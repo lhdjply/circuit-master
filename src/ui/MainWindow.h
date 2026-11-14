@@ -62,6 +62,8 @@ private:
     bool startLiveScope();
     /// 按仿真结果点亮/熄灭电路里的发光二极管
     void applyLedStates(const SimulationResult& result);
+    /// 熄灭所有 LED（停止仿真或换电路时调用）
+    void clearLedStates();
     void showQuickGuide();
     void showAbout();
 

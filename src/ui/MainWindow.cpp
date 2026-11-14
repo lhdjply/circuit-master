@@ -948,6 +948,7 @@ void MainWindow::newCircuit()
     }
     if (m_waveLive)
         m_waveLive->stopLiveScope();
+    clearLedStates();
     updateTitle();
     resetHistory();
     updateRunAction();
@@ -1172,8 +1173,11 @@ void MainWindow::updateRunAction()
         if (!running && m_actMonitor->isChecked())
             m_actMonitor->setChecked(false);
     }
-    if (!running && m_waveWindow && m_waveWindow->isVisible())
-        m_waveWindow->hide();
+    if (!running) {
+        if (m_waveWindow && m_waveWindow->isVisible())
+            m_waveWindow->hide();
+        clearLedStates();
+    }
 
     if (running) {
         m_actRun->setText(QStringLiteral("停止仿真"));
@@ -1393,6 +1397,16 @@ void MainWindow::applyLedStates(const SimulationResult& result)
             current = result.elementCurrents.value(name, 0.0);
         }
         item->setLedBrightness(brightnessFor(current));
+    }
+}
+
+void MainWindow::clearLedStates()
+{
+    if (!m_scene)
+        return;
+    for (ComponentItem* item : m_scene->componentItems()) {
+        if (item->component().type == ComponentType::Led && item->ledBrightness() > 0.0)
+            item->setLedBrightness(0.0);
     }
 }
 

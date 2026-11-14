@@ -412,12 +412,20 @@ private slots:
         QVERIFY(window.grab().save(QCoreApplication::applicationDirPath()
                                    + QStringLiteral("/shots/led_on.png")));
 
-        // 把 LED 反接：不导通，应当熄灭
+        // 停止仿真后应当熄灭
+        QAction* run = window.findChild<QAction*>(QStringLiteral("actRun"));
+        QVERIFY(run);
+        run->trigger(); // 此时是「停止仿真」
+        settle();
+        QCOMPARE(led->ledBrightness(), 0.0);
+
+        // 把 LED 反接再跑：不导通，仍然不亮
         led->setRotationAngle(270);
         settle();
         window.runSimulation();
         settle();
         QCOMPARE(led->ledBrightness(), 0.0);
+        run->trigger(); // 收尾，停掉仿真
     }
 
     void spaceRotatesSelection()
