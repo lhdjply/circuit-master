@@ -24,6 +24,7 @@
 #include <QListWidget>
 #include <QLabel>
 #include <QLineEdit>
+#include <QElapsedTimer>
 #include <QSet>
 #include <QTest>
 
@@ -46,7 +47,8 @@ private slots:
 
         UpdateDialog dialog(release);
         dialog.show();
-        QTest::qWait(200);
+        QTRY_VERIFY_WITH_TIMEOUT(dialog.isVisible(), 3000);
+        settle();
 
         QVERIFY(dialog.isVisible());
 
@@ -58,7 +60,7 @@ private slots:
         // 帮助菜单里应当有「检查更新…」
         MainWindow window;
         window.show();
-        QTest::qWait(200);
+        waitShown(window);
         bool found = false;
         for (QAction* action : window.findChildren<QAction*>()) {
             if (action->text() == QStringLiteral("检查更新…"))
@@ -134,7 +136,7 @@ private slots:
         MainWindow window;
         window.resize(1200, 800);
         window.show();
-        QTest::qWait(200);
+        waitShown(window);
 
         QAction* wireAction = nullptr;
         for (QAction* action : window.findChildren<QAction*>()) {
@@ -150,7 +152,7 @@ private slots:
         MainWindow window;
         window.resize(1400, 880);
         window.show();
-        QTest::qWait(400);
+        waitShown(window);
 
         QVERIFY2(!window.windowIcon().isNull(), "应用图标未能从资源加载");
 
@@ -168,7 +170,7 @@ private slots:
         }
         QVERIFY(rcExample);
         rcExample->trigger();
-        QTest::qWait(200);
+        settle();
 
         QCOMPARE(scene->componentItems().size(), 6); // 4 个元件 + 2 个测试点
         QCOMPARE(scene->wireItems().size(), 3);
@@ -185,15 +187,11 @@ private slots:
                 break;
             }
         }
-        QTest::qWait(150);
+        settle();
         QVERIFY(window.grab().save(dir.filePath(QStringLiteral("shots/main_selected.png"))));
 
         window.runSimulation();
-        QTest::qWait(500);
-
-        auto* wave = window.findChild<WaveformWindow*>();
-        QVERIFY(wave);
-        QVERIFY(wave->isVisible());
+        auto* wave = waitWaveWindow(window);
         const QString waveShot = dir.filePath(QStringLiteral("shots/waveform.png"));
         QVERIFY(wave->grab().save(waveShot));
         QVERIFY(QFileInfo(waveShot).size() > 5000);
@@ -204,7 +202,7 @@ private slots:
         MainWindow window;
         window.resize(1400, 880);
         window.show();
-        QTest::qWait(300);
+        waitShown(window);
 
         QAction* acExample = nullptr;
         for (QAction* action : window.findChildren<QAction*>()) {
@@ -213,14 +211,10 @@ private slots:
         }
         QVERIFY(acExample);
         acExample->trigger();
-        QTest::qWait(200);
+        settle();
 
         window.runSimulation();
-        QTest::qWait(500);
-
-        auto* wave = window.findChild<WaveformWindow*>();
-        QVERIFY(wave);
-        QVERIFY(wave->isVisible());
+        auto* wave = waitWaveWindow(window);
         QVERIFY(wave->grab().save(
             QCoreApplication::applicationDirPath() + QStringLiteral("/shots/waveform_ac.png")));
     }
@@ -230,7 +224,7 @@ private slots:
         MainWindow window;
         window.resize(1400, 880);
         window.show();
-        QTest::qWait(300);
+        waitShown(window);
 
         QAction* diodeExample = nullptr;
         for (QAction* action : window.findChildren<QAction*>()) {
@@ -239,14 +233,10 @@ private slots:
         }
         QVERIFY(diodeExample);
         diodeExample->trigger();
-        QTest::qWait(200);
+        settle();
 
         window.runSimulation();
-        QTest::qWait(600);
-
-        auto* wave = window.findChild<WaveformWindow*>();
-        QVERIFY(wave);
-        QVERIFY(wave->isVisible());
+        auto* wave = waitWaveWindow(window);
         QVERIFY(wave->grab().save(
             QCoreApplication::applicationDirPath() + QStringLiteral("/shots/waveform_diode.png")));
     }
@@ -256,7 +246,7 @@ private slots:
         MainWindow window;
         window.resize(1200, 800);
         window.show();
-        QTest::qWait(300);
+        waitShown(window);
 
         auto* scene = window.findChild<SchematicScene*>();
         QVERIFY(scene);
@@ -268,7 +258,7 @@ private slots:
         }
         QVERIFY(rcExample);
         rcExample->trigger();
-        QTest::qWait(200);
+        settle();
 
         ComponentItem* resistor = nullptr;
         for (ComponentItem* item : scene->componentItems()) {
@@ -277,7 +267,7 @@ private slots:
         }
         QVERIFY(resistor);
         resistor->setSelected(true);
-        QTest::qWait(100);
+        settle();
 
         QLineEdit* valueEdit = nullptr;
         for (QLineEdit* edit : window.findChildren<QLineEdit*>()) {
@@ -287,7 +277,7 @@ private slots:
         QVERIFY(valueEdit);
         valueEdit->setText(QStringLiteral("2k"));
         emit valueEdit->editingFinished();
-        QTest::qWait(50);
+        settle();
         QCOMPARE(resistor->component().value, 2000.0);
 
         QAction* rotateAction = nullptr;
@@ -307,7 +297,7 @@ private slots:
         MainWindow window;
         window.resize(1400, 880);
         window.show();
-        QTest::qWait(300);
+        waitShown(window);
 
         QAction* opAmpExample = nullptr;
         for (QAction* action : window.findChildren<QAction*>()) {
@@ -316,7 +306,7 @@ private slots:
         }
         QVERIFY(opAmpExample);
         opAmpExample->trigger();
-        QTest::qWait(200);
+        settle();
 
         const QString dir = QCoreApplication::applicationDirPath();
         QVERIFY(window.grab().save(dir + QStringLiteral("/shots/opamp_schematic.png")));
@@ -328,7 +318,7 @@ private slots:
             if (item->component().type == ComponentType::OpAmp)
                 item->setSelected(true);
         }
-        QTest::qWait(100);
+        settle();
         bool gainLabelFound = false;
         for (QLabel* label : window.findChildren<QLabel*>()) {
             if (label->text() == QStringLiteral("开环增益"))
@@ -337,11 +327,7 @@ private slots:
         QVERIFY2(gainLabelFound, "属性面板缺少开环增益字段");
 
         window.runSimulation();
-        QTest::qWait(600);
-
-        auto* wave = window.findChild<WaveformWindow*>();
-        QVERIFY(wave);
-        QVERIFY(wave->isVisible());
+        auto* wave = waitWaveWindow(window);
 
         auto* list = wave->findChild<QListWidget*>();
         QVERIFY(list);
@@ -364,7 +350,7 @@ private slots:
         MainWindow window;
         window.resize(1200, 800);
         window.show();
-        QTest::qWait(300);
+        waitShown(window);
 
         QListWidget* library = nullptr;
         for (QListWidget* list : window.findChildren<QListWidget*>()) {
@@ -406,7 +392,7 @@ private slots:
         MainWindow window;
         window.resize(1200, 800);
         window.show();
-        QTest::qWait(300);
+        waitShown(window);
 
         auto* scene = window.findChild<SchematicScene*>();
         QVERIFY(scene);
@@ -434,21 +420,21 @@ private slots:
         QCOMPARE(scene->componentItems().size(), 2);
 
         undoAction->trigger();
-        QTest::qWait(50);
+        settle();
         QCOMPARE(scene->componentItems().size(), 1);
         QVERIFY(redoAction->isEnabled());
 
         undoAction->trigger();
-        QTest::qWait(50);
+        settle();
         QCOMPARE(scene->componentItems().size(), 0);
         QVERIFY(!undoAction->isEnabled());
 
         redoAction->trigger();
-        QTest::qWait(50);
+        settle();
         QCOMPARE(scene->componentItems().size(), 1);
 
         redoAction->trigger();
-        QTest::qWait(50);
+        settle();
         QCOMPARE(scene->componentItems().size(), 2);
 
         // 移动后撤销应回到原位
@@ -461,11 +447,11 @@ private slots:
         const QPointF original = moved->pos();
         moved->setPos(QPointF(420, 420));
         scene->commitEdit();
-        QTest::qWait(50);
+        settle();
         QCOMPARE(moved->pos(), QPointF(420, 420));
 
         undoAction->trigger();
-        QTest::qWait(50);
+        settle();
         ComponentItem* restored = nullptr;
         for (ComponentItem* item : scene->componentItems()) {
             if (item->component().type == ComponentType::Resistor)
@@ -478,11 +464,11 @@ private slots:
         scene->clearSelection();
         restored->setSelected(true);
         scene->deleteSelection();
-        QTest::qWait(50);
+        settle();
         QCOMPARE(scene->componentItems().size(), 1);
 
         undoAction->trigger();
-        QTest::qWait(50);
+        settle();
         QCOMPARE(scene->componentItems().size(), 2);
     }
 
@@ -491,7 +477,7 @@ private slots:
         MainWindow window;
         window.resize(1200, 800);
         window.show();
-        QTest::qWait(300);
+        waitShown(window);
 
         auto* scene = window.findChild<SchematicScene*>();
         auto* view = window.findChild<SchematicView*>();
@@ -508,7 +494,7 @@ private slots:
         QApplication::sendEvent(view->viewport(), &enter);
         QDropEvent drop(QPointF(target), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
         QApplication::sendEvent(view->viewport(), &drop);
-        QTest::qWait(100);
+        settle();
 
         QCOMPARE(scene->componentItems().size(), 1);
         ComponentItem* item = scene->componentItems().first();
@@ -522,7 +508,7 @@ private slots:
         MainWindow window;
         window.resize(1200, 800);
         window.show();
-        QTest::qWait(300);
+        waitShown(window);
 
         QAction* rcExample = nullptr;
         for (QAction* action : window.findChildren<QAction*>()) {
@@ -531,7 +517,7 @@ private slots:
         }
         QVERIFY(rcExample);
         rcExample->trigger();
-        QTest::qWait(200);
+        settle();
 
         auto* scene = window.findChild<SchematicScene*>();
         QVERIFY(scene);
@@ -548,7 +534,7 @@ private slots:
         const int before = scene->componentItems().size();
         scene->copySelection();
         scene->pasteClipboard();
-        QTest::qWait(50);
+        settle();
 
         QCOMPARE(scene->componentItems().size(), before + 1);
         ComponentItem* pasted = nullptr;
@@ -583,7 +569,7 @@ private slots:
         MainWindow window;
         window.resize(1200, 800);
         window.show();
-        QTest::qWait(300);
+        waitShown(window);
 
         QAction* rcExample = nullptr;
         for (QAction* action : window.findChildren<QAction*>()) {
@@ -592,7 +578,7 @@ private slots:
         }
         QVERIFY(rcExample);
         rcExample->trigger();
-        QTest::qWait(200);
+        settle();
 
         auto* scene = window.findChild<SchematicScene*>();
         auto* view = window.findChild<SchematicView*>();
@@ -614,7 +600,7 @@ private slots:
         QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, from);
         QTest::mouseMove(view->viewport(), to, 20);
         QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, to);
-        QTest::qWait(100);
+        settle();
 
         QVERIFY(r1->isSelected());
         QVERIFY(c1->isSelected());
@@ -632,7 +618,7 @@ private slots:
         QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, pressPoint);
         QTest::mouseMove(view->viewport(), dragTo, 20);
         QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, dragTo);
-        QTest::qWait(100);
+        settle();
 
         QCOMPARE(r1->pos(), r1Start + QPointF(60, 0));
         QCOMPARE(c1->pos(), c1Start + QPointF(60, 0));
@@ -652,7 +638,7 @@ private slots:
         QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, secondPress);
         QTest::mouseMove(view->viewport(), secondTo, 20);
         QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, secondTo);
-        QTest::qWait(100);
+        settle();
         QCOMPARE(r1->pos(), r1Mid + QPointF(40, 0));
         QCOMPARE(c1->pos(), c1Mid + QPointF(40, 0));
 
@@ -663,7 +649,7 @@ private slots:
         QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, wirePress);
         QTest::mouseMove(view->viewport(), wireTo, 20);
         QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, wireTo);
-        QTest::qWait(100);
+        settle();
         QCOMPARE(wire->scenePoints().first(), wireBefore + QPointF(0, 30));
     }
 
@@ -677,7 +663,7 @@ private slots:
 
         SimulationSettingsDialog dialog(options);
         dialog.show();
-        QTest::qWait(150);
+        settle();
 
         QLineEdit* stopEdit = nullptr;
         QLineEdit* stepEdit = nullptr;
@@ -704,7 +690,7 @@ private slots:
             if (box->count() == 2 && box->itemText(0) == QStringLiteral("静态波形图"))
                 box->setCurrentIndex(0);
         }
-        QTest::qWait(100);
+        settle();
         QVERIFY(stopEdit->isVisible());
         QVERIFY(stepEdit->isVisible());
 
@@ -713,7 +699,7 @@ private slots:
             if (box->count() == 2 && box->itemText(1) == QStringLiteral("动态示波器"))
                 box->setCurrentIndex(1);
         }
-        QTest::qWait(100);
+        settle();
         QVERIFY(dialog.grab().save(QCoreApplication::applicationDirPath()
                                    + QStringLiteral("/shots/settings_scope.png")));
     }
@@ -771,7 +757,7 @@ private slots:
         wave.startLive(circuit,
                        {{QStringLiteral("TP1 (V(%1))").arg(node), QStringLiteral("V(%1)").arg(node)}});
         wave.show();
-        QTest::qWait(800);
+        settle();
         QVERIFY(wave.isLive());
 
         QComboBox* voltDiv = nullptr;
@@ -780,9 +766,9 @@ private slots:
                 voltDiv = box;
         }
         QVERIFY(voltDiv);
-        // 峰值约 110 V，需要 3 格能容下
-        QVERIFY2(voltDiv->currentData().toDouble() * 3.0 >= 110.0,
-                 qPrintable(voltDiv->currentText()));
+        // 峰值约 110 V，需要 3 格能容下。
+        // 量程要等实时仿真攒够采样点才会自动选定，这里轮询而不是固定睡眠。
+        QTRY_VERIFY_WITH_TIMEOUT(voltDiv->currentData().toDouble() * 3.0 >= 110.0, 5000);
     }
 
     void liveScopeFromMenu()
@@ -790,7 +776,7 @@ private slots:
         MainWindow window;
         window.resize(1400, 880);
         window.show();
-        QTest::qWait(300);
+        waitShown(window);
 
         QAction* rcExample = nullptr;
         for (QAction* action : window.findChildren<QAction*>()) {
@@ -799,7 +785,7 @@ private slots:
         }
         QVERIFY(rcExample);
         rcExample->trigger();
-        QTest::qWait(200);
+        settle();
 
         QAction* scopeAction = nullptr;
         for (QAction* action : window.findChildren<QAction*>()) {
@@ -808,13 +794,15 @@ private slots:
         }
         QVERIFY(scopeAction);
         scopeAction->trigger();
-        QTest::qWait(1200);
+        settle();
 
         auto* wave = window.findChild<WaveformWindow*>();
         QVERIFY(wave);
         QVERIFY(wave->isVisible());
         QVERIFY(wave->isLive());
-        QVERIFY(wave->liveTime() > 0.0);
+        // 实时仿真的定时器每 33ms 推进一步。等它攒到半个窗口（约 2ms）再截图，
+        // 否则截出来是一张空图；轮询在条件满足后立刻返回，不会多等。
+        QTRY_VERIFY_WITH_TIMEOUT(wave->liveTime() > 2e-3, 5000);
         QVERIFY(wave->grab().save(QCoreApplication::applicationDirPath()
                                   + QStringLiteral("/shots/live_scope.png")));
 
@@ -827,7 +815,7 @@ private slots:
         QVERIFY(windowBox);
         QCOMPARE(windowBox->count(), 32);
         windowBox->setCurrentIndex(windowBox->count() - 1);
-        QTest::qWait(300);
+        settle();
         QVERIFY(wave->isLive());
     }
 
@@ -836,7 +824,7 @@ private slots:
         MainWindow window;
         window.resize(1200, 800);
         window.show();
-        QTest::qWait(300);
+        waitShown(window);
 
         QAction* rcExample = nullptr;
         for (QAction* action : window.findChildren<QAction*>()) {
@@ -845,7 +833,7 @@ private slots:
         }
         QVERIFY(rcExample);
         rcExample->trigger();
-        QTest::qWait(200);
+        settle();
 
         auto* scene = window.findChild<SchematicScene*>();
         QVERIFY(scene);
@@ -857,7 +845,7 @@ private slots:
         }
         QVERIFY(resistor);
         resistor->setSelected(true);
-        QTest::qWait(100);
+        settle();
 
         QLineEdit* valueEdit = nullptr;
         for (QLineEdit* edit : window.findChildren<QLineEdit*>()) {
@@ -868,20 +856,20 @@ private slots:
 
         valueEdit->setText(QStringLiteral("2.2kΩ"));
         emit valueEdit->editingFinished();
-        QTest::qWait(50);
+        settle();
         QCOMPARE(resistor->component().value, 2200.0);
 
         // 单位不匹配：拒绝并标红
         valueEdit->setText(QStringLiteral("5V"));
         emit valueEdit->editingFinished();
-        QTest::qWait(50);
+        settle();
         QCOMPARE(resistor->component().value, 2200.0);
         QVERIFY(valueEdit->styleSheet().contains(QStringLiteral("dc2626")));
 
         // 不带单位按默认单位（Ω）
         valueEdit->setText(QStringLiteral("2.2k"));
         emit valueEdit->editingFinished();
-        QTest::qWait(50);
+        settle();
         QCOMPARE(resistor->component().value, 2200.0);
         QVERIFY(valueEdit->styleSheet().isEmpty());
 
@@ -894,18 +882,18 @@ private slots:
         QVERIFY(capacitor);
         scene->clearSelection();
         capacitor->setSelected(true);
-        QTest::qWait(100);
+        settle();
         QVERIFY(valueEdit->text().contains(QStringLiteral("µF")));
 
         valueEdit->setText(QStringLiteral("0.0001F"));
         emit valueEdit->editingFinished();
-        QTest::qWait(50);
+        settle();
         QVERIFY(std::abs(capacitor->component().value - 100e-6) < 1e-15);
 
         // 重新选中后数值以工程记数法显示
         capacitor->setSelected(false);
         capacitor->setSelected(true);
-        QTest::qWait(50);
+        settle();
         QVERIFY(valueEdit->text().contains(QStringLiteral("100")));
     }
 
@@ -914,7 +902,7 @@ private slots:
         MainWindow window;
         window.resize(1200, 800);
         window.show();
-        QTest::qWait(300);
+        waitShown(window);
 
         auto* scene = window.findChild<SchematicScene*>();
         auto* view = window.findChild<SchematicView*>();
@@ -927,20 +915,20 @@ private slots:
         }
         QVERIFY(newAction);
         newAction->trigger();
-        QTest::qWait(100);
+        settle();
 
         scene->placeComponent(ComponentType::Resistor, QPointF(300, 300));
         scene->placeComponent(ComponentType::VoltageSource, QPointF(300, 420));
 
         view->setTool(SchematicView::Tool::Wire);
-        QTest::qWait(50);
+        settle();
 
         const QPoint start = view->mapFromScene(QPointF(270, 300));
         const QPoint end = view->mapFromScene(QPointF(270, 420));
         QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, start);
         QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, end);
         QTest::mouseClick(view->viewport(), Qt::RightButton, Qt::NoModifier, end);
-        QTest::qWait(100);
+        settle();
 
         QCOMPARE(scene->wireItems().size(), 1);
         const QVector<QPointF> points = scene->wireItems().first()->scenePoints();
@@ -954,7 +942,7 @@ private slots:
         MainWindow window;
         window.resize(1200, 800);
         window.show();
-        QTest::qWait(300);
+        waitShown(window);
 
         auto* scene = window.findChild<SchematicScene*>();
         QVERIFY(scene);
@@ -966,7 +954,7 @@ private slots:
         }
         QVERIFY(newAction);
         newAction->trigger();
-        QTest::qWait(50);
+        settle();
 
         auto* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(200, 200));
         auto* capacitor = scene->placeComponent(ComponentType::Capacitor, QPointF(300, 300));
@@ -1008,16 +996,45 @@ private slots:
         QCOMPARE(net.nodeOf(capacitor->component().id, 1), 0);
 
         window.runSimulation();
-        QTest::qWait(500);
-
-        auto* wave = window.findChild<WaveformWindow*>();
-        QVERIFY(wave);
-        QVERIFY(wave->isVisible());
+        auto* wave = waitWaveWindow(window);
 
         // 没有测试点时波形为空
         auto* list = wave->findChild<QListWidget*>();
         QVERIFY(list);
         QCOMPARE(list->count(), 0);
+    }
+private:
+    /// 让事件循环跑几轮：处理 show()、布局请求，以及 QTimer::singleShot(0) 排队的任务。
+    /// 比固定 qWait(N) 快得多，也不受机器快慢影响。
+    static void settle(int rounds = 3)
+    {
+        for (int i = 0; i < rounds; ++i)
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+    }
+
+    /// 等主窗口画完第一帧。
+    static void waitShown(MainWindow& window)
+    {
+        QTRY_VERIFY_WITH_TIMEOUT(window.isVisible(), 3000);
+        settle();
+    }
+
+    /// 等仿真把波形窗口弹出来。
+    /// 这里不能直接用 QTRY_VERIFY：宏在失败时执行 `return;`，放在返回指针的
+    /// 函数里编译不过。改成自己轮询，超时返回 nullptr 由调用方断言。
+    static WaveformWindow* waitWaveWindow(MainWindow& window, int timeoutMs = 5000)
+    {
+        QElapsedTimer timer;
+        timer.start();
+        WaveformWindow* wave = nullptr;
+        while (timer.elapsed() < timeoutMs) {
+            wave = window.findChild<WaveformWindow*>();
+            if (wave && wave->isVisible())
+                break;
+            QTest::qWait(5); // 只睡 5ms 并处理事件，条件一满足立刻返回
+        }
+        settle();
+        return (wave && wave->isVisible()) ? wave : nullptr;
     }
 };
 
