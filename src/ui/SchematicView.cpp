@@ -1,0 +1,290 @@
+#include "ui/SchematicView.h"
+
+#include "ui/ComponentItem.h"
+#include "ui/SchematicScene.h"
+#include "ui/Symbols.h"
+
+#include <QGraphicsPathItem>
+#include <QKeyEvent>
+#include <QLineF>
+#include <QMouseEvent>
+#include <QPainter>
+#include <QScrollBar>
+#include <QWheelEvent>
+
+#include <algorithm>
+#include <cmath>
+
+namespace csm {
+
+SchematicView::SchematicView(SchematicScene* scene, QWidget* parent)
+    : QGraphicsView(scene, parent)
+    , m_scene(scene)
+{
+    setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing
+                   | QPainter::SmoothPixmapTransform);
+    setDragMode(QGraphicsView::RubberBandDrag);
+    setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
+    setResizeAnchor(QGraphicsView::AnchorViewCenter);
+    setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
+    setFrameShape(QFrame::NoFrame);
+    setFocusPolicy(Qt::StrongFocus);
+    setMouseTracking(true);
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    setBackgroundBrush(Qt::NoBrush);
+    centerOn(300.0, 300.0);
+}
+
+void SchematicView::setTool(Tool tool)
+{
+    if (m_tool == tool)
+        return;
+    if (m_tool == Tool::Wire && tool != Tool::Wire)
+        cancelWire();
+
+    m_tool = tool;
+    setDragMode(tool == Tool::Select ? QGraphicsView::RubberBandDrag : QGraphicsView::NoDrag);
+    updateCursorAndHint();
+    emit toolChanged();
+}
+
+void SchematicView::setPendingType(ComponentType type)
+{
+    m_pendingType = type;
+    setTool(Tool::Place);
+}
+
+void SchematicView::updateCursorAndHint()
+{
+    switch (m_tool) {
+    case Tool::Select:
+        viewport()->setCursor(Qt::ArrowCursor);
+        emit hintChanged(QStringLiteral("选择模式：拖动元件移动，双击元件编辑参数，R 键旋转"));
+        break;
+    case Tool::Wire:
+        viewport()->setCursor(Qt::CrossCursor);
+        emit hintChanged(QStringLiteral("连线模式：单击放置拐点，双击或右键结束，Esc 取消"));
+        break;
+    case Tool::Place:
+        viewport()->setCursor(Qt::CrossCursor);
+        emit hintChanged(QStringLiteral("放置 %1：单击画布放置（按住 Ctrl 可连续放置），Esc 退出")
+                             .arg(typeName(m_pendingType)));
+        break;
+    }
+}
+
+void SchematicView::mousePressEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::MiddleButton) {
+        m_panning = true;
+        m_panStart = event->pos();
+        viewport()->setCursor(Qt::ClosedHandCursor);
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::RightButton && m_tool == Tool::Wire && !m_wirePoints.isEmpty()) {
+        finishWire();
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton && m_tool == Tool::Place) {
+        const QPointF pos = m_scene->snap(mapToScene(event->pos()));
+        ComponentItem* item = m_scene->placeComponent(m_pendingType, pos);
+        emit componentPlaced(item);
+        if (!(event->modifiers() & Qt::ControlModifier))
+            setTool(Tool::Select);
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton && m_tool == Tool::Wire) {
+        const QPointF pos = m_scene->snapToPin(mapToScene(event->pos()));
+        if (m_wirePoints.isEmpty())
+            startWire(pos);
+        else
+            addWirePoint(pos);
+        updatePreview(pos);
+        event->accept();
+        return;
+    }
+
+    QGraphicsView::mousePressEvent(event);
+}
+
+void SchematicView::mouseMoveEvent(QMouseEvent* event)
+{
+    if (m_panning) {
+        const QPoint delta = event->pos() - m_panStart;
+        m_panStart = event->pos();
+        horizontalScrollBar()->setValue(horizontalScrollBar()->value() - delta.x());
+        verticalScrollBar()->setValue(verticalScrollBar()->value() - delta.y());
+        event->accept();
+        return;
+    }
+
+    const QPointF scenePos = mapToScene(event->pos());
+    emit scenePositionChanged(scenePos);
+
+    if (m_tool == Tool::Wire && !m_wirePoints.isEmpty())
+        updatePreview(scenePos);
+
+    QGraphicsView::mouseMoveEvent(event);
+}
+
+void SchematicView::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::MiddleButton && m_panning) {
+        m_panning = false;
+        updateCursorAndHint();
+        event->accept();
+        return;
+    }
+    QGraphicsView::mouseReleaseEvent(event);
+}
+
+void SchematicView::mouseDoubleClickEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton && m_tool == Tool::Wire) {
+        finishWire();
+        event->accept();
+        return;
+    }
+    QGraphicsView::mouseDoubleClickEvent(event);
+}
+
+void SchematicView::wheelEvent(QWheelEvent* event)
+{
+    const double factor = event->angleDelta().y() > 0 ? 1.15 : 1.0 / 1.15;
+    zoomBy(factor);
+    event->accept();
+}
+
+void SchematicView::keyPressEvent(QKeyEvent* event)
+{
+    if (event->key() == Qt::Key_Escape) {
+        if (m_tool == Tool::Wire) {
+            cancelWire();
+            setTool(Tool::Select);
+        } else if (m_tool == Tool::Place) {
+            setTool(Tool::Select);
+        } else {
+            m_scene->clearSelection();
+        }
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+        if (m_tool == Tool::Wire && !m_wirePoints.isEmpty()) {
+            finishWire();
+            event->accept();
+            return;
+        }
+    }
+    QGraphicsView::keyPressEvent(event);
+}
+
+void SchematicView::startWire(const QPointF& scenePos)
+{
+    m_wirePoints.clear();
+    m_wirePoints.append(scenePos);
+
+    if (!m_preview) {
+        m_preview = new QGraphicsPathItem();
+        QPen pen(theme::wire, 2.0, Qt::DashLine);
+        pen.setCapStyle(Qt::RoundCap);
+        m_preview->setPen(pen);
+        m_preview->setZValue(5.0);
+        m_scene->addItem(m_preview);
+    }
+}
+
+void SchematicView::addWirePoint(const QPointF& scenePos)
+{
+    if (m_wirePoints.isEmpty()) {
+        startWire(scenePos);
+        return;
+    }
+    if (QLineF(m_wirePoints.last(), scenePos).length() < 1.0)
+        return;
+    m_wirePoints.append(scenePos);
+}
+
+void SchematicView::updatePreview(const QPointF& scenePos)
+{
+    if (!m_preview || m_wirePoints.isEmpty())
+        return;
+
+    QPainterPath path;
+    path.moveTo(m_wirePoints.first());
+    for (int i = 1; i < m_wirePoints.size(); ++i)
+        path.lineTo(m_wirePoints.at(i));
+    path.lineTo(m_scene->snapToPin(scenePos));
+    m_preview->setPath(path);
+}
+
+void SchematicView::finishWire()
+{
+    if (m_wirePoints.size() >= 2)
+        m_scene->addWire(m_wirePoints);
+
+    m_wirePoints.clear();
+    if (m_preview) {
+        m_scene->removeItem(m_preview);
+        delete m_preview;
+        m_preview = nullptr;
+    }
+}
+
+void SchematicView::cancelWire()
+{
+    m_wirePoints.clear();
+    if (m_preview) {
+        m_scene->removeItem(m_preview);
+        delete m_preview;
+        m_preview = nullptr;
+    }
+}
+
+void SchematicView::zoomBy(double factor)
+{
+    const double current = transform().m11();
+    const double target = current * factor;
+    if (target < 0.15 || target > 4.0)
+        return;
+    scale(factor, factor);
+    emit scaleChanged(transform().m11());
+}
+
+void SchematicView::zoomFit()
+{
+    const QRectF bounds = m_scene->itemsBoundingRect();
+    if (bounds.isEmpty()) {
+        resetTransform();
+        centerOn(300.0, 300.0);
+        return;
+    }
+    fitInView(bounds.adjusted(-60.0, -60.0, 60.0, 60.0), Qt::KeepAspectRatio);
+    emit scaleChanged(transform().m11());
+}
+
+void SchematicView::rotateSelection()
+{
+    const QList<QGraphicsItem*> selected = m_scene->selectedItems();
+    for (QGraphicsItem* item : selected) {
+        if (item->type() != ComponentItem::Type)
+            continue;
+        auto* comp = static_cast<ComponentItem*>(item);
+        comp->setRotationAngle(comp->rotationAngle() + 90);
+    }
+    m_scene->refresh();
+}
+
+void SchematicView::deleteSelection()
+{
+    m_scene->deleteSelection();
+}
+
+} // namespace csm

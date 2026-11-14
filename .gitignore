@@ -1,0 +1,18 @@
+# 构建目录
+build/
+build-*/
+install-test/
+.dev-core/
+
+# Qt / CMake 临时文件
+*.autosave
+*.user
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+.cache/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp

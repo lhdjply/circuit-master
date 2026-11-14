@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=电路仿真大师
+Name[en]=Circuit Master
+GenericName=电路仿真软件
+GenericName[en]=Circuit Simulator
+Comment=基于 Qt6 的跨平台电路原理图编辑与仿真软件
+Comment[en]=Cross-platform schematic editor and circuit simulator built with Qt6
+Exec=CircuitMaster %f
+Icon=circuit-master
+Terminal=false
+Categories=Science;Electronics;Education;
+Keywords=circuit;simulation;spice;electronics;schematic;电路;仿真;
+StartupWMClass=CircuitMaster
+MimeType=application/x-circuit-master;

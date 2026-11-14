@@ -1,0 +1,48 @@
+#pragma once
+
+#include "core/Component.h"
+
+#include <QGraphicsObject>
+
+namespace csm {
+
+/// 原理图上的一个元件图元：负责绘制符号、捕捉网格、显示编号与数值。
+class ComponentItem : public QGraphicsObject {
+    Q_OBJECT
+public:
+    enum { Type = UserType + 100 };
+
+    explicit ComponentItem(const Component& comp, QGraphicsItem* parent = nullptr);
+
+    int type() const override { return Type; }
+
+    QRectF boundingRect() const override;
+    QPainterPath shape() const override;
+    void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override;
+
+    const Component& component() const { return m_comp; }
+    void setComponent(const Component& comp);
+    void setRefdes(const QString& refdes);
+    void setValue(double value);
+    void setRotationAngle(int degrees);
+    void setClosed(bool closed);
+
+    int rotationAngle() const { return m_comp.rotation; }
+    QVector<QPointF> pinScenePositions() const;
+
+signals:
+    void componentChanged();
+    void editRequested();
+
+protected:
+    QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
+    void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override;
+    void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
+    void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;
+
+private:
+    Component m_comp;
+    bool m_hover = false;
+};
+
+} // namespace csm
