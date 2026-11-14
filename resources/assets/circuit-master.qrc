@@ -1,0 +1,17 @@
+<RCC>
+  <qresource prefix="/icons">
+    <file alias="icon.svg">icons/icon.svg</file>
+    <file alias="new.svg">icons/new.svg</file>
+    <file alias="open.svg">icons/open.svg</file>
+    <file alias="save.svg">icons/save.svg</file>
+    <file alias="select.svg">icons/select.svg</file>
+    <file alias="wire.svg">icons/wire.svg</file>
+    <file alias="run.svg">icons/run.svg</file>
+    <file alias="settings.svg">icons/settings.svg</file>
+    <file alias="zoom_in.svg">icons/zoom_in.svg</file>
+    <file alias="zoom_out.svg">icons/zoom_out.svg</file>
+    <file alias="zoom_fit.svg">icons/zoom_fit.svg</file>
+    <file alias="delete.svg">icons/delete.svg</file>
+    <file alias="grid.svg">icons/grid.svg</file>
+  </qresource>
+</RCC>

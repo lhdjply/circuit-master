@@ -6,7 +6,10 @@ project(CircuitMaster VERSION 0.1.0 LANGUAGES CXX
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
+include(GNUInstallDirs)
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Charts Svg)
 find_package(Qt6 6.5 QUIET COMPONENTS Test)
@@ -53,47 +56,41 @@ add_library(csm_ui STATIC ${CSM_UI_SOURCES} ${CSM_UI_HEADERS})
 target_link_libraries(csm_ui PUBLIC csm_core Qt6::Widgets Qt6::Charts Qt6::Svg)
 target_compile_options(csm_ui PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
-qt_add_executable(CircuitMaster src/main.cpp)
+# ---------------------------------------------------------------- 资源
+# 图标与应用图标统一放在 resources/assets/icons，由 qrc 以 /icons 前缀暴露
+set(CSM_RESOURCES resources/assets/circuit-master.qrc)
+
+# ---------------------------------------------------------------- 可执行程序
+qt_add_executable(CircuitMaster
+    src/main.cpp
+    ${CSM_RESOURCES}
+)
 target_link_libraries(CircuitMaster PRIVATE csm_ui)
-
-qt_add_resources(csm_ui "app_icons"
-    PREFIX "/icons"
-    BASE "assets"
-    FILES assets/icon.svg
-)
-
-qt_add_resources(csm_ui "toolbar_icons"
-    PREFIX "/icons"
-    BASE "assets/icons"
-    FILES
-        assets/icons/new.svg
-        assets/icons/open.svg
-        assets/icons/save.svg
-        assets/icons/select.svg
-        assets/icons/wire.svg
-        assets/icons/run.svg
-        assets/icons/settings.svg
-        assets/icons/zoom_in.svg
-        assets/icons/zoom_out.svg
-        assets/icons/zoom_fit.svg
-        assets/icons/delete.svg
-        assets/icons/grid.svg
-)
 set_target_properties(CircuitMaster PROPERTIES WIN32_EXECUTABLE TRUE MACOSX_BUNDLE TRUE)
 
 # ---------------------------------------------------------------- 测试
 if (TARGET Qt6::Test)
     enable_testing()
+
     add_executable(test_core tests/test_core.cpp)
     target_link_libraries(test_core PRIVATE csm_core Qt6::Test)
     add_test(NAME core COMMAND test_core)
 
-    add_executable(test_ui tests/test_ui.cpp)
+    add_executable(test_ui tests/test_ui.cpp ${CSM_RESOURCES})
     target_link_libraries(test_ui PRIVATE csm_ui Qt6::Test)
     add_test(NAME ui COMMAND test_ui)
     set_tests_properties(ui PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()
 
-install(TARGETS CircuitMaster RUNTIME DESTINATION bin)
-install(FILES packaging/circuit-master.desktop DESTINATION share/applications)
-install(FILES assets/icon.svg DESTINATION share/icons/hicolor/scalable/apps RENAME circuit-master.svg)
+# ---------------------------------------------------------------- 安装
+# 桌面入口由模板生成，Exec 指向实际安装位置
+set(CSM_DESKTOP_EXEC "${CMAKE_INSTALL_FULL_BINDIR}/CircuitMaster")
+configure_file(resources/linux/circuit-master.desktop.in
+               "${CMAKE_CURRENT_BINARY_DIR}/circuit-master.desktop" @ONLY)
+
+install(TARGETS CircuitMaster RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/circuit-master.desktop"
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+install(FILES resources/assets/icons/icon.svg
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
+        RENAME circuit-master.svg)

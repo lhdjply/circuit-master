@@ -75,6 +75,10 @@ sudo cmake --install build --prefix /usr/local
 
 安装内容包括可执行文件、桌面入口与图标。之后可直接在应用菜单中搜索「电路仿真大师」。
 
+> 桌面入口由 `resources/linux/circuit-master.desktop.in` 在配置阶段生成，`Exec` 取自
+> `CMAKE_INSTALL_FULL_BINDIR`。若修改安装前缀，请重新运行一次 `cmake -S . -B build`
+> 让路径同步。
+
 ### 运行测试
 
 ```bash
@@ -111,8 +115,11 @@ ctest --test-dir build --output-on-failure
 
 ```
 ├── CMakeLists.txt
-├── assets/icon.svg                 应用图标
-├── packaging/circuit-master.desktop
+├── resources/
+│   ├── assets/
+│   │   ├── circuit-master.qrc      图标资源清单（/icons 前缀）
+│   │   └── icons/                  应用图标 + 12 枚工具栏图标
+│   └── linux/circuit-master.desktop.in   桌面入口模板（CMake 生成）
 ├── src/
 │   ├── core/                       数据模型与网表
 │   │   ├── Component.{h,cpp}       元件定义、引脚几何、源波形
