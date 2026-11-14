@@ -41,6 +41,23 @@ include(GNUInstallDirs)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Charts Svg)
 find_package(Qt6 6.5 QUIET COMPONENTS Test)
 
+# Debian 打包的版本号只能来自 debian/changelog（dpkg 的硬约束，不能动态生成）。
+# 两份版本号不一致时给个提示：通常意味着改了 VERSION 却忘了 dch。
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/debian/changelog")
+    file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/debian/changelog" CSM_DEB_LINE LIMIT_COUNT 1)
+    if(CSM_DEB_LINE MATCHES "^[^(]+\\(([^)]+)\\)")
+        set(CSM_DEB_VERSION "${CMAKE_MATCH_1}")
+        # 允许 Debian 修订号（0.1.0-1）：只比较上游版本部分
+        string(REGEX REPLACE "-[0-9]+$" "" CSM_DEB_UPSTREAM "${CSM_DEB_VERSION}")
+        if(NOT CSM_DEB_UPSTREAM STREQUAL CSM_VERSION_NUMBER)
+            message(WARNING
+                    "VERSION（${CSM_VERSION_STRING}）与 debian/changelog"
+                    "（${CSM_DEB_VERSION}）不一致：安装包版本取 changelog，"
+                    "发布前请用 `dch -v ${CSM_VERSION_NUMBER}` 同步")
+        endif()
+    endif()
+endif()
+
 qt_standard_project_setup()
 
 # ---------------------------------------------------------------- 版本头文件
@@ -108,7 +125,10 @@ target_link_libraries(CircuitMaster PRIVATE csm_ui)
 set_target_properties(CircuitMaster PROPERTIES WIN32_EXECUTABLE TRUE MACOSX_BUNDLE TRUE)
 
 # ---------------------------------------------------------------- 测试
-if (TARGET Qt6::Test)
+# 打包时用 -DCSM_BUILD_TESTS=OFF 跳过（见 debian/rules）
+option(CSM_BUILD_TESTS "构建单元测试（需要 Qt6::Test）" ON)
+
+if (CSM_BUILD_TESTS AND TARGET Qt6::Test)
     enable_testing()
 
     add_executable(test_core tests/test_core.cpp)

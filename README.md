@@ -213,6 +213,35 @@ ctest --test-dir build --output-on-failure
 # 电路仿真大师 v0.1.0
 ```
 
+## 打包（Debian / Ubuntu / Deepin）
+
+仓库内已包含 `debian/` 打包文件，可直接用 dpkg 工具链构建 `.deb`：
+
+```bash
+# 构建依赖：debhelper、cmake、Qt6 开发包
+sudo apt install debhelper cmake qt6-base-dev qt6-charts-dev qt6-svg-dev
+
+# 生成安装包（产物在上一级目录）
+dpkg-buildpackage -us -uc -b
+```
+
+打包相关约定：
+
+- 版本号：`debian/changelog` 是安装包的版本来源（dpkg 的硬约束），
+  与根目录 `VERSION` 不一致时 CMake 会给出警告，发版请用 `dch -v 0.2.0` 同步
+- 打包时传入 `-DCSM_BUILD_TESTS=OFF` 跳过单元测试（测试需要 Qt6::Test，与安装内容无关）
+- 安装内容全部由 CMake 的 install 规则提供：可执行文件、`.desktop`、SVG 图标、示例电路
+
+安装后的文件布局：
+
+```
+/usr/bin/CircuitMaster
+/usr/share/applications/circuit-master.desktop
+/usr/share/icons/hicolor/scalable/apps/circuit-master.svg
+/usr/share/circuit-master/examples/*.csm
+/usr/share/doc/circuit-master/          README、CHANGELOG、架构说明
+```
+
 ## 开发约定
 
 提交信息遵循 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/)：

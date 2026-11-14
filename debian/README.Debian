@@ -1,0 +1,35 @@
+circuit-master for Debian
+=========================
+
+安装内容
+--------
+
+  /usr/bin/CircuitMaster                        主程序
+  /usr/share/applications/circuit-master.desktop
+  /usr/share/icons/hicolor/scalable/apps/circuit-master.svg
+  /usr/share/circuit-master/examples/           内置示例电路（.csm）
+  /usr/share/doc/circuit-master/                README、CHANGELOG、架构说明
+
+数据与配置
+----------
+
+程序不在系统目录写任何状态：电路保存在用户选择的位置（默认扩展名 .csm，
+JSON 格式，可直接编辑）；窗口与分析设置随工程文件保存。
+
+文件关联
+--------
+
+安装或升级后由 postinst 刷新桌面项缓存与图标缓存；若应用菜单里没有立即
+出现「电路仿真大师」，注销重新登录一次即可。
+
+从源码构建
+----------
+
+  cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+  cmake --build build -j"$(nproc)"
+  sudo cmake --install build --prefix /usr/local
+
+打包时会传入 -DCSM_BUILD_TESTS=OFF 跳过测试（测试需要 Qt6::Test，
+与安装内容无关）。
+
+ -- Circuit Master Maintainers <lhdjply@users.noreply.github.com>

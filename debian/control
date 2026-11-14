@@ -1,0 +1,30 @@
+Source: circuit-master
+Section: science
+Priority: optional
+Maintainer: Circuit Master Maintainers <lhdjply@users.noreply.github.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake (>= 3.21),
+ qt6-base-dev,
+ qt6-charts-dev,
+ qt6-svg-dev,
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: circuit-master
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ qt6-qpa-plugins,
+Description: schematic editor and circuit simulator built with Qt6
+ Circuit Master is a cross-platform schematic editor and
+ circuit simulator written in C++17 with Qt6.
+ .
+ It provides a grid-based schematic canvas with drag-and-drop parts,
+ wire drawing with pin snapping, and an MNA (modified nodal analysis)
+ solver supporting DC operating point, transient and AC sweep analysis.
+ Waveforms are shown either as a static plot or as a live oscilloscope,
+ and circuits can be saved as .csm JSON or exported as SPICE netlists.
+ .
+ It is intended as a native replacement for Multisim on Linux.
