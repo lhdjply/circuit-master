@@ -155,6 +155,18 @@ ctest --test-dir build --output-on-failure
 - [ ] 交流相位、阻抗、傅里叶与参数扫描
 - [ ] 子电路与层次化设计、BOM 与 PDF 出图
 
+## 开发约定
+
+提交信息遵循 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/)：
+`feat` / `fix` / `docs` / `refactor` / `perf` / `test` / `build` / `chore` 等，
+格式为 `<type>(<scope>): <subject>`。详见 [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)。
+
+仓库提供了提交模板，克隆后执行一次即可启用：
+
+```bash
+git config commit.template .gitmessage
+```
+
 ## 许可
 
 本项目为自由软件，可作为 Multisim 在 Linux 上的替代方案使用与修改。
