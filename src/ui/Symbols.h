@@ -28,8 +28,10 @@ inline const QColor junction(0x25, 0x63, 0xeb);
 QPainterPath symbolShape(ComponentType type);
 
 /// 在局部坐标系中绘制元件符号（调用者负责旋转/平移）。
+/// glow：发光二极管的亮度（0 = 灭，1 = 最亮），其它元件忽略
 void paintSymbol(QPainter* painter, const Component& component, bool selected, bool showPins,
-                 int rotation = 0, bool mirrorX = false, bool mirrorY = false);
+                 int rotation = 0, bool mirrorX = false, bool mirrorY = false,
+                 double glow = 0.0);
 
 /// 加载内置 SVG 图标。
 ///

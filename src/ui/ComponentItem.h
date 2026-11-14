@@ -27,6 +27,9 @@ public:
     void setRotationAngle(int degrees);
     void setMirrored(bool horizontal, bool vertical);
     void setClosed(bool closed);
+    /// 发光二极管的亮度（0 = 灭，1 = 最亮），仿真后由主窗口写入
+    void setLedBrightness(double brightness);
+    double ledBrightness() const { return m_ledBrightness; }
 
     int rotationAngle() const { return m_comp.rotation; }
     bool mirroredX() const { return m_comp.mirrorX; }
@@ -46,6 +49,7 @@ protected:
 private:
     Component m_comp;
     bool m_hover = false;
+    double m_ledBrightness = 0.0;
 };
 
 } // namespace csm

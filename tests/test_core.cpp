@@ -348,6 +348,14 @@ private slots:
         // 串联电阻上的压降约为 5 − Vf，电流在 1.5~3.5 mA
         const double current = (5.0 - vled->y.last()) / 1000.0;
         QVERIFY2(current > 1.5e-3 && current < 3.5e-3, qPrintable(QString::number(current)));
+
+        // 界面靠这个电流点亮 LED，直流工作点也要带上元件电流
+        SimulationOptions op;
+        op.kind = AnalysisKind::OperatingPoint;
+        const SimulationResult dc = Simulator::run(c, op);
+        QVERIFY(dc.ok);
+        const double idc = dc.elementCurrents.value(QStringLiteral("I(D1)"), 0.0);
+        QVERIFY2(idc > 1.5e-3 && idc < 3.5e-3, qPrintable(QString::number(idc)));
     }
 
     void pnpTransistorMirrorsNpn()

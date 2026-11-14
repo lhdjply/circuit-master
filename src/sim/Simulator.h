@@ -4,6 +4,7 @@
 
 #include <QString>
 #include <QStringList>
+#include <QHash>
 #include <QVector>
 
 #include <memory>
@@ -47,6 +48,8 @@ struct SimulationResult {
     QString report;      // 工作点文字报告
     QStringList nodeLabels; // 节点 1..N 的连接说明，用于界面提示
     QVector<int> probeWaves; // 测试点对应的波形下标（已排在 waves 前部）
+    /// 最后一个采样点上各元件的电流（键为 "I(编号)"），界面用它点亮 LED 等
+    QHash<QString, double> elementCurrents;
     double elapsedMs = 0.0;
 
     const Signal* signal(const QString& name) const

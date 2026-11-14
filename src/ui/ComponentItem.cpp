@@ -6,6 +6,7 @@
 #include <QCursor>
 #include <QGraphicsSceneMouseEvent>
 #include <QPainter>
+#include <QRadialGradient>
 #include <QtMath>
 
 #include <cmath>
@@ -40,6 +41,15 @@ QPainterPath ComponentItem::shape() const
     return symbolShape(m_comp.type);
 }
 
+void ComponentItem::setLedBrightness(double brightness)
+{
+    const double clamped = std::max(0.0, std::min(brightness, 1.0));
+    if (qFuzzyCompare(clamped + 1.0, m_ledBrightness + 1.0))
+        return;
+    m_ledBrightness = clamped;
+    update();
+}
+
 void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget)
 {
     Q_UNUSED(option);
@@ -50,12 +60,30 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
 
     const bool selected = isSelected();
 
+    // 点亮的 LED：先画一圈暖色光晕，符号再叠在上面
+    if (m_comp.type == ComponentType::Led && m_ledBrightness > 0.01) {
+        painter->save();
+        painter->setPen(Qt::NoPen);
+        const double radius = 26.0;
+        QRadialGradient glow(QPointF(0.0, 0.0), radius);
+        QColor core(255, 96, 40);
+        core.setAlphaF(0.55 * m_ledBrightness);
+        QColor edge(255, 140, 40);
+        edge.setAlphaF(0.0);
+        glow.setColorAt(0.0, core);
+        glow.setColorAt(0.45, core);
+        glow.setColorAt(1.0, edge);
+        painter->setBrush(glow);
+        painter->drawEllipse(QPointF(0.0, 0.0), radius, radius);
+        painter->restore();
+    }
+
     painter->save();
     // 屏幕坐标系镜像后再旋转：M = S · R
     painter->scale(m_comp.mirrorX ? -1.0 : 1.0, m_comp.mirrorY ? -1.0 : 1.0);
     painter->rotate(double(m_comp.rotation));
     paintSymbol(painter, m_comp, selected, true, m_comp.rotation, m_comp.mirrorX,
-                m_comp.mirrorY);
+                m_comp.mirrorY, m_ledBrightness);
     painter->restore();
 
     if (m_comp.type == ComponentType::Ground) {

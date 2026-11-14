@@ -1082,6 +1082,9 @@ void MainWindow::runSimulation()
 
     appendLog(QStringLiteral("✔ 完成，用时 %1 ms").arg(QString::number(result.elapsedMs, 'f', 1)));
 
+    // 先点亮 LED：工作点分支会直接弹对话框返回，放在后面就轮不到它了
+    applyLedStates(result);
+
     const bool hasProbes = applyProbeSignals(circuit, net, result);
     if (!hasProbes && result.kind != AnalysisKind::OperatingPoint)
         appendLog(QStringLiteral("⚠ 电路中没有测试点，波形为空。请放置电压测试点（TP）或电流测试点（IP）。"));
@@ -1107,6 +1110,18 @@ void MainWindow::runSimulation()
     if (!m_wave) {
         m_wave = new WaveformWindow(this);
         connect(m_wave, &WaveformWindow::scopeRequested, this, &MainWindow::openScope);
+        // 实时仿真推进时同步刷新 LED 亮度
+        connect(m_wave, &WaveformWindow::liveUpdated, this, [this] {
+            for (ComponentItem* item : m_scene->componentItems()) {
+                if (item->component().type != ComponentType::Led)
+                    continue;
+                const double amps =
+                    m_wave->liveValue(QStringLiteral("I(%1)").arg(item->component().refdes));
+                const double i = std::abs(amps);
+                item->setLedBrightness(i < 1e-4 ? 0.0
+                                                : std::min(1.0, std::log10(i / 1e-4) / 2.0));
+            }
+        });
     }
     m_wave->setResult(result);
     m_wave->show();
@@ -1134,6 +1149,18 @@ void MainWindow::openScope()
     if (!m_wave) {
         m_wave = new WaveformWindow(this);
         connect(m_wave, &WaveformWindow::scopeRequested, this, &MainWindow::openScope);
+        // 实时仿真推进时同步刷新 LED 亮度
+        connect(m_wave, &WaveformWindow::liveUpdated, this, [this] {
+            for (ComponentItem* item : m_scene->componentItems()) {
+                if (item->component().type != ComponentType::Led)
+                    continue;
+                const double amps =
+                    m_wave->liveValue(QStringLiteral("I(%1)").arg(item->component().refdes));
+                const double i = std::abs(amps);
+                item->setLedBrightness(i < 1e-4 ? 0.0
+                                                : std::min(1.0, std::log10(i / 1e-4) / 2.0));
+            }
+        });
     }
     m_wave->startLive(circuit, probes);
     m_wave->show();
@@ -1221,6 +1248,31 @@ void MainWindow::loadExample(int index)
     updateAnalysisLabel();
     loadCircuitData(circuit, name, QString());
     appendLog(QStringLiteral("已载入示例「%1」。按 F5 运行仿真。").arg(name));
+}
+
+void MainWindow::applyLedStates(const SimulationResult& result)
+{
+    // 正向电流越大越亮：0.1 mA 起亮，10 mA 到最亮
+    const auto brightnessFor = [](double amps) {
+        const double i = std::abs(amps);
+        if (i < 1e-4)
+            return 0.0;
+        return std::min(1.0, std::log10(i / 1e-4) / 2.0);
+    };
+
+    for (ComponentItem* item : m_scene->componentItems()) {
+        if (item->component().type != ComponentType::Led)
+            continue;
+        const QString name = QStringLiteral("I(%1)").arg(item->component().refdes);
+        double current = 0.0;
+        if (const Signal* wave = result.signal(name)) {
+            if (!wave->y.isEmpty())
+                current = wave->y.last();
+        } else {
+            current = result.elementCurrents.value(name, 0.0);
+        }
+        item->setLedBrightness(brightnessFor(current));
+    }
 }
 
 void MainWindow::checkForUpdates(bool manual)

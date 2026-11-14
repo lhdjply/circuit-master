@@ -51,6 +51,8 @@ private:
     void scanExamples();
     void loadExample(int index);
     void checkForUpdates(bool manual);
+    /// 按仿真结果点亮/熄灭电路里的发光二极管
+    void applyLedStates(const SimulationResult& result);
     void showQuickGuide();
     void showAbout();
 

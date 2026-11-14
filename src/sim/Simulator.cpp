@@ -963,6 +963,14 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
 
     if (options.kind == AnalysisKind::OperatingPoint) {
         result.ok = true;
+        QVector<double> currents;
+        sample(p, x, st, false, 0.0, 0.0, dm, currents);
+        for (int i = 0; i < p.elements.size(); ++i) {
+            const int idx = p.nNodes + i;
+            if (idx < currents.size())
+                result.elementCurrents.insert(
+                    QStringLiteral("I(%1)").arg(p.elements.at(i)->refdes), currents.at(idx));
+        }
         result.report = buildReport(circuit, p, net, x, st, dm, 0.0);
         result.elapsedMs = double(timer.nsecsElapsed()) / 1e6;
         return result;

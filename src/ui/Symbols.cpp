@@ -87,7 +87,7 @@ QPainterPath symbolShape(ComponentType type)
 }
 
 void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPins, int rotation,
-                 bool mirrorX, bool mirrorY)
+                 bool mirrorX, bool mirrorY, double glow)
 {
     const QColor color = selected ? theme::selected : theme::symbol;
     const QPen pen = symbolPen(color, selected ? 2.4 : 2.0);
@@ -135,10 +135,21 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         p->drawLine(QPointF(8.0, 0.0), QPointF(30.0, 0.0));
         QPolygonF triangle;
         triangle << QPointF(-8.0, -11.0) << QPointF(-8.0, 11.0) << QPointF(8.0, 0.0);
-        p->setBrush(color);
+
+        // 点亮时三角形从主题色过渡到暖红，亮度越高越红
+        QColor fill = color;
+        QColor stroke = color;
+        if (glow > 0.01) {
+            const QColor hot(255, 72, 24);
+            fill = QColor(int(color.red() + (hot.red() - color.red()) * glow),
+                          int(color.green() + (hot.green() - color.green()) * glow),
+                          int(color.blue() + (hot.blue() - color.blue()) * glow));
+            stroke = fill;
+        }
+        p->setBrush(fill);
         p->drawPolygon(triangle);
         p->setBrush(Qt::NoBrush);
-        p->setPen(symbolPen(color, 2.8));
+        p->setPen(symbolPen(stroke, 2.8));
         p->drawLine(QPointF(8.0, -11.0), QPointF(8.0, 11.0));
 
         // 两个 45° 斜向右上的箭头，表示发光

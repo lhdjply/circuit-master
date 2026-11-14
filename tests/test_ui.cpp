@@ -242,6 +242,57 @@ private slots:
             QCoreApplication::applicationDirPath() + QStringLiteral("/shots/waveform_diode.png")));
     }
 
+    void ledLightsUpAfterSimulation()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 300));
+        source->setRotationAngle(90);
+        Component src = source->component();
+        src.function = SourceFunction::Constant;
+        src.dcValue = 5.0;
+        source->setComponent(src);
+
+        auto* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(250, 200));
+        Component r = resistor->component();
+        r.value = 1000.0;
+        resistor->setComponent(r);
+
+        auto* led = scene->placeComponent(ComponentType::Led, QPointF(400, 300));
+        led->setRotationAngle(90);
+        scene->placeComponent(ComponentType::Ground, QPointF(100, 400));
+        scene->placeComponent(ComponentType::Ground, QPointF(400, 400));
+
+        scene->addWire({QPointF(100, 270), QPointF(100, 200), QPointF(220, 200)});
+        scene->addWire({QPointF(280, 200), QPointF(400, 200), QPointF(400, 270)});
+        scene->addWire({QPointF(400, 330), QPointF(400, 400)});
+        scene->addWire({QPointF(100, 330), QPointF(100, 400)});
+        settle();
+
+        QCOMPARE(led->ledBrightness(), 0.0);
+        window.runSimulation();
+        settle();
+
+        // 5 V 经 1 kΩ → 约 3 mA，应当点亮
+        QVERIFY2(led->ledBrightness() > 0.3,
+                 qPrintable(QString::number(led->ledBrightness())));
+        QVERIFY(window.grab().save(QCoreApplication::applicationDirPath()
+                                   + QStringLiteral("/shots/led_on.png")));
+
+        // 把 LED 反接：不导通，应当熄灭
+        led->setRotationAngle(270);
+        settle();
+        window.runSimulation();
+        settle();
+        QCOMPARE(led->ledBrightness(), 0.0);
+    }
+
     void spaceRotatesSelection()
     {
         MainWindow window;

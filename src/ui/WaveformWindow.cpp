@@ -826,6 +826,17 @@ void WaveformWindow::setLivePlaying(bool playing)
     }
 }
 
+double WaveformWindow::liveValue(const QString& name) const
+{
+    if (!m_live)
+        return 0.0;
+    const int index = m_live->signalNames().indexOf(name);
+    if (index < 0)
+        return 0.0;
+    const QVector<double> values = m_live->values();
+    return index < values.size() ? values.at(index) : 0.0;
+}
+
 void WaveformWindow::liveTick()
 {
     if (!m_live || !m_livePlaying)
@@ -864,6 +875,8 @@ void WaveformWindow::liveTick()
             m_liveBuffers[i].y.append(values.at(index));
         }
     }
+
+    emit liveUpdated();
 
     const double time = m_live->time();
     const double cutoff = time - 2.0 * m_liveWindow;

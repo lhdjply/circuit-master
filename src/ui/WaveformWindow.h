@@ -35,8 +35,12 @@ public:
     bool isLive() const { return m_live != nullptr; }
     double liveTime() const;
 
+    /// 实时仿真每推进一批采样点后发出，主窗口用它刷新 LED 等指示
+    double liveValue(const QString& name) const;
+
 signals:
     void scopeRequested();
+    void liveUpdated();
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
