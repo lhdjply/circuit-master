@@ -332,6 +332,47 @@ private slots:
         QCOMPARE(loaded.components.first().rotation, 90);
     }
 
+    void suggestedStepAvoidsAliasing()
+    {
+        Circuit c = loopCircuit(ComponentType::Resistor, 1000.0,
+                                ComponentType::Resistor, 1000.0, 0.0);
+        Component& v = c.components[0];
+        v.function = SourceFunction::Sine;
+        v.amplitude = 220.0;
+        v.frequency = 50.0; // 周期 20 ms
+
+        // 每个周期 20 点 → 1 ms
+        QVERIFY2(near(c.suggestedMaxStep(), 1e-3, 1e-9),
+                 qPrintable(QString::number(c.suggestedMaxStep())));
+
+        auto peakWith = [&c](double step) {
+            LiveTransient live;
+            QString error;
+            if (!live.start(c, step, &error))
+                return -1.0;
+            const QStringList names = live.signalNames();
+            const int index = names.indexOf(QStringLiteral("V(2)"));
+            if (index < 0)
+                return -1.0;
+            double peak = 0.0;
+            const int steps = int(0.25 / step);
+            for (int i = 0; i < steps; ++i) {
+                if (!live.advance(1, &error))
+                    return -1.0;
+                peak = std::max(peak, std::abs(live.values().at(index)));
+            }
+            return peak;
+        };
+
+        // 建议步长下应看到完整正弦峰值（约 110 V）
+        const double good = peakWith(c.suggestedMaxStep());
+        QVERIFY2(near(good, 110.0, 5.0), qPrintable(QString::number(good)));
+
+        // 步长等于信号周期时完全混叠，输出退化为 0
+        const double aliased = peakWith(0.02);
+        QVERIFY2(aliased < 1.0, qPrintable(QString::number(aliased)));
+    }
+
     void liveTransientMatchesBatch()
     {
         Circuit c = loopCircuit(ComponentType::Resistor, 1000.0,

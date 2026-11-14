@@ -299,6 +299,29 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
     return circuit;
 }
 
+double Circuit::suggestedMaxStep() const
+{
+    double fmax = 0.0;
+    for (const Component& comp : components) {
+        if (!isSource(comp.type))
+            continue;
+        if (comp.function == SourceFunction::Sine && comp.frequency > 0.0) {
+            fmax = std::max(fmax, comp.frequency);
+        } else if (comp.function == SourceFunction::Pulse) {
+            if (comp.pulsePeriod > 0.0)
+                fmax = std::max(fmax, 1.0 / comp.pulsePeriod);
+            const double edge = std::max(comp.pulseRise, comp.pulseFall);
+            if (edge > 0.0)
+                fmax = std::max(fmax, 1.0 / (edge * 4.0));
+        }
+    }
+    if (fmax <= 0.0)
+        return 0.0;
+
+    // 每个周期至少 20 个采样点
+    return 1.0 / (fmax * 20.0);
+}
+
 QPointF Circuit::snapPoint(const QPointF& p, double grid)
 {
     return QPointF(std::round(p.x() / grid) * grid, std::round(p.y() / grid) * grid);

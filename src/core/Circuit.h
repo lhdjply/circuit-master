@@ -32,6 +32,10 @@ public:
     QJsonObject toJson() const;
     static Circuit fromJson(const QJsonObject& obj, QString* error = nullptr);
 
+    /// 依据电源频率/脉冲周期建议的最大步长，用于避免采样混叠。
+    /// 没有动态电源时返回 0。
+    double suggestedMaxStep() const;
+
     static QPointF snapPoint(const QPointF& p, double grid = kGrid);
     static QVector<QPointF> normalizeWire(const QVector<QPointF>& points);
 };

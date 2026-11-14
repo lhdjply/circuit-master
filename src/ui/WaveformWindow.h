@@ -89,10 +89,12 @@ private:
     int m_liveDecimation = 1;
     int m_liveSampleCounter = 0;
     bool m_livePlaying = false;
+    bool m_liveAutoScaled = false;
 
     void updateLiveDecimation();
     void restartLiveEngine();
     void applyLiveScales();
+    void autoPickLiveScales();
 };
 
 } // namespace csm

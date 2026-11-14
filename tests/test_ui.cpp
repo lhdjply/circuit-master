@@ -642,6 +642,73 @@ private slots:
                                    + QStringLiteral("/shots/settings_scope.png")));
     }
 
+    void liveScopePicksUsableRange()
+    {
+        // 220 V 正弦整流：默认 5 V/格 会把波形顶出屏幕，启动时应自动选到合适档位
+        Circuit circuit;
+        Component v;
+        v.id = 1;
+        v.type = ComponentType::VoltageSource;
+        v.pos = QPointF(100, 300);
+        v.rotation = 90;
+        v.refdes = QStringLiteral("V1");
+        v.function = SourceFunction::Sine;
+        v.amplitude = 220.0;
+        v.frequency = 50.0;
+        circuit.components.append(v);
+
+        Component r;
+        r.id = 2;
+        r.type = ComponentType::Resistor;
+        r.pos = QPointF(200, 200);
+        r.refdes = QStringLiteral("R1");
+        r.value = 1000.0;
+        circuit.components.append(r);
+
+        Component r2 = r;
+        r2.id = 3;
+        r2.pos = QPointF(300, 300);
+        r2.rotation = 90;
+        r2.refdes = QStringLiteral("R2");
+        r2.value = 1000.0;
+        circuit.components.append(r2);
+
+        Component g;
+        g.id = 4;
+        g.type = ComponentType::Ground;
+        g.pos = QPointF(200, 400);
+        g.refdes = QStringLiteral("GND");
+        circuit.components.append(g);
+
+        circuit.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(170, 200)}});
+        circuit.wires.append(Wire{{QPointF(230, 200), QPointF(300, 200), QPointF(300, 270)}});
+        circuit.wires.append(Wire{{QPointF(300, 330), QPointF(300, 400), QPointF(100, 400),
+                                   QPointF(100, 330)}});
+
+        const Netlist net = circuit.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        const int node = net.nodeOf(2, 1);
+        QVERIFY(node > 0);
+
+        WaveformWindow wave;
+        wave.resize(1000, 600);
+        wave.startLive(circuit,
+                       {{QStringLiteral("TP1 (V(%1))").arg(node), QStringLiteral("V(%1)").arg(node)}});
+        wave.show();
+        QTest::qWait(800);
+        QVERIFY(wave.isLive());
+
+        QComboBox* voltDiv = nullptr;
+        for (QComboBox* box : wave.findChildren<QComboBox*>()) {
+            if (box->count() > 0 && box->itemText(0) == QStringLiteral("1 mV"))
+                voltDiv = box;
+        }
+        QVERIFY(voltDiv);
+        // 峰值约 110 V，需要 3 格能容下
+        QVERIFY2(voltDiv->currentData().toDouble() * 3.0 >= 110.0,
+                 qPrintable(voltDiv->currentText()));
+    }
+
     void liveScopeFromMenu()
     {
         MainWindow window;

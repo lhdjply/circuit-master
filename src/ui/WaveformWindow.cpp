@@ -590,12 +590,72 @@ void WaveformWindow::applyLiveScales()
     }
 }
 
+/// 启动后按峰值选一次量程；之后只有在波形超出量程时才自动放大，
+/// 不会随信号变化来回跳动（缩小需用户手动调整）。
+void WaveformWindow::autoPickLiveScales()
+{
+    double voltPeak = 0.0;
+    double ampPeak = 0.0;
+    int samples = 0;
+    for (const Signal& wave : m_liveBuffers) {
+        samples = std::max(samples, int(wave.y.size()));
+        for (double value : wave.y) {
+            if (wave.unit == QLatin1String("V"))
+                voltPeak = std::max(voltPeak, std::abs(value));
+            else
+                ampPeak = std::max(ampPeak, std::abs(value));
+        }
+    }
+
+    // 数据太少时不判断，避免把启动瞬间的 0 V 当成峰值
+    if (samples < 50)
+        return;
+
+    const bool needInitial = !m_liveAutoScaled;
+    const bool voltageClipped = m_liveHasVoltage && voltPeak > m_liveVoltDiv * 2.9;
+    const bool currentClipped = m_liveHasCurrent && ampPeak > m_liveAmpDiv * 2.9;
+    if (!needInitial && !voltageClipped && !currentClipped)
+        return;
+
+    auto pick = [](QComboBox* box, double peak) {
+        if (!box || peak <= 0.0)
+            return;
+        // 峰值占据约 2.5 格：选“不小于 peak/2.5 的最小档”，保证不超出 ±3 格
+        const double target = peak / 2.5;
+        int best = box->count() - 1;
+        for (int i = 0; i < box->count(); ++i) {
+            if (box->itemData(i).toDouble() >= target) {
+                best = i;
+                break;
+            }
+        }
+        box->setCurrentIndex(best);
+    };
+
+    if (m_liveHasVoltage && (needInitial || voltageClipped))
+        pick(m_liveVoltDivBox, voltPeak);
+    if (m_liveHasCurrent && (needInitial || currentClipped))
+        pick(m_liveAmpDivBox, ampPeak);
+
+    m_liveVoltDiv = m_liveVoltDivBox->currentData().toDouble();
+    m_liveAmpDiv = m_liveAmpDivBox->currentData().toDouble();
+    m_liveAutoScaled = true;
+    applyLiveScales();
+}
+
 void WaveformWindow::restartLiveEngine()
 {
     m_live = std::make_unique<LiveTransient>();
 
-    // 由时间窗自动推导步长：每个窗口约 500 个采样点
-    const double step = std::max(m_liveWindow / 500.0, 1e-12);
+    // 步长同时受两件事约束：
+    //  1) 时间窗分辨率：每个窗口约 500 个采样点
+    //  2) 信号本身：每个电源周期至少 20 点，避免大时基下采样混叠（正弦被采成 0）
+    double step = m_liveWindow / 500.0;
+    const double suggested = m_liveCircuit.suggestedMaxStep();
+    if (suggested > 0.0)
+        step = std::min(step, suggested);
+    // 下限防止步数爆炸（每窗口最多 2 万步）
+    step = std::max({step, m_liveWindow / 20000.0, 1e-12});
     QString error;
     if (!m_live->start(m_liveCircuit, step, &error)) {
         m_live.reset();
@@ -607,6 +667,7 @@ void WaveformWindow::restartLiveEngine()
         buffer.x.clear();
         buffer.y.clear();
     }
+    m_liveAutoScaled = false;
     updateLiveDecimation();
     for (QLineSeries* series : m_liveSeries)
         series->clear();
@@ -670,6 +731,7 @@ void WaveformWindow::startLive(const Circuit& circuit,
     }
     m_liveHasVoltage = hasVoltage;
     m_liveHasCurrent = hasCurrent;
+    m_liveAutoScaled = false;
     m_liveVoltDiv = m_liveVoltDivBox->currentData().toDouble();
     m_liveAmpDiv = m_liveAmpDivBox->currentData().toDouble();
     if (m_liveVoltWidget)
@@ -848,9 +910,12 @@ void WaveformWindow::liveTick()
         m_liveSeries[i]->replace(points);
     }
 
-    m_info->setText(QStringLiteral("t = %1  ·  %2/div")
+    autoPickLiveScales();
+
+    m_info->setText(QStringLiteral("t = %1  ·  %2/div  ·  步长 %3")
                         .arg(formatEng(time, QStringLiteral("s"), 3),
-                             formatEng(m_liveDiv, QStringLiteral("s"), 2)));
+                             formatEng(m_liveDiv, QStringLiteral("s"), 2),
+                             formatEng(h, QStringLiteral("s"), 2)));
 }
 
 void WaveformWindow::autoScale()
