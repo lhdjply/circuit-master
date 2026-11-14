@@ -198,8 +198,9 @@ MainWindow::MainWindow(QWidget* parent)
 
     appendLog(QStringLiteral("电路仿真大师 0.1.0  —  Qt6 / MNA 求解器"));
     appendLog(QStringLiteral("提示：左键选择拖动，双击编辑参数，R 键旋转；按 F5 运行仿真。"));
+    appendLog(QStringLiteral("已新建空白电路：可从左侧元件库放置元件，"
+                             "或通过「仿真 → 示例电路」载入示例。"));
 
-    loadExample(0);
     m_dirty = false;
     updateTitle();
 }

@@ -74,6 +74,20 @@ private slots:
 
         auto* scene = window.findChild<SchematicScene*>();
         QVERIFY(scene);
+        // 启动应为空白电路
+        QCOMPARE(scene->componentItems().size(), 0);
+        QCOMPARE(scene->wireItems().size(), 0);
+
+        // 为截图载入 RC 示例
+        QAction* rcExample = nullptr;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text().contains(QStringLiteral("RC 充电")))
+                rcExample = action;
+        }
+        QVERIFY(rcExample);
+        rcExample->trigger();
+        QTest::qWait(200);
+
         QCOMPARE(scene->componentItems().size(), 6); // 4 个元件 + 2 个测试点
         QCOMPARE(scene->wireItems().size(), 3);
 
@@ -164,6 +178,15 @@ private slots:
 
         auto* scene = window.findChild<SchematicScene*>();
         QVERIFY(scene);
+
+        QAction* rcExample = nullptr;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text().contains(QStringLiteral("RC 充电")))
+                rcExample = action;
+        }
+        QVERIFY(rcExample);
+        rcExample->trigger();
+        QTest::qWait(200);
 
         ComponentItem* resistor = nullptr;
         for (ComponentItem* item : scene->componentItems()) {
