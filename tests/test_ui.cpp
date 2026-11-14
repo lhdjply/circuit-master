@@ -13,6 +13,7 @@
 #include <QFileInfo>
 #include <QPixmap>
 #include <QIcon>
+#include <QLabel>
 #include <QLineEdit>
 #include <QSet>
 #include <QTest>
@@ -191,6 +192,49 @@ private slots:
         QVERIFY(rotateAction);
         rotateAction->trigger();
         QCOMPARE(resistor->component().rotation, 90);
+    }
+
+    void captureOpAmp()
+    {
+        MainWindow window;
+        window.resize(1400, 880);
+        window.show();
+        QTest::qWait(300);
+
+        QAction* opAmpExample = nullptr;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text().contains(QStringLiteral("运放")))
+                opAmpExample = action;
+        }
+        QVERIFY(opAmpExample);
+        opAmpExample->trigger();
+        QTest::qWait(200);
+
+        const QString dir = QCoreApplication::applicationDirPath();
+        QVERIFY(window.grab().save(dir + QStringLiteral("/shots/opamp_schematic.png")));
+
+        // 选中运放后，属性面板应显示“开环增益”
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        for (ComponentItem* item : scene->componentItems()) {
+            if (item->component().type == ComponentType::OpAmp)
+                item->setSelected(true);
+        }
+        QTest::qWait(100);
+        bool gainLabelFound = false;
+        for (QLabel* label : window.findChildren<QLabel*>()) {
+            if (label->text() == QStringLiteral("开环增益"))
+                gainLabelFound = true;
+        }
+        QVERIFY2(gainLabelFound, "属性面板缺少开环增益字段");
+
+        window.runSimulation();
+        QTest::qWait(600);
+
+        auto* wave = window.findChild<WaveformWindow*>();
+        QVERIFY(wave);
+        QVERIFY(wave->isVisible());
+        QVERIFY(wave->grab().save(dir + QStringLiteral("/shots/waveform_opamp.png")));
     }
 
     void drawWireWithMouse()

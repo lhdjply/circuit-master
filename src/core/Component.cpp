@@ -17,12 +17,18 @@ QVector<QPointF> pinOffsets(ComponentType type)
 {
     if (type == ComponentType::Ground)
         return {QPointF(0.0, 0.0)};
+    if (type == ComponentType::OpAmp)
+        return {QPointF(-30.0, -20.0), QPointF(-30.0, 20.0), QPointF(30.0, 0.0)};
     return {QPointF(-30.0, 0.0), QPointF(30.0, 0.0)};
 }
 
 int pinCount(ComponentType type)
 {
-    return type == ComponentType::Ground ? 1 : 2;
+    switch (type) {
+    case ComponentType::Ground: return 1;
+    case ComponentType::OpAmp:  return 3;
+    default:                    return 2;
+    }
 }
 
 QString typeName(ComponentType type)
@@ -32,6 +38,7 @@ QString typeName(ComponentType type)
     case ComponentType::Capacitor:     return QStringLiteral("电容");
     case ComponentType::Inductor:      return QStringLiteral("电感");
     case ComponentType::Diode:         return QStringLiteral("二极管");
+    case ComponentType::OpAmp:         return QStringLiteral("运算放大器");
     case ComponentType::Switch:        return QStringLiteral("开关");
     case ComponentType::VoltageSource: return QStringLiteral("电压源");
     case ComponentType::CurrentSource: return QStringLiteral("电流源");
@@ -47,6 +54,7 @@ QString typeSymbol(ComponentType type)
     case ComponentType::Capacitor:     return QStringLiteral("C");
     case ComponentType::Inductor:      return QStringLiteral("L");
     case ComponentType::Diode:         return QStringLiteral("D");
+    case ComponentType::OpAmp:         return QStringLiteral("U");
     case ComponentType::Switch:        return QStringLiteral("S");
     case ComponentType::VoltageSource: return QStringLiteral("V");
     case ComponentType::CurrentSource: return QStringLiteral("I");
@@ -64,7 +72,7 @@ QString refPrefix(ComponentType type)
 
 bool isTwoTerminal(ComponentType type)
 {
-    return type != ComponentType::Ground;
+    return type != ComponentType::Ground && type != ComponentType::OpAmp;
 }
 
 bool isSource(ComponentType type)
@@ -150,6 +158,7 @@ QString Component::unitName() const
     case ComponentType::VoltageSource: return QStringLiteral("V");
     case ComponentType::CurrentSource: return QStringLiteral("A");
     case ComponentType::Diode:         return QStringLiteral("A");
+    case ComponentType::OpAmp:         return QString();
     case ComponentType::Switch:        return QStringLiteral("Ω");
     case ComponentType::Ground:        return QString();
     }
@@ -183,6 +192,9 @@ QString Component::displayValue() const
     case ComponentType::Diode:
         return QStringLiteral("1N4148");
 
+    case ComponentType::OpAmp:
+        return QStringLiteral("A = ") + formatEng(value, QString(), 3);
+
     case ComponentType::Switch:
         return closed ? QStringLiteral("闭合") : QStringLiteral("断开");
 
@@ -211,6 +223,9 @@ QString Component::spiceValueSpec() const
 
     case ComponentType::Diode:
         return QStringLiteral("D1N4148");
+
+    case ComponentType::OpAmp:
+        return spiceNumber(value);
 
     case ComponentType::VoltageSource:
     case ComponentType::CurrentSource: {

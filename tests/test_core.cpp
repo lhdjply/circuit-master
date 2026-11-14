@@ -2,6 +2,7 @@
 #include "core/Units.h"
 #include "sim/Simulator.h"
 
+#include <QDebug>
 #include <QTest>
 
 #include <cmath>
@@ -52,6 +53,30 @@ Circuit loopCircuit(ComponentType typeA, double valueA, ComponentType typeB, dou
     Wire w3;
     w3.points = {QPointF(300, 330), QPointF(300, 400), QPointF(100, 400), QPointF(100, 330)};
     circuit.wires = {w1, w2, w3};
+    return circuit;
+}
+
+/// 反相放大器：V1 - R1 - U1(-)  |  R2 反馈  |  U1(+) 接地
+Circuit opAmpInverting(double inputVolts, double gain = 1e5)
+{
+    Circuit circuit;
+
+    Component v = makeComp(ComponentType::VoltageSource, QPointF(100, 380), 0.0, 90);
+    v.function = SourceFunction::Constant;
+    v.dcValue = inputVolts;
+    addComponent(circuit, v);
+
+    addComponent(circuit, makeComp(ComponentType::Resistor, QPointF(180, 320), 1000.0));
+    addComponent(circuit, makeComp(ComponentType::Resistor, QPointF(300, 420), 10000.0));
+    addComponent(circuit, makeComp(ComponentType::OpAmp, QPointF(300, 300), gain));
+    addComponent(circuit, makeComp(ComponentType::Ground, QPointF(100, 410), 0.0));
+    addComponent(circuit, makeComp(ComponentType::Ground, QPointF(220, 240), 0.0));
+
+    circuit.wires.append(Wire{{QPointF(100, 350), QPointF(100, 320), QPointF(150, 320)}});
+    circuit.wires.append(Wire{{QPointF(210, 320), QPointF(270, 320)}});
+    circuit.wires.append(Wire{{QPointF(270, 320), QPointF(270, 420)}});
+    circuit.wires.append(Wire{{QPointF(330, 420), QPointF(330, 300)}});
+    circuit.wires.append(Wire{{QPointF(270, 280), QPointF(270, 240), QPointF(220, 240)}});
     return circuit;
 }
 
@@ -151,6 +176,73 @@ private slots:
         const int idx = 100; // t = 1 ms, 理论值 3.1606 V
         QVERIFY2(near(s->y.at(idx), 3.16, 0.15), qPrintable(QString::number(s->y.at(idx))));
         QVERIFY2(s->y.last() > 4.8, qPrintable(QString::number(s->y.last())));
+    }
+
+    void opAmpInvertingDc()
+    {
+        Circuit c = opAmpInverting(1.0);
+        const Netlist net = c.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        QCOMPARE(net.nodeCount, 3);
+
+        const Component* op = nullptr;
+        for (const Component& comp : c.components) {
+            if (comp.refdes == QLatin1String("U1"))
+                op = &comp;
+        }
+        QVERIFY(op);
+        QCOMPARE(net.compPins.value(op->id).size(), 3);
+
+        const int outNode = net.nodeOf(op->id, 2);
+        const int inNode = net.nodeOf(op->id, 1);
+
+        SimulationOptions tr;
+        tr.kind = AnalysisKind::Transient;
+        tr.tStop = 1e-4;
+        tr.tStep = 1e-5;
+        const SimulationResult r = Simulator::run(c, tr);
+        QVERIFY2(r.ok, qPrintable(r.error));
+
+        const Signal* out = r.signal(QStringLiteral("V(%1)").arg(outNode));
+        const Signal* in = r.signal(QStringLiteral("V(%1)").arg(inNode));
+        QVERIFY(out);
+        QVERIFY(in);
+        // 增益 10 倍反相，虚地约 0 V
+        QVERIFY2(near(out->y.first(), -10.0, 0.05),
+                 qPrintable(QString::number(out->y.first())));
+        QVERIFY2(std::abs(in->y.first()) < 2e-3,
+                 qPrintable(QString::number(in->y.first())));
+
+        QString error;
+        const Circuit loaded = Circuit::fromJson(c.toJson(), &error);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        QVERIFY(loaded.find(op->id));
+        QCOMPARE(loaded.find(op->id)->type, ComponentType::OpAmp);
+
+        const QString spice = c.toSpiceNetlist();
+        QVERIFY(spice.contains(QStringLiteral("EU1")));
+        QVERIFY(spice.contains(QStringLiteral("100000")));
+    }
+
+    void opAmpInvertingAc()
+    {
+        Circuit c = opAmpInverting(1.0);
+        const Netlist net = c.buildNetlist();
+        const int outNode = net.nodeOf(c.components.at(3).id, 2);
+
+        SimulationOptions opt;
+        opt.kind = AnalysisKind::AC;
+        opt.fStart = 1000.0;
+        opt.fStop = 1000.0001;
+        opt.acPoints = 2;
+        const SimulationResult r = Simulator::run(c, opt);
+        QVERIFY2(r.ok, qPrintable(r.error));
+
+        const Signal* out = r.signal(QStringLiteral("V(%1)").arg(outNode));
+        QVERIFY(out);
+        QVERIFY(!out->y.isEmpty());
+        // 反相 10 倍 → 20 dB
+        QVERIFY2(near(out->y.first(), 20.0, 0.1), qPrintable(QString::number(out->y.first())));
     }
 
     void diodeRectifier()

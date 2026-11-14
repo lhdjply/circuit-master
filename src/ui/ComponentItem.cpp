@@ -82,8 +82,10 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
         refAlign = Qt::AlignLeft | Qt::AlignVCenter;
         valueAlign = Qt::AlignRight | Qt::AlignVCenter;
     } else {
-        refRect = QRectF(-75.0, -43.0, 150.0, 18.0);
-        valueRect = QRectF(-80.0, 25.0, 160.0, 18.0);
+        // 运放三角形较高，标签再向外让一点
+        const bool opamp = m_comp.type == ComponentType::OpAmp;
+        refRect = QRectF(-75.0, opamp ? -51.0 : -43.0, 150.0, 18.0);
+        valueRect = QRectF(-80.0, opamp ? 33.0 : 25.0, 160.0, 18.0);
     }
 
     painter->drawText(refRect, refAlign, m_comp.refdes);

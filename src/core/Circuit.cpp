@@ -21,6 +21,7 @@ QString typeToTag(ComponentType type)
     case ComponentType::Capacitor:     return QStringLiteral("C");
     case ComponentType::Inductor:      return QStringLiteral("L");
     case ComponentType::Diode:         return QStringLiteral("D");
+    case ComponentType::OpAmp:         return QStringLiteral("U");
     case ComponentType::Switch:        return QStringLiteral("SW");
     case ComponentType::VoltageSource: return QStringLiteral("V");
     case ComponentType::CurrentSource: return QStringLiteral("I");
@@ -34,6 +35,7 @@ ComponentType tagToType(const QString& tag)
     if (tag == QLatin1String("C")) return ComponentType::Capacitor;
     if (tag == QLatin1String("L")) return ComponentType::Inductor;
     if (tag == QLatin1String("D")) return ComponentType::Diode;
+    if (tag == QLatin1String("U")) return ComponentType::OpAmp;
     if (tag == QLatin1String("SW")) return ComponentType::Switch;
     if (tag == QLatin1String("V")) return ComponentType::VoltageSource;
     if (tag == QLatin1String("I")) return ComponentType::CurrentSource;
@@ -128,6 +130,19 @@ QString Circuit::toSpiceNetlist() const
         const QVector<int> nodes = net.compPins.value(comp.id);
         if (nodes.size() < 2)
             continue;
+
+        // 运放导出为 SPICE 的 E 元件（VCVS），输出参考地
+        if (comp.type == ComponentType::OpAmp) {
+            lines << QStringLiteral("* %1: 三端理想运放，开环增益 %2，输出电阻 50Ω")
+                         .arg(comp.refdes, spiceNumber(comp.value));
+            lines << QStringLiteral("E%1 %2 0 %3 %4 %5")
+                         .arg(comp.refdes)
+                         .arg(nodes.at(2))
+                         .arg(nodes.at(0))
+                         .arg(nodes.at(1))
+                         .arg(spiceNumber(comp.value));
+            continue;
+        }
 
         QString name = comp.refdes;
         if (comp.type == ComponentType::Switch)

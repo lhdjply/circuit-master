@@ -65,6 +65,10 @@ QPainterPath symbolShape(ComponentType type)
         path.addRoundedRect(QRectF(-14.0, -6.0, 28.0, 34.0), 4.0, 4.0);
         return path;
     }
+    if (type == ComponentType::OpAmp) {
+        path.addRoundedRect(QRectF(-34.0, -27.0, 68.0, 54.0), 5.0, 5.0);
+        return path;
+    }
     path.addRoundedRect(QRectF(-33.0, -16.0, 66.0, 32.0), 5.0, 5.0);
     path.addEllipse(QPointF(-30.0, 0.0), 5.0, 5.0);
     path.addEllipse(QPointF(30.0, 0.0), 5.0, 5.0);
@@ -123,6 +127,23 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         p->setBrush(Qt::NoBrush);
         p->setPen(symbolPen(color, 2.8));
         p->drawLine(QPointF(8.0, -11.0), QPointF(8.0, 11.0));
+        break;
+    }
+
+    case ComponentType::OpAmp: {
+        p->drawLine(QPointF(-30.0, -20.0), QPointF(-18.0, -20.0));
+        p->drawLine(QPointF(-30.0, 20.0), QPointF(-18.0, 20.0));
+        p->drawLine(QPointF(18.0, 0.0), QPointF(30.0, 0.0));
+        QPolygonF triangle;
+        triangle << QPointF(-18.0, -22.0) << QPointF(-18.0, 22.0) << QPointF(18.0, 0.0);
+        p->setBrush(theme::symbolFill);
+        p->drawPolygon(triangle);
+        p->setBrush(Qt::NoBrush);
+        // 同相输入 +
+        p->drawLine(QPointF(-13.0, -12.0), QPointF(-7.0, -12.0));
+        p->drawLine(QPointF(-10.0, -15.0), QPointF(-10.0, -9.0));
+        // 反相输入 −
+        p->drawLine(QPointF(-13.0, 12.0), QPointF(-7.0, 12.0));
         break;
     }
 

@@ -189,6 +189,36 @@ Circuit exampleAcLowpass()
 }
 
 /// 优先使用内置 SVG 图标，缺失时回退到系统主题图标。
+Circuit exampleOpAmp()
+{
+    Circuit circuit;
+
+    Component v = makeComponent(1, ComponentType::VoltageSource, 100, 380, 90, QStringLiteral("V1"), 0);
+    v.function = SourceFunction::Sine;
+    v.amplitude = 1.0;
+    v.frequency = 1000.0;
+    v.offset = 0.0;
+    circuit.components.append(v);
+
+    circuit.components.append(
+        makeComponent(2, ComponentType::Resistor, 180, 320, 0, QStringLiteral("R1"), 1e3));
+    circuit.components.append(
+        makeComponent(3, ComponentType::Resistor, 300, 420, 0, QStringLiteral("R2"), 10e3));
+    circuit.components.append(
+        makeComponent(4, ComponentType::OpAmp, 300, 300, 0, QStringLiteral("U1"), 1e5));
+    circuit.components.append(
+        makeComponent(5, ComponentType::Ground, 100, 410, 0, QStringLiteral("GND"), 0));
+    circuit.components.append(
+        makeComponent(6, ComponentType::Ground, 220, 240, 0, QStringLiteral("GND"), 0));
+
+    circuit.wires.append(Wire{{QPointF(100, 350), QPointF(100, 320), QPointF(150, 320)}});
+    circuit.wires.append(Wire{{QPointF(210, 320), QPointF(270, 320)}});
+    circuit.wires.append(Wire{{QPointF(270, 320), QPointF(270, 420)}});
+    circuit.wires.append(Wire{{QPointF(330, 420), QPointF(330, 300)}});
+    circuit.wires.append(Wire{{QPointF(270, 280), QPointF(270, 240), QPointF(220, 240)}});
+    return circuit;
+}
+
 QIcon actionIcon(const QString& name, const QString& themeName, QStyle::StandardPixmap fallback)
 {
     QIcon icon(QStringLiteral(":/icons/%1.svg").arg(name));
@@ -439,7 +469,8 @@ void MainWindow::createMenus()
                                QStringLiteral("电阻分压（工作点）"),
                                QStringLiteral("二极管半波整流（瞬态）"),
                                QStringLiteral("RLC 阻尼振荡（瞬态）"),
-                               QStringLiteral("RC 低通滤波器（交流扫频）")};
+                               QStringLiteral("RC 低通滤波器（交流扫频）"),
+                               QStringLiteral("运放反相放大器（瞬态）")};
     for (int i = 0; i < names.size(); ++i) {
         QAction* action = examples->addAction(names.at(i));
         connect(action, &QAction::triggered, this, [this, i] { loadExample(i); });
@@ -481,6 +512,7 @@ void MainWindow::buildLibrary()
         {ComponentType::Capacitor, QStringLiteral("电容  C")},
         {ComponentType::Inductor, QStringLiteral("电感  L")},
         {ComponentType::Diode, QStringLiteral("二极管  D")},
+        {ComponentType::OpAmp, QStringLiteral("运算放大器  U")},
         {ComponentType::Switch, QStringLiteral("开关  S")},
         {ComponentType::VoltageSource, QStringLiteral("电压源  V")},
         {ComponentType::CurrentSource, QStringLiteral("电流源  I")},
@@ -886,6 +918,13 @@ void MainWindow::loadExample(int index)
         options.fStop = 1e6;
         options.acPoints = 160;
         break;
+    case 5:
+        circuit = exampleOpAmp();
+        name = QStringLiteral("运放反相放大器");
+        options.kind = AnalysisKind::Transient;
+        options.tStop = 3e-3;
+        options.tStep = 5e-6;
+        break;
     default:
         return;
     }
@@ -915,7 +954,7 @@ void MainWindow::showQuickGuide()
         "波形会显示在查看器中。</li>"
         "</ol>"
         "<b>注意</b>：电路必须包含接地符号（GND），否则无法确定参考电位。<br><br>"
-        "<span style='color:#64748b'>提示：菜单「仿真 → 示例电路」内置 5 个可直接运行的例子。</span>"));
+        "<span style='color:#64748b'>提示：菜单「仿真 → 示例电路」内置 6 个可直接运行的例子。</span>"));
     box.exec();
 }
 

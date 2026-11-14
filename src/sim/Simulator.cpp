@@ -148,9 +148,18 @@ Problem buildProblem(const Circuit& circuit, const Netlist& net)
         if (comp.type == ComponentType::Ground)
             continue;
         p.elements.append(&comp);
-        if (comp.type == ComponentType::VoltageSource || comp.type == ComponentType::Inductor) {
-            const int n1 = net.nodeOf(comp.id, 0);
-            const int n2 = net.nodeOf(comp.id, 1);
+        const bool needsBranch = comp.type == ComponentType::VoltageSource
+            || comp.type == ComponentType::Inductor || comp.type == ComponentType::OpAmp;
+        if (needsBranch) {
+            int n1 = -1;
+            int n2 = 0;
+            if (comp.type == ComponentType::OpAmp) {
+                n1 = net.nodeOf(comp.id, 2); // 输出端
+                n2 = 0;                      // 参考地
+            } else {
+                n1 = net.nodeOf(comp.id, 0);
+                n2 = net.nodeOf(comp.id, 1);
+            }
             if (n1 < 0 || n2 < 0)
                 continue;
             p.branchOf.insert(comp.id, p.nBranches);
@@ -207,6 +216,22 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
             const double id = dm.current(vd);
             addG(a, n1, n2, g);
             addI(b, n1, n2, id - g * vd);
+            break;
+        }
+        case ComponentType::OpAmp: {
+            // 三端理想运放：v_out - Rout·i_out = A·(v+ - v-)
+            const int br = p.branchOf.value(comp.id, -1);
+            if (br < 0)
+                break;
+            const double gain = comp.value > 1.0 ? comp.value : 1e5;
+            addBranch(a, b, p, comp.id, 50.0, 0.0);
+            const int ib = p.nNodes + br;
+            const int inP = p.nodeOf(comp.id, 0);
+            const int inM = p.nodeOf(comp.id, 1);
+            if (inP > 0)
+                a(ib, inP - 1) -= gain;
+            if (inM > 0)
+                a(ib, inM - 1) += gain;
             break;
         }
         case ComponentType::Switch: {
@@ -327,7 +352,8 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
                     * (v - st.capV.value(comp.id, 0.0));
             break;
         case ComponentType::Inductor:
-        case ComponentType::VoltageSource: {
+        case ComponentType::VoltageSource:
+        case ComponentType::OpAmp: {
             const int br = p.branchOf.value(comp.id, -1);
             if (br >= 0)
                 current = x[size_t(p.nNodes + br)];
@@ -451,6 +477,21 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
         case ComponentType::Diode:
             addG(a, n1, n2, Cx(dm.conductance(st.diodeV.value(comp.id, 0.6)), 0.0));
             break;
+        case ComponentType::OpAmp: {
+            const int br = p.branchOf.value(comp.id, -1);
+            if (br < 0)
+                break;
+            const double gain = comp.value > 1.0 ? comp.value : 1e5;
+            addBranch(a, b, p, comp.id, Cx(50.0, 0.0), Cx(0.0, 0.0));
+            const int ib = p.nNodes + br;
+            const int inP = p.nodeOf(comp.id, 0);
+            const int inM = p.nodeOf(comp.id, 1);
+            if (inP > 0)
+                a(ib, inP - 1) -= Cx(gain, 0.0);
+            if (inM > 0)
+                a(ib, inM - 1) += Cx(gain, 0.0);
+            break;
+        }
         case ComponentType::Switch:
             addG(a, n1, n2, Cx(1.0 / (comp.closed ? 1e-3 : 1e9), 0.0));
             break;

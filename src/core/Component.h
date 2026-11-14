@@ -11,6 +11,7 @@ enum class ComponentType {
     Capacitor,
     Inductor,
     Diode,
+    OpAmp,
     Switch,
     VoltageSource,
     CurrentSource,
@@ -24,7 +25,7 @@ enum class SourceFunction {
 };
 
 /// 元件在“局部坐标”下的引脚位置（未旋转、未平移）。
-/// 两端元件在 x 轴 ±30 处，接地符号只有一个位于原点的引脚。
+/// 两端元件在 x 轴 ±30 处；运放为三引脚（同相、反相、输出）；接地只有一个原点引脚。
 QVector<QPointF> pinOffsets(ComponentType type);
 int pinCount(ComponentType type);
 

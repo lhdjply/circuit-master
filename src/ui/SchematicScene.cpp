@@ -134,6 +134,9 @@ ComponentItem* SchematicScene::placeComponent(ComponentType type, const QPointF&
         comp.function = SourceFunction::Constant;
         comp.dcValue = 1e-3;
         break;
+    case ComponentType::OpAmp:
+        comp.value = 1e5;
+        break;
     case ComponentType::Switch:
         comp.closed = true;
         break;

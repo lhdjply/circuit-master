@@ -76,6 +76,7 @@ void PropertyPanel::buildUi()
 
     m_value = makeEdit(QStringLiteral("例如 10k / 4.7u"));
     m_form->addRow(QStringLiteral("数值"), m_value);
+    m_valueLabel = qobject_cast<QLabel*>(m_form->labelForField(m_value));
 
     m_function = new QComboBox(page);
     m_function->addItem(QStringLiteral("直流 (DC)"), int(SourceFunction::Constant));
@@ -191,7 +192,14 @@ void PropertyPanel::updateVisibility()
     const Component c = m_item->component();
     const bool source = isSource(c.type);
     const bool analog = c.type == ComponentType::Resistor || c.type == ComponentType::Capacitor
-        || c.type == ComponentType::Inductor;
+        || c.type == ComponentType::Inductor || c.type == ComponentType::OpAmp;
+
+    if (m_valueLabel) {
+        const bool opamp = c.type == ComponentType::OpAmp;
+        m_valueLabel->setText(opamp ? QStringLiteral("开环增益") : QStringLiteral("数值"));
+        m_value->setPlaceholderText(opamp ? QStringLiteral("例如 100k")
+                                          : QStringLiteral("例如 10k / 4.7u"));
+    }
 
     m_form->setRowVisible(m_value, analog);
     m_form->setRowVisible(m_function, source);
