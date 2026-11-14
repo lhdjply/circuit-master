@@ -280,7 +280,7 @@ bool applyProbeSignals(const Circuit& circuit, const Netlist& net, SimulationRes
 /// 优先使用内置 SVG 图标，缺失时回退到系统主题图标。
 QIcon actionIcon(const QString& name, const QString& themeName, QStyle::StandardPixmap fallback)
 {
-    QIcon icon(QStringLiteral(":/icons/%1.svg").arg(name));
+    QIcon icon = svgIcon(QStringLiteral(":/icons/%1.svg").arg(name));
     if (!icon.isNull())
         return icon;
     icon = QIcon::fromTheme(themeName);
@@ -299,7 +299,7 @@ MainWindow::MainWindow(QWidget* parent)
         ? QGuiApplication::primaryScreen()->availableGeometry()
         : QRect(0, 0, 1400, 880);
     resize(qMin(1400, available.width() - 80), qMin(880, available.height() - 80));
-    QIcon appIcon(QStringLiteral(":/icons/icon.svg"));
+    QIcon appIcon = svgIcon(QStringLiteral(":/icons/icon.svg"));
     if (appIcon.isNull())
         appIcon = componentIcon(ComponentType::VoltageSource, QSize(64, 64));
     setWindowIcon(appIcon);

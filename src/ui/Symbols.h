@@ -31,6 +31,14 @@ QPainterPath symbolShape(ComponentType type);
 void paintSymbol(QPainter* painter, const Component& component, bool selected, bool showPins,
                  int rotation = 0, bool mirrorX = false, bool mirrorY = false);
 
+/// 加载内置 SVG 图标。
+///
+/// QIcon 读 SVG 依赖 Qt 的 iconengines 插件（libqsvgicon.so）。最小化安装的
+/// 系统（CI runner、只装了运行时库的环境）没有这个插件，QIcon 会直接是空的，
+/// 界面上一片空白。插件缺失时改用 QSvgRenderer 自己渲染若干尺寸兜底。
+/// forceFallback 用于测试：跳过插件路径，直接验证兜底渲染。
+QIcon svgIcon(const QString& path, bool forceFallback = false);
+
 /// 元件库图标。
 QIcon componentIcon(ComponentType type, const QSize& size = QSize(60, 42));
 

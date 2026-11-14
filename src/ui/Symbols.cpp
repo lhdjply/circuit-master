@@ -3,6 +3,7 @@
 #include <QFont>
 #include <QPainter>
 #include <QPixmap>
+#include <QtSvg/QSvgRenderer>
 #include <QPolygonF>
 
 namespace csm {
@@ -242,6 +243,31 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         drawPinDots(p, comp, selected);
 
     p->restore();
+}
+
+QIcon svgIcon(const QString& path, bool forceFallback)
+{
+    if (!forceFallback) {
+        QIcon icon(path);
+        if (!icon.isNull())
+            return icon;
+    }
+
+    QIcon icon;
+    QSvgRenderer renderer(path);
+    if (!renderer.isValid())
+        return icon;
+
+    for (int size : {16, 22, 24, 32, 48, 64, 128}) {
+        QPixmap pixmap(size, size);
+        pixmap.fill(Qt::transparent);
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        renderer.render(&painter);
+        painter.end();
+        icon.addPixmap(pixmap);
+    }
+    return icon;
 }
 
 QIcon componentIcon(ComponentType type, const QSize& size)

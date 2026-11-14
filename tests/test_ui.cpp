@@ -1,5 +1,6 @@
 #include "csm_version.h"
 #include "ui/MainWindow.h"
+#include "ui/Symbols.h"
 #include "ui/UpdateDialog.h"
 #include "ui/SimulationSettingsDialog.h"
 #include "ui/SchematicScene.h"
@@ -106,6 +107,22 @@ private slots:
                 }
             }
             QVERIFY2(opaque > 0, qPrintable(QStringLiteral("图标渲染为空: ") + name));
+
+            // 系统没有 Qt SVG 图标插件时（CI 的最小化安装），必须走 QSvgRenderer
+            // 兜底，否则界面图标全空
+            const QIcon fallback = svgIcon(QStringLiteral(":/icons/%1.svg").arg(name), true);
+            QVERIFY2(!fallback.isNull(),
+                     qPrintable(QStringLiteral("兜底渲染失败: ") + name));
+            const QImage fallbackImage = fallback.pixmap(22, 22).toImage();
+            int fallbackOpaque = 0;
+            for (int y = 0; y < fallbackImage.height(); ++y) {
+                for (int x = 0; x < fallbackImage.width(); ++x) {
+                    if (qAlpha(fallbackImage.pixel(x, y)) > 0)
+                        ++fallbackOpaque;
+                }
+            }
+            QVERIFY2(fallbackOpaque > 0,
+                     qPrintable(QStringLiteral("兜底渲染为空: ") + name));
         }
 
         MainWindow window;
