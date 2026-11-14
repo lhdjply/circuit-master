@@ -12,6 +12,7 @@
 #include "ui/Symbols.h"
 #include "ui/WaveformWindow.h"
 
+#include <QAbstractItemView>
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
@@ -34,6 +35,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScrollArea>
@@ -50,6 +52,29 @@
 namespace csm {
 
 namespace {
+
+class ComponentLibrary : public QListWidget {
+public:
+    explicit ComponentLibrary(QWidget* parent = nullptr)
+        : QListWidget(parent)
+    {
+        setDragEnabled(true);
+        setDragDropMode(QAbstractItemView::DragOnly);
+        setDefaultDropAction(Qt::CopyAction);
+    }
+
+protected:
+    QMimeData* mimeData(const QList<QListWidgetItem*>& items) const override
+    {
+        if (items.isEmpty())
+            return nullptr;
+        auto* mime = new QMimeData;
+        mime->setData(QStringLiteral("application/x-csm-component"),
+                      QByteArray::number(items.first()->data(Qt::UserRole).toInt()));
+        return mime;
+    }
+};
+
 
 AnalysisKind kindFromTag(const QString& tag)
 {
@@ -498,12 +523,12 @@ void MainWindow::createDocks()
     libraryLayout->setContentsMargins(6, 6, 6, 6);
     libraryLayout->setSpacing(6);
 
-    auto* hint = new QLabel(QStringLiteral("点击元件，再在画布上单击放置"), libraryContainer);
+    auto* hint = new QLabel(QStringLiteral("把元件拖到画布上放置"), libraryContainer);
     hint->setWordWrap(true);
     hint->setStyleSheet(QStringLiteral("color:#64748b; font-size:11px;"));
     libraryLayout->addWidget(hint);
 
-    m_library = new QListWidget(libraryContainer);
+    m_library = new ComponentLibrary(libraryContainer);
     m_library->setIconSize(QSize(46, 34));
     m_library->setSpacing(2);
     m_library->setUniformItemSizes(true);
@@ -511,9 +536,6 @@ void MainWindow::createDocks()
     libraryDock->setWidget(libraryContainer);
     addDockWidget(Qt::LeftDockWidgetArea, libraryDock);
     buildLibrary();
-
-    connect(m_library, &QListWidget::itemClicked, this, &MainWindow::onLibraryClicked);
-    connect(m_library, &QListWidget::itemActivated, this, &MainWindow::onLibraryClicked);
 
     auto* propsDock = new QDockWidget(QStringLiteral("属性"), this);
     propsDock->setObjectName(QStringLiteral("propsDock"));
@@ -573,15 +595,6 @@ void MainWindow::updateAnalysisLabel()
         break;
     }
     m_analysisLabel->setText(text);
-}
-
-void MainWindow::onLibraryClicked(QListWidgetItem* item)
-{
-    if (!item)
-        return;
-    const auto type = ComponentType(item->data(Qt::UserRole).toInt());
-    m_view->setPendingType(type);
-    m_view->setFocus();
 }
 
 void MainWindow::onSelectionChanged()
@@ -965,7 +978,7 @@ void MainWindow::showQuickGuide()
     box.setText(QStringLiteral(
         "<b>三步完成一次仿真</b>"
         "<ol>"
-        "<li>在左侧<b>元件库</b>中点击元件，再在画布上单击放置；按 <b>R</b> 旋转。</li>"
+        "<li>从左侧<b>元件库</b>把元件拖到画布上；按 <b>R</b> 旋转。</li>"
         "<li>点击工具栏<b>连线</b>（W），在引脚处单击并拖出折线，双击结束。<br>"
         "导线端点吸附到引脚后会自动出现连接点。</li>"
         "<li>双击元件修改数值（可直接写 10kΩ、4.7µF、1mH，不写单位按默认单位），"

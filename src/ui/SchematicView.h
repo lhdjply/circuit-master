@@ -17,14 +17,13 @@ class ComponentItem;
 class SchematicView : public QGraphicsView {
     Q_OBJECT
 public:
-    enum class Tool { Select, Wire, Place };
+    enum class Tool { Select, Wire };
 
     explicit SchematicView(SchematicScene* scene, QWidget* parent = nullptr);
 
     void setTool(Tool tool);
     Tool tool() const { return m_tool; }
 
-    void setPendingType(ComponentType type);
     void zoomBy(double factor);
     void zoomFit();
     void rotateSelection();
@@ -47,6 +46,9 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private:
     void startWire(const QPointF& scenePos);
@@ -57,7 +59,6 @@ private:
 
     SchematicScene* m_scene = nullptr;
     Tool m_tool = Tool::Select;
-    ComponentType m_pendingType = ComponentType::Resistor;
 
     QVector<QPointF> m_wirePoints;
     QGraphicsPathItem* m_preview = nullptr;

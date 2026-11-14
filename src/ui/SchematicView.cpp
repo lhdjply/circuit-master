@@ -6,6 +6,9 @@
 
 #include <QGraphicsPathItem>
 #include <QContextMenuEvent>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
 #include <QKeyEvent>
 #include <QMenu>
 #include <QLineF>
@@ -32,6 +35,8 @@ SchematicView::SchematicView(SchematicScene* scene, QWidget* parent)
     setFrameShape(QFrame::NoFrame);
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
+    setAcceptDrops(true);
+    viewport()->setAcceptDrops(true);
     setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     setBackgroundBrush(Qt::NoBrush);
@@ -51,12 +56,6 @@ void SchematicView::setTool(Tool tool)
     emit toolChanged();
 }
 
-void SchematicView::setPendingType(ComponentType type)
-{
-    m_pendingType = type;
-    setTool(Tool::Place);
-}
-
 void SchematicView::updateCursorAndHint()
 {
     switch (m_tool) {
@@ -67,11 +66,6 @@ void SchematicView::updateCursorAndHint()
     case Tool::Wire:
         viewport()->setCursor(Qt::CrossCursor);
         emit hintChanged(QStringLiteral("连线模式：单击放置拐点，双击或右键结束，Esc 取消"));
-        break;
-    case Tool::Place:
-        viewport()->setCursor(Qt::CrossCursor);
-        emit hintChanged(QStringLiteral("放置 %1：单击画布放置（按住 Ctrl 可连续放置），Esc 退出")
-                             .arg(typeName(m_pendingType)));
         break;
     }
 }
@@ -88,16 +82,6 @@ void SchematicView::mousePressEvent(QMouseEvent* event)
 
     if (event->button() == Qt::RightButton && m_tool == Tool::Wire && !m_wirePoints.isEmpty()) {
         finishWire();
-        event->accept();
-        return;
-    }
-
-    if (event->button() == Qt::LeftButton && m_tool == Tool::Place) {
-        const QPointF pos = m_scene->snap(mapToScene(event->pos()));
-        ComponentItem* item = m_scene->placeComponent(m_pendingType, pos);
-        emit componentPlaced(item);
-        if (!(event->modifiers() & Qt::ControlModifier))
-            setTool(Tool::Select);
         event->accept();
         return;
     }
@@ -162,6 +146,52 @@ void SchematicView::wheelEvent(QWheelEvent* event)
     const double factor = event->angleDelta().y() > 0 ? 1.15 : 1.0 / 1.15;
     zoomBy(factor);
     event->accept();
+}
+
+void SchematicView::dragEnterEvent(QDragEnterEvent* event)
+{
+    if (event->mimeData()->hasFormat(QStringLiteral("application/x-csm-component"))) {
+        event->acceptProposedAction();
+        viewport()->setCursor(Qt::DragCopyCursor);
+    } else {
+        event->ignore();
+    }
+}
+
+void SchematicView::dragMoveEvent(QDragMoveEvent* event)
+{
+    if (event->mimeData()->hasFormat(QStringLiteral("application/x-csm-component")))
+        event->acceptProposedAction();
+    else
+        event->ignore();
+}
+
+void SchematicView::dropEvent(QDropEvent* event)
+{
+    if (!event->mimeData()->hasFormat(QStringLiteral("application/x-csm-component"))) {
+        event->ignore();
+        return;
+    }
+
+    bool ok = false;
+    const int typeValue =
+        event->mimeData()->data(QStringLiteral("application/x-csm-component")).toInt(&ok);
+    if (!ok) {
+        event->ignore();
+        return;
+    }
+
+    cancelWire();
+    const QPointF scenePos = m_scene->snap(mapToScene(event->position().toPoint()));
+    ComponentItem* item = m_scene->placeComponent(ComponentType(typeValue), scenePos);
+    if (item) {
+        m_scene->clearSelection();
+        item->setSelected(true);
+        setFocus();
+        emit componentPlaced(item);
+    }
+    updateCursorAndHint();
+    event->acceptProposedAction();
 }
 
 void SchematicView::contextMenuEvent(QContextMenuEvent* event)
@@ -242,8 +272,6 @@ void SchematicView::keyPressEvent(QKeyEvent* event)
     if (event->key() == Qt::Key_Escape) {
         if (m_tool == Tool::Wire) {
             cancelWire();
-            setTool(Tool::Select);
-        } else if (m_tool == Tool::Place) {
             setTool(Tool::Select);
         } else {
             m_scene->clearSelection();

@@ -51,7 +51,6 @@ private:
 
     void onSelectionChanged();
     void onEditRequested(ComponentItem* item);
-    void onLibraryClicked(QListWidgetItem* item);
     void setDirty(bool dirty);
     bool maybeSave();
     void updateTitle();

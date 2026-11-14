@@ -14,6 +14,9 @@
 #include <QFileInfo>
 #include <QPixmap>
 #include <QComboBox>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
 #include <QIcon>
 #include <QListWidget>
 #include <QLabel>
@@ -277,6 +280,37 @@ private slots:
         }
 
         QVERIFY(wave->grab().save(dir + QStringLiteral("/shots/waveform_opamp.png")));
+    }
+
+    void dragComponentFromLibrary()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        QTest::qWait(300);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        auto* view = window.findChild<SchematicView*>();
+        QVERIFY(scene && view);
+        QCOMPARE(scene->componentItems().size(), 0);
+
+        QMimeData mime;
+        mime.setData(QStringLiteral("application/x-csm-component"),
+                     QByteArray::number(int(ComponentType::Resistor)));
+
+        const QPoint targetInView = view->mapFromScene(QPointF(200, 200));
+        const QPoint target = view->viewport()->mapFrom(view, targetInView);
+        QDragEnterEvent enter(target, Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(view->viewport(), &enter);
+        QDropEvent drop(QPointF(target), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(view->viewport(), &drop);
+        QTest::qWait(100);
+
+        QCOMPARE(scene->componentItems().size(), 1);
+        ComponentItem* item = scene->componentItems().first();
+        QCOMPARE(item->component().type, ComponentType::Resistor);
+        QCOMPARE(item->pos(), QPointF(200, 200));
+        QVERIFY(item->isSelected());
     }
 
     void copyPasteAndMirror()
