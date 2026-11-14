@@ -7,6 +7,7 @@
 #include <QMainWindow>
 
 class QAction;
+class QComboBox;
 class QDockWidget;
 class QLabel;
 class QListWidget;
@@ -76,6 +77,7 @@ private:
     WaveformWindow* m_wave = nullptr;
     QPlainTextEdit* m_log = nullptr;
     QListWidget* m_library = nullptr;
+    QComboBox* m_libraryCategory = nullptr;
     QLabel* m_coordLabel = nullptr;
     QLabel* m_hintLabel = nullptr;
     QLabel* m_analysisLabel = nullptr;

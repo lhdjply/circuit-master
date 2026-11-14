@@ -17,6 +17,7 @@
 
 #include <QAbstractItemView>
 #include <QAction>
+#include <QComboBox>
 #include <QActionGroup>
 #include <QApplication>
 #include <QCloseEvent>
@@ -591,30 +592,39 @@ void MainWindow::createToolBar()
 
 void MainWindow::buildLibrary()
 {
+    // 元件按用途分类；下拉框切换分类，列表只显示该类的元件
     struct Entry {
         ComponentType type;
         QString text;
+        QString category;
     };
     const QVector<Entry> entries = {
-        {ComponentType::Resistor, QStringLiteral("电阻  R")},
-        {ComponentType::Capacitor, QStringLiteral("电容  C")},
-        {ComponentType::Inductor, QStringLiteral("电感  L")},
-        {ComponentType::Diode, QStringLiteral("二极管  D")},
-        {ComponentType::Npn, QStringLiteral("NPN 三极管  Q")},
-        {ComponentType::Pnp, QStringLiteral("PNP 三极管  Q")},
-        {ComponentType::Nmos, QStringLiteral("N 沟道 MOS  M")},
-        {ComponentType::Pmos, QStringLiteral("P 沟道 MOS  M")},
-        {ComponentType::Igbt, QStringLiteral("IGBT  Z")},
-        {ComponentType::OpAmp, QStringLiteral("运算放大器  U")},
-        {ComponentType::Switch, QStringLiteral("开关  S")},
-        {ComponentType::VoltageSource, QStringLiteral("电压源  V")},
-        {ComponentType::CurrentSource, QStringLiteral("电流源  I")},
-        {ComponentType::Ground, QStringLiteral("接地  GND")},
-        {ComponentType::Probe, QStringLiteral("电压测试点  TP")},
-        {ComponentType::CurrentProbe, QStringLiteral("电流测试点  IP")},
+        {ComponentType::Resistor, QStringLiteral("电阻  R"), QStringLiteral("基础")},
+        {ComponentType::Capacitor, QStringLiteral("电容  C"), QStringLiteral("基础")},
+        {ComponentType::Inductor, QStringLiteral("电感  L"), QStringLiteral("基础")},
+        {ComponentType::Diode, QStringLiteral("二极管  D"), QStringLiteral("半导体")},
+        {ComponentType::Npn, QStringLiteral("NPN 三极管  Q"), QStringLiteral("半导体")},
+        {ComponentType::Pnp, QStringLiteral("PNP 三极管  Q"), QStringLiteral("半导体")},
+        {ComponentType::Nmos, QStringLiteral("N 沟道 MOS  M"), QStringLiteral("半导体")},
+        {ComponentType::Pmos, QStringLiteral("P 沟道 MOS  M"), QStringLiteral("半导体")},
+        {ComponentType::Igbt, QStringLiteral("IGBT  Z"), QStringLiteral("半导体")},
+        {ComponentType::OpAmp, QStringLiteral("运算放大器  U"), QStringLiteral("半导体")},
+        {ComponentType::VoltageSource, QStringLiteral("电压源  V"), QStringLiteral("电源")},
+        {ComponentType::CurrentSource, QStringLiteral("电流源  I"), QStringLiteral("电源")},
+        {ComponentType::Switch, QStringLiteral("开关  S"), QStringLiteral("开关与接地")},
+        {ComponentType::Ground, QStringLiteral("接地  GND"), QStringLiteral("开关与接地")},
+        {ComponentType::Probe, QStringLiteral("电压测试点  TP"), QStringLiteral("测试点")},
+        {ComponentType::CurrentProbe, QStringLiteral("电流测试点  IP"), QStringLiteral("测试点")},
     };
 
+    const QString category = m_libraryCategory ? m_libraryCategory->currentText() : QString();
+    // 注意用 QStringLiteral：QLatin1String 会把 UTF-8 字节按 Latin-1 解释，
+    // 与下拉框里的 QString 永远不相等，列表会变成空的
+    const bool showAll = category.isEmpty() || category == QStringLiteral("全部");
+
     for (const Entry& entry : entries) {
+        if (!showAll && entry.category != category)
+            continue;
         auto* item = new QListWidgetItem(componentIcon(entry.type), entry.text, m_library);
         item->setData(Qt::UserRole, int(entry.type));
         item->setSizeHint(QSize(0, 46));
@@ -632,6 +642,16 @@ void MainWindow::createDocks()
     libraryLayout->setContentsMargins(6, 6, 6, 6);
     libraryLayout->setSpacing(6);
 
+    m_libraryCategory = new QComboBox(libraryContainer);
+    m_libraryCategory->addItem(QStringLiteral("全部"));
+    for (const QString& name : {QStringLiteral("基础"), QStringLiteral("半导体"),
+                                QStringLiteral("电源"), QStringLiteral("开关与接地"),
+                                QStringLiteral("测试点")}) {
+        m_libraryCategory->addItem(name);
+    }
+    m_libraryCategory->setToolTip(QStringLiteral("按类别筛选元件"));
+    libraryLayout->addWidget(m_libraryCategory);
+
     auto* hint = new QLabel(QStringLiteral("把元件拖到画布上放置"), libraryContainer);
     hint->setWordWrap(true);
     hint->setStyleSheet(QStringLiteral("color:#64748b; font-size:11px;"));
@@ -645,6 +665,12 @@ void MainWindow::createDocks()
     libraryDock->setWidget(libraryContainer);
     addDockWidget(Qt::LeftDockWidgetArea, libraryDock);
     buildLibrary();
+
+    connect(m_libraryCategory, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this] {
+                m_library->clear();
+                buildLibrary();
+            });
 
     auto* propsDock = new QDockWidget(QStringLiteral("属性"), this);
     propsDock->setObjectName(QStringLiteral("propsDock"));

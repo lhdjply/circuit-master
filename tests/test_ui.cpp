@@ -13,6 +13,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QComboBox>
 #include <QDir>
 #include <QFileInfo>
 #include <QPixmap>
@@ -385,6 +386,55 @@ private slots:
         }
         QVERIFY2(opaque > 0, "拖影为空");
         QVERIFY2(bluish < opaque / 2, "拖影仍带有蓝色选中背景");
+    }
+
+    void libraryFiltersByCategory()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        QListWidget* library = nullptr;
+        for (QListWidget* list : window.findChildren<QListWidget*>()) {
+            if (list->count() > 0 && list->item(0)->text().contains(QStringLiteral("电阻")))
+                library = list;
+        }
+        QVERIFY(library);
+        const int allCount = library->count();
+        QVERIFY(allCount >= 16);
+
+        QComboBox* category = nullptr;
+        for (QComboBox* box : window.findChildren<QComboBox*>()) {
+            if (box->count() > 0 && box->itemText(0) == QStringLiteral("全部"))
+                category = box;
+        }
+        QVERIFY(category);
+        QCOMPARE(category->count(), 6);
+
+        // 每个分类都应当有内容，且加起来不超过全部
+        QMap<QString, int> counts;
+        for (int i = 1; i < category->count(); ++i) {
+            category->setCurrentIndex(i);
+            settle();
+            counts.insert(category->currentText(), library->count());
+            QVERIFY2(library->count() > 0,
+                     qPrintable(QStringLiteral("分类为空: ") + category->currentText()));
+        }
+
+        QCOMPARE(counts.value(QStringLiteral("基础")), 3);
+        QCOMPARE(counts.value(QStringLiteral("电源")), 2);
+        QCOMPARE(counts.value(QStringLiteral("半导体")), 7);
+
+        int sum = 0;
+        for (int n : counts)
+            sum += n;
+        QCOMPARE(sum, allCount);
+
+        // 切回「全部」应恢复完整列表
+        category->setCurrentIndex(0);
+        settle();
+        QCOMPARE(library->count(), allCount);
     }
 
     void transistorSymbolsRender()
