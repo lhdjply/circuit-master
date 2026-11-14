@@ -6,6 +6,8 @@
 #include <QStringList>
 #include <QVector>
 
+#include <memory>
+
 namespace csm {
 
 enum class AnalysisKind {
@@ -14,8 +16,14 @@ enum class AnalysisKind {
     AC,
 };
 
+enum class DisplayMode {
+    Plot,
+    Scope,
+};
+
 struct SimulationOptions {
     AnalysisKind kind = AnalysisKind::Transient;
+    DisplayMode display = DisplayMode::Plot;
     double tStop = 0.01;
     double tStep = 1e-5;
     double fStart = 10.0;
@@ -49,6 +57,28 @@ struct SimulationResult {
         }
         return nullptr;
     }
+};
+
+/// 增量瞬态求解器：用于示波器的连续仿真，每次推进若干步。
+class LiveTransient {
+public:
+    LiveTransient();
+    ~LiveTransient();
+    LiveTransient(const LiveTransient&) = delete;
+    LiveTransient& operator=(const LiveTransient&) = delete;
+
+    bool start(const Circuit& circuit, double step, QString* error);
+    bool advance(int steps, QString* error);
+
+    double time() const;
+    double step() const;
+    int nodeCount() const;
+    const QStringList& signalNames() const;
+    QVector<double> values() const;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> m_impl;
 };
 
 /// 基于改进节点法（MNA）的电路求解器。

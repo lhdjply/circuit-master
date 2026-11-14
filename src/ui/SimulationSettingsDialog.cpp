@@ -43,6 +43,12 @@ SimulationSettingsDialog::SimulationSettingsDialog(const SimulationOptions& opti
     m_kind->setCurrentIndex(m_kind->findData(int(options.kind)));
     m_form->addRow(QStringLiteral("分析类型"), m_kind);
 
+    m_display = new QComboBox(this);
+    m_display->addItem(QStringLiteral("静态波形图"), int(DisplayMode::Plot));
+    m_display->addItem(QStringLiteral("动态示波器"), int(DisplayMode::Scope));
+    m_display->setCurrentIndex(m_display->findData(int(options.display)));
+    m_form->addRow(QStringLiteral("显示方式"), m_display);
+
     m_tStop = new QLineEdit(QString::number(options.tStop, 'g', 6), this);
     m_form->addRow(QStringLiteral("停止时间 (s)"), m_tStop);
 
@@ -61,6 +67,14 @@ SimulationSettingsDialog::SimulationSettingsDialog(const SimulationOptions& opti
     m_form->addRow(QStringLiteral("扫频点数"), m_points);
 
     root->addLayout(m_form);
+
+    m_scopeHint = new QLabel(
+        QStringLiteral("动态示波器会根据时间窗自动选择步长并连续仿真，"
+                       "无需设置停止时间与最大步长；关闭窗口或点「停止」结束。"),
+        this);
+    m_scopeHint->setWordWrap(true);
+    m_scopeHint->setStyleSheet(QStringLiteral("color:#64748b;"));
+    root->addWidget(m_scopeHint);
     root->addStretch(1);
 
     auto* box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -72,6 +86,8 @@ SimulationSettingsDialog::SimulationSettingsDialog(const SimulationOptions& opti
     connect(box, &QDialogButtonBox::rejected, this, &SimulationSettingsDialog::reject);
     connect(m_kind, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &SimulationSettingsDialog::updateVisibility);
+    connect(m_display, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &SimulationSettingsDialog::updateVisibility);
 
     updateVisibility();
 }
@@ -79,11 +95,17 @@ SimulationSettingsDialog::SimulationSettingsDialog(const SimulationOptions& opti
 void SimulationSettingsDialog::updateVisibility()
 {
     const auto kind = AnalysisKind(m_kind->currentData().toInt());
-    m_form->setRowVisible(m_tStop, kind == AnalysisKind::Transient);
-    m_form->setRowVisible(m_tStep, kind == AnalysisKind::Transient);
+    const bool scope = m_display
+        && DisplayMode(m_display->currentData().toInt()) == DisplayMode::Scope;
+
+    m_form->setRowVisible(m_tStop, kind == AnalysisKind::Transient && !scope);
+    m_form->setRowVisible(m_tStep, kind == AnalysisKind::Transient && !scope);
+    m_form->setRowVisible(m_display, kind == AnalysisKind::Transient);
     m_form->setRowVisible(m_fStart, kind == AnalysisKind::AC);
     m_form->setRowVisible(m_fStop, kind == AnalysisKind::AC);
     m_form->setRowVisible(m_points, kind == AnalysisKind::AC);
+    if (m_scopeHint)
+        m_scopeHint->setVisible(kind == AnalysisKind::Transient && scope);
 }
 
 bool SimulationSettingsDialog::parseField(QLineEdit* edit, double* out, const QString& label)
@@ -107,17 +129,21 @@ void SimulationSettingsDialog::accept()
     opt.kind = AnalysisKind(m_kind->currentData().toInt());
 
     if (opt.kind == AnalysisKind::Transient) {
-        if (!parseField(m_tStop, &opt.tStop, QStringLiteral("停止时间"))
-            || !parseField(m_tStep, &opt.tStep, QStringLiteral("最大步长")))
-            return;
-        if (opt.tStop <= 0.0 || opt.tStep <= 0.0) {
-            QMessageBox::warning(this, QStringLiteral("参数无效"),
-                                 QStringLiteral("停止时间与步长必须大于 0。"));
-            return;
+        opt.display = DisplayMode(m_display->currentData().toInt());
+        if (opt.display == DisplayMode::Plot) {
+            if (!parseField(m_tStop, &opt.tStop, QStringLiteral("停止时间"))
+                || !parseField(m_tStep, &opt.tStep, QStringLiteral("最大步长")))
+                return;
+            if (opt.tStop <= 0.0 || opt.tStep <= 0.0) {
+                QMessageBox::warning(this, QStringLiteral("参数无效"),
+                                     QStringLiteral("停止时间与步长必须大于 0。"));
+                return;
+            }
+            if (opt.tStep > opt.tStop)
+                opt.tStep = opt.tStop / 1000.0;
         }
-        if (opt.tStep > opt.tStop)
-            opt.tStep = opt.tStop / 1000.0;
     } else if (opt.kind == AnalysisKind::AC) {
+        opt.display = DisplayMode::Plot;
         if (!parseField(m_fStart, &opt.fStart, QStringLiteral("起始频率"))
             || !parseField(m_fStop, &opt.fStop, QStringLiteral("终止频率")))
             return;

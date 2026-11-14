@@ -293,6 +293,40 @@ private slots:
         QCOMPARE(loaded.components.first().rotation, 90);
     }
 
+    void liveTransientMatchesBatch()
+    {
+        Circuit c = loopCircuit(ComponentType::Resistor, 1000.0,
+                                ComponentType::Capacitor, 1e-6, 0.0);
+        Component& v = c.components[0];
+        v.function = SourceFunction::Pulse;
+        v.pulseV1 = 0.0;
+        v.pulseV2 = 5.0;
+        v.pulseRise = 1e-9;
+        v.pulseFall = 1e-9;
+        v.pulseWidth = 0.004;
+        v.pulsePeriod = 0.01;
+
+        LiveTransient live;
+        QString error;
+        QVERIFY2(live.start(c, 1e-5, &error), qPrintable(error));
+        QVERIFY2(live.advance(500, &error), qPrintable(error));
+        QCOMPARE(live.time(), 5e-3);
+        const QVector<double> values = live.values();
+        QVERIFY(values.size() >= 2);
+        const double liveCap = values.at(1); // V(2)
+
+        SimulationOptions opt;
+        opt.kind = AnalysisKind::Transient;
+        opt.tStop = 5e-3;
+        opt.tStep = 1e-5;
+        const SimulationResult r = Simulator::run(c, opt);
+        QVERIFY2(r.ok, qPrintable(r.error));
+        const Signal* s = r.signal(QStringLiteral("V(2)"));
+        QVERIFY(s);
+        QVERIFY2(near(liveCap, s->y.last(), 1e-9),
+                 qPrintable(QString::number(liveCap - s->y.last())));
+    }
+
     void probeMapsToNodeWithoutAffectingResult()
     {
         Circuit c = opAmpInverting(1.0);

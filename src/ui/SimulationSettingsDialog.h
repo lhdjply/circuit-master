@@ -6,6 +6,7 @@
 
 class QComboBox;
 class QFormLayout;
+class QLabel;
 class QLineEdit;
 class QSpinBox;
 
@@ -27,12 +28,14 @@ private:
 
     SimulationOptions m_options;
     QComboBox* m_kind = nullptr;
+    QComboBox* m_display = nullptr;
     QFormLayout* m_form = nullptr;
     QLineEdit* m_tStop = nullptr;
     QLineEdit* m_tStep = nullptr;
     QLineEdit* m_fStart = nullptr;
     QLineEdit* m_fStop = nullptr;
     QSpinBox* m_points = nullptr;
+    QLabel* m_scopeHint = nullptr;
 };
 
 } // namespace csm

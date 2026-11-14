@@ -517,6 +517,108 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
 
 } // namespace
 
+// ---------------------------------------------------------------- 增量瞬态
+struct LiveTransient::Impl {
+    Circuit circuit;
+    Netlist net;
+    Problem problem;
+    DiodeModel diode;
+    ElementState state;
+    std::vector<double> x;
+    QStringList names;
+    double h = 1e-5;
+    double t = 0.0;
+    bool started = false;
+};
+
+LiveTransient::LiveTransient()
+    : m_impl(new Impl)
+{
+}
+
+LiveTransient::~LiveTransient() = default;
+
+bool LiveTransient::start(const Circuit& circuit, double step, QString* error)
+{
+    Impl& d = *m_impl;
+    d.circuit = circuit;
+    d.h = step > 0.0 ? step : 1e-5;
+    d.net = circuit.buildNetlist();
+    if (!d.net.valid) {
+        if (error)
+            *error = d.net.error;
+        return false;
+    }
+    if (d.net.nodeCount == 0) {
+        if (error)
+            *error = QStringLiteral("电路中没有可求解的节点。");
+        return false;
+    }
+
+    d.diode = DiodeModel();
+    d.diode.vt = kBoltzmann * (273.15 + 27.0) / kElectron;
+    d.problem = buildProblem(d.circuit, d.net);
+    d.x.assign(size_t(d.problem.nNodes + d.problem.nBranches), 0.0);
+    d.state = ElementState();
+    d.t = 0.0;
+
+    if (!newtonSolve(d.problem, d.state, false, 0.0, 0.0, d.x, d.diode, error))
+        return false;
+    updateState(d.problem, d.state, d.x);
+
+    d.names.clear();
+    for (int i = 1; i <= d.problem.nNodes; ++i)
+        d.names << QStringLiteral("V(%1)").arg(i);
+    for (const Component* comp : d.problem.elements)
+        d.names << QStringLiteral("I(%1)").arg(comp->refdes);
+
+    d.started = true;
+    return true;
+}
+
+bool LiveTransient::advance(int steps, QString* error)
+{
+    Impl& d = *m_impl;
+    if (!d.started)
+        return false;
+
+    for (int i = 0; i < steps; ++i) {
+        d.t += d.h;
+        if (!newtonSolve(d.problem, d.state, true, d.h, d.t, d.x, d.diode, error))
+            return false;
+        updateState(d.problem, d.state, d.x);
+    }
+    return true;
+}
+
+double LiveTransient::time() const
+{
+    return m_impl->t;
+}
+
+double LiveTransient::step() const
+{
+    return m_impl->h;
+}
+
+int LiveTransient::nodeCount() const
+{
+    return m_impl->problem.nNodes;
+}
+
+const QStringList& LiveTransient::signalNames() const
+{
+    return m_impl->names;
+}
+
+QVector<double> LiveTransient::values() const
+{
+    QVector<double> out;
+    sample(m_impl->problem, m_impl->x, m_impl->state, true, m_impl->h, m_impl->t, m_impl->diode,
+           out);
+    return out;
+}
+
 SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions& options)
 {
     QElapsedTimer timer;

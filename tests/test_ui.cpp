@@ -1,4 +1,5 @@
 #include "ui/MainWindow.h"
+#include "ui/SimulationSettingsDialog.h"
 #include "ui/SchematicScene.h"
 #include "ui/SchematicView.h"
 #include "ui/WireItem.h"
@@ -12,6 +13,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QPixmap>
+#include <QComboBox>
 #include <QIcon>
 #include <QListWidget>
 #include <QLabel>
@@ -425,6 +427,103 @@ private slots:
                             wirePress + QPoint(0, 30));
         QTest::qWait(100);
         QCOMPARE(wire->scenePoints().first(), wireBefore + QPointF(0, 30));
+    }
+
+    void settingsHideTimingForScope()
+    {
+        SimulationOptions options;
+        options.kind = AnalysisKind::Transient;
+        options.display = DisplayMode::Scope;
+        options.tStop = 3e-3;
+        options.tStep = 1e-5;
+
+        SimulationSettingsDialog dialog(options);
+        dialog.show();
+        QTest::qWait(150);
+
+        QLineEdit* stopEdit = nullptr;
+        QLineEdit* stepEdit = nullptr;
+        for (QLineEdit* edit : dialog.findChildren<QLineEdit*>()) {
+            if (edit->text() == QString::number(options.tStop, 'g', 6))
+                stopEdit = edit;
+            if (edit->text() == QString::number(options.tStep, 'g', 6))
+                stepEdit = edit;
+        }
+        QVERIFY(stopEdit);
+        QVERIFY(stepEdit);
+        QVERIFY(!stopEdit->isVisible());
+        QVERIFY(!stepEdit->isVisible());
+
+        bool hintVisible = false;
+        for (QLabel* label : dialog.findChildren<QLabel*>()) {
+            if (label->text().contains(QStringLiteral("自动选择步长")) && label->isVisible())
+                hintVisible = true;
+        }
+        QVERIFY(hintVisible);
+
+        // 切回静态波形图后恢复
+        for (QComboBox* box : dialog.findChildren<QComboBox*>()) {
+            if (box->count() == 2 && box->itemText(0) == QStringLiteral("静态波形图"))
+                box->setCurrentIndex(0);
+        }
+        QTest::qWait(100);
+        QVERIFY(stopEdit->isVisible());
+        QVERIFY(stepEdit->isVisible());
+
+        // 回到动态模式并截图
+        for (QComboBox* box : dialog.findChildren<QComboBox*>()) {
+            if (box->count() == 2 && box->itemText(1) == QStringLiteral("动态示波器"))
+                box->setCurrentIndex(1);
+        }
+        QTest::qWait(100);
+        QVERIFY(dialog.grab().save(QCoreApplication::applicationDirPath()
+                                   + QStringLiteral("/shots/settings_scope.png")));
+    }
+
+    void liveScopeFromMenu()
+    {
+        MainWindow window;
+        window.resize(1400, 880);
+        window.show();
+        QTest::qWait(300);
+
+        QAction* rcExample = nullptr;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text().contains(QStringLiteral("RC 充电")))
+                rcExample = action;
+        }
+        QVERIFY(rcExample);
+        rcExample->trigger();
+        QTest::qWait(200);
+
+        QAction* scopeAction = nullptr;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text() == QStringLiteral("动态示波器"))
+                scopeAction = action;
+        }
+        QVERIFY(scopeAction);
+        scopeAction->trigger();
+        QTest::qWait(1200);
+
+        auto* wave = window.findChild<WaveformWindow*>();
+        QVERIFY(wave);
+        QVERIFY(wave->isVisible());
+        QVERIFY(wave->isLive());
+        QVERIFY(wave->liveTime() > 0.0);
+        QVERIFY(wave->grab().save(QCoreApplication::applicationDirPath()
+                                  + QStringLiteral("/shots/live_scope.png")));
+
+        // 时间窗下拉应覆盖 5 ns ~ 100 s
+        QComboBox* windowBox = nullptr;
+        for (QComboBox* box : wave->findChildren<QComboBox*>()) {
+            if (box->count() > 0 && box->itemText(0).startsWith(QStringLiteral("5 ns")))
+                windowBox = box;
+        }
+        QVERIFY(windowBox);
+        QCOMPARE(windowBox->count(), 32);
+        windowBox->setCurrentIndex(windowBox->count() - 1);
+        QTest::qWait(300);
+        QVERIFY(wave->isLive());
     }
 
     void drawWireWithMouse()

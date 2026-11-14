@@ -1,5 +1,6 @@
 #include "ui/MainWindow.h"
 
+
 #include "core/Circuit.h"
 #include "core/Netlist.h"
 #include "core/Units.h"
@@ -88,6 +89,9 @@ QJsonObject analysisToJson(const SimulationOptions& options)
     object.insert(QStringLiteral("fStart"), options.fStart);
     object.insert(QStringLiteral("fStop"), options.fStop);
     object.insert(QStringLiteral("acPoints"), options.acPoints);
+    object.insert(QStringLiteral("display"),
+                  options.display == DisplayMode::Scope ? QStringLiteral("scope")
+                                                        : QStringLiteral("plot"));
     return object;
 }
 
@@ -100,7 +104,31 @@ SimulationOptions optionsFromJson(const QJsonObject& analysis)
     options.fStart = analysis.value(QStringLiteral("fStart")).toDouble(options.fStart);
     options.fStop = analysis.value(QStringLiteral("fStop")).toDouble(options.fStop);
     options.acPoints = analysis.value(QStringLiteral("acPoints")).toInt(options.acPoints);
+    options.display = analysis.value(QStringLiteral("display")).toString() == QLatin1String("scope")
+        ? DisplayMode::Scope
+        : DisplayMode::Plot;
     return options;
+}
+
+/// 收集测试点与对应信号名（显示名, 信号名）。
+QVector<QPair<QString, QString>> probeSpecs(const Circuit& circuit, const Netlist& net)
+{
+    QVector<QPair<QString, QString>> probes;
+    QSet<int> seenNodes;
+    for (const Component& comp : circuit.components) {
+        if (comp.type == ComponentType::Probe) {
+            const int node = net.nodeOf(comp.id, 0);
+            if (node <= 0 || seenNodes.contains(node))
+                continue;
+            seenNodes.insert(node);
+            probes.append({QStringLiteral("%1 (V(%2))").arg(comp.refdes).arg(node),
+                           QStringLiteral("V(%1)").arg(node)});
+        } else if (comp.type == ComponentType::CurrentProbe) {
+            probes.append({QStringLiteral("%1 (I)").arg(comp.refdes),
+                           QStringLiteral("I(%1)").arg(comp.refdes)});
+        }
+    }
+    return probes;
 }
 
 /// 只保留测试点波形：电压测试点取节点电压，电流测试点取支路电流。
@@ -300,6 +328,9 @@ void MainWindow::createActions()
                    QStyle::SP_FileDialogDetailedView),
         QStringLiteral("分析设置…"), this);
 
+    m_actScope = new QAction(QStringLiteral("动态示波器"), this);
+    m_actScope->setToolTip(QStringLiteral("对当前电路连续仿真并滚动显示"));
+
     m_actSelectTool = new QAction(
         actionIcon(QStringLiteral("select"), QStringLiteral("edit-select"), QStyle::SP_ArrowUp),
         QStringLiteral("选择"), this);
@@ -345,6 +376,7 @@ void MainWindow::createActions()
 
     connect(m_actRun, &QAction::triggered, this, &MainWindow::runSimulation);
     connect(m_actSettings, &QAction::triggered, this, &MainWindow::openSettings);
+    connect(m_actScope, &QAction::triggered, this, &MainWindow::openScope);
 
     connect(m_actSelectTool, &QAction::triggered, this,
             [this] { m_view->setTool(SchematicView::Tool::Select); });
@@ -394,6 +426,7 @@ void MainWindow::createMenus()
     QMenu* simMenu = menuBar()->addMenu(QStringLiteral("仿真(&S)"));
     simMenu->addAction(m_actRun);
     simMenu->addAction(m_actSettings);
+    simMenu->addAction(m_actScope);
     simMenu->addSeparator();
 
     QMenu* examples = simMenu->addMenu(QStringLiteral("示例电路"));
@@ -761,6 +794,11 @@ void MainWindow::runSimulation()
     for (const QString& warning : net.warnings)
         appendLog(QStringLiteral("⚠ ") + warning);
 
+    if (m_options.kind == AnalysisKind::Transient && m_options.display == DisplayMode::Scope) {
+        openScope();
+        return;
+    }
+
     QApplication::setOverrideCursor(Qt::WaitCursor);
     SimulationResult result = Simulator::run(circuit, m_options);
     QApplication::restoreOverrideCursor();
@@ -799,12 +837,42 @@ void MainWindow::runSimulation()
         return;
     }
 
-    if (!m_wave)
+    if (!m_wave) {
         m_wave = new WaveformWindow(this);
+        connect(m_wave, &WaveformWindow::scopeRequested, this, &MainWindow::openScope);
+    }
     m_wave->setResult(result);
     m_wave->show();
     m_wave->raise();
     m_wave->activateWindow();
+}
+
+void MainWindow::openScope()
+{
+    const Circuit circuit = m_scene->toCircuit();
+    const Netlist net = circuit.buildNetlist();
+    if (!net.valid) {
+        QMessageBox::warning(this, QStringLiteral("无法运行示波器"), net.error);
+        return;
+    }
+
+    const QVector<QPair<QString, QString>> probes = probeSpecs(circuit, net);
+    if (probes.isEmpty()) {
+        QMessageBox::information(
+            this, QStringLiteral("无法运行示波器"),
+            QStringLiteral("电路中没有测试点。请放置电压测试点（TP）或电流测试点（IP）。"));
+        return;
+    }
+
+    if (!m_wave) {
+        m_wave = new WaveformWindow(this);
+        connect(m_wave, &WaveformWindow::scopeRequested, this, &MainWindow::openScope);
+    }
+    m_wave->startLive(circuit, probes);
+    m_wave->show();
+    m_wave->raise();
+    m_wave->activateWindow();
+    appendLog(QStringLiteral("实时示波器已启动：连续仿真，关闭窗口或点「停止」结束。"));
 }
 
 void MainWindow::openSettings()

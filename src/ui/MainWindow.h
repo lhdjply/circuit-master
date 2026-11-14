@@ -25,6 +25,7 @@ public:
     explicit MainWindow(QWidget* parent = nullptr);
 
     void runSimulation();
+    void openScope();
 
 
 protected:
@@ -95,6 +96,7 @@ private:
 
     QAction* m_actRun = nullptr;
     QAction* m_actSettings = nullptr;
+    QAction* m_actScope = nullptr;
     QAction* m_actGuide = nullptr;
     QAction* m_actAbout = nullptr;
 

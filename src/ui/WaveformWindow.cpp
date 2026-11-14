@@ -1,8 +1,12 @@
 #include "ui/WaveformWindow.h"
 
+#include "core/Circuit.h"
+
 #include "core/Units.h"
 
 #include <QChart>
+#include <QCloseEvent>
+#include <QComboBox>
 #include <QChartView>
 #include <QFileDialog>
 #include <QHBoxLayout>
@@ -17,11 +21,13 @@
 #include <QPixmap>
 #include <QPushButton>
 #include <QSplitter>
+#include <QTimer>
 #include <QTextStream>
 #include <QValueAxis>
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <memory>
 #include <cmath>
 #include <limits>
 
@@ -54,20 +60,12 @@ QIcon swatch(const QColor& color)
     return QIcon(pm);
 }
 
-struct NiceRange {
-    double min;
-    double max;
-    double step;
-};
-
-NiceRange niceRange(double lo, double hi, int targetTicks)
+void applyFixedTicks(QValueAxis* axis, double lo, double hi, int divisions)
 {
-    if (!(hi > lo)) {
-        const double center = lo;
-        lo = center - 0.5;
-        hi = center + 0.5;
-    }
-    const double rawStep = (hi - lo) / std::max(1, targetTicks);
+    double span = hi - lo;
+    if (!(span > 0.0))
+        span = 1.0;
+    const double rawStep = span / std::max(1, divisions);
     const double magnitude = std::pow(10.0, std::floor(std::log10(rawStep)));
     const double normalized = rawStep / magnitude;
     double step = 10.0;
@@ -81,18 +79,11 @@ NiceRange niceRange(double lo, double hi, int targetTicks)
         step = 5.0;
     step *= magnitude;
 
-    const double newMin = std::floor(lo / step) * step;
-    const double newMax = std::ceil(hi / step) * step;
-    return {newMin, newMax, step};
+    const double min = std::floor(lo / step) * step;
+    axis->setRange(min, min + step * divisions);
+    axis->setTickCount(divisions + 1);
 }
 
-void applyNiceTicks(QValueAxis* axis, double lo, double hi)
-{
-    const NiceRange range = niceRange(lo, hi, 6);
-    axis->setRange(range.min, range.max);
-    const int ticks = int(std::round((range.max - range.min) / range.step)) + 1;
-    axis->setTickCount(std::max(2, std::min(ticks, 20)));
-}
 
 QString kindName(AnalysisKind kind)
 {
@@ -153,18 +144,129 @@ WaveformWindow::WaveformWindow(QWidget* parent)
 
     auto* toolbar = new QHBoxLayout();
     toolbar->setContentsMargins(10, 8, 10, 8);
-    auto* autoButton = new QPushButton(QStringLiteral("自动缩放"), chartSide);
+    m_autoButton = new QPushButton(QStringLiteral("自动缩放"), chartSide);
+    QPushButton* autoButton = m_autoButton;
+    m_scopeButton = new QPushButton(QStringLiteral("示波器"), chartSide);
+    m_scopeButton->setToolTip(QStringLiteral("以动态示波器方式回放瞬态波形"));
+    m_scopeButton->setEnabled(false);
     auto* csvButton = new QPushButton(QStringLiteral("导出 CSV"), chartSide);
     auto* pngButton = new QPushButton(QStringLiteral("导出图片"), chartSide);
     toolbar->addWidget(autoButton);
+    toolbar->addWidget(m_scopeButton);
     toolbar->addSpacing(12);
     auto* tip = new QLabel(QStringLiteral("在图上拖拽可框选放大，右键复位"), chartSide);
     tip->setStyleSheet(QStringLiteral("color:#94a3b8; font-size:11px;"));
     toolbar->addWidget(tip);
     toolbar->addStretch(1);
+    m_liveControls = new QWidget(chartSide);
+    auto* liveLayout = new QHBoxLayout(m_liveControls);
+    liveLayout->setContentsMargins(0, 0, 0, 0);
+    liveLayout->setSpacing(6);
+    m_liveButton = new QPushButton(QStringLiteral("暂停"), m_liveControls);
+    m_liveWindowBox = new QComboBox(m_liveControls);
+    const QVector<QPair<QString, double>> divisions = {
+        {QStringLiteral("5 ns/div"), 5e-9},    {QStringLiteral("10 ns/div"), 1e-8},
+        {QStringLiteral("20 ns/div"), 2e-8},   {QStringLiteral("50 ns/div"), 5e-8},
+        {QStringLiteral("100 ns/div"), 1e-7},  {QStringLiteral("200 ns/div"), 2e-7},
+        {QStringLiteral("500 ns/div"), 5e-7},  {QStringLiteral("1 µs/div"), 1e-6},
+        {QStringLiteral("2 µs/div"), 2e-6},    {QStringLiteral("5 µs/div"), 5e-6},
+        {QStringLiteral("10 µs/div"), 1e-5},   {QStringLiteral("20 µs/div"), 2e-5},
+        {QStringLiteral("50 µs/div"), 5e-5},   {QStringLiteral("100 µs/div"), 1e-4},
+        {QStringLiteral("200 µs/div"), 2e-4},  {QStringLiteral("500 µs/div"), 5e-4},
+        {QStringLiteral("1 ms/div"), 1e-3},    {QStringLiteral("2 ms/div"), 2e-3},
+        {QStringLiteral("5 ms/div"), 5e-3},    {QStringLiteral("10 ms/div"), 1e-2},
+        {QStringLiteral("20 ms/div"), 2e-2},   {QStringLiteral("50 ms/div"), 5e-2},
+        {QStringLiteral("100 ms/div"), 1e-1},  {QStringLiteral("200 ms/div"), 2e-1},
+        {QStringLiteral("500 ms/div"), 5e-1},  {QStringLiteral("1 s/div"), 1.0},
+        {QStringLiteral("2 s/div"), 2.0},      {QStringLiteral("5 s/div"), 5.0},
+        {QStringLiteral("10 s/div"), 10.0},    {QStringLiteral("20 s/div"), 20.0},
+        {QStringLiteral("50 s/div"), 50.0},    {QStringLiteral("100 s/div"), 100.0},
+    };
+    m_liveWindowBox->setMaxVisibleItems(20);
+    m_liveWindowBox->setMinimumContentsLength(12);
+    for (const auto& entry : divisions)
+        m_liveWindowBox->addItem(entry.first, entry.second);
+    m_liveWindowBox->setCurrentIndex(15); // 500 µs/div
+    m_liveVoltDivBox = new QComboBox(m_liveControls);
+    const QVector<QPair<QString, double>> voltDivs = {
+        {QStringLiteral("1 mV"), 1e-3},   {QStringLiteral("2 mV"), 2e-3},
+        {QStringLiteral("5 mV"), 5e-3},   {QStringLiteral("10 mV"), 1e-2},
+        {QStringLiteral("20 mV"), 2e-2},  {QStringLiteral("50 mV"), 5e-2},
+        {QStringLiteral("100 mV"), 1e-1}, {QStringLiteral("200 mV"), 2e-1},
+        {QStringLiteral("500 mV"), 5e-1}, {QStringLiteral("1 V"), 1.0},
+        {QStringLiteral("2 V"), 2.0},     {QStringLiteral("5 V"), 5.0},
+        {QStringLiteral("10 V"), 10.0},   {QStringLiteral("20 V"), 20.0},
+        {QStringLiteral("50 V"), 50.0},   {QStringLiteral("100 V"), 100.0},
+    };
+    for (const auto& entry : voltDivs)
+        m_liveVoltDivBox->addItem(entry.first, entry.second);
+    m_liveVoltDivBox->setCurrentIndex(11); // 5 V
+
+    m_liveAmpDivBox = new QComboBox(m_liveControls);
+    const QVector<QPair<QString, double>> ampDivs = {
+        {QStringLiteral("1 µA"), 1e-6},   {QStringLiteral("2 µA"), 2e-6},
+        {QStringLiteral("5 µA"), 5e-6},   {QStringLiteral("10 µA"), 1e-5},
+        {QStringLiteral("20 µA"), 2e-5},  {QStringLiteral("50 µA"), 5e-5},
+        {QStringLiteral("100 µA"), 1e-4}, {QStringLiteral("200 µA"), 2e-4},
+        {QStringLiteral("500 µA"), 5e-4}, {QStringLiteral("1 mA"), 1e-3},
+        {QStringLiteral("2 mA"), 2e-3},   {QStringLiteral("5 mA"), 5e-3},
+        {QStringLiteral("10 mA"), 1e-2},  {QStringLiteral("20 mA"), 2e-2},
+        {QStringLiteral("50 mA"), 5e-2},  {QStringLiteral("100 mA"), 1e-1},
+        {QStringLiteral("1 A"), 1.0},
+    };
+    for (const auto& entry : ampDivs)
+        m_liveAmpDivBox->addItem(entry.first, entry.second);
+    m_liveAmpDivBox->setCurrentIndex(9); // 1 mA
+
+    auto makePair = [this](const QString& text, QComboBox* box) {
+        auto* widget = new QWidget(m_liveControls);
+        auto* layout = new QHBoxLayout(widget);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(4);
+        layout->addWidget(new QLabel(text, widget));
+        layout->addWidget(box);
+        return widget;
+    };
+
+    m_liveVoltWidget = makePair(QStringLiteral("电压/格"), m_liveVoltDivBox);
+    m_liveAmpWidget = makePair(QStringLiteral("电流/格"), m_liveAmpDivBox);
+
+    auto* stopLiveButton = new QPushButton(QStringLiteral("停止"), m_liveControls);
+    liveLayout->addWidget(m_liveButton);
+    liveLayout->addWidget(makePair(QStringLiteral("时间/格"), m_liveWindowBox));
+    liveLayout->addWidget(m_liveVoltWidget);
+    liveLayout->addWidget(m_liveAmpWidget);
+    liveLayout->addWidget(stopLiveButton);
+    m_liveControls->setVisible(false);
+
+    toolbar->addWidget(m_liveControls);
     toolbar->addWidget(csvButton);
     toolbar->addWidget(pngButton);
     chartLayout->addLayout(toolbar);
+
+    m_liveTimer = new QTimer(this);
+    m_liveTimer->setInterval(33);
+    connect(m_liveTimer, &QTimer::timeout, this, &WaveformWindow::liveTick);
+    connect(m_liveButton, &QPushButton::clicked, this,
+            [this] { setLivePlaying(!m_livePlaying); });
+    connect(stopLiveButton, &QPushButton::clicked, this, &WaveformWindow::stopLive);
+    connect(m_liveWindowBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this] {
+                m_liveDiv = m_liveWindowBox->currentData().toDouble();
+                m_liveWindow = m_liveDiv * 10.0;
+                if (m_live)
+                    restartLiveEngine();
+            });
+    connect(m_liveVoltDivBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this] {
+                m_liveVoltDiv = m_liveVoltDivBox->currentData().toDouble();
+                applyLiveScales();
+            });
+    connect(m_liveAmpDivBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this] {
+                m_liveAmpDiv = m_liveAmpDivBox->currentData().toDouble();
+                applyLiveScales();
+            });
 
     m_chart = new QChart();
     m_chart->legend()->hide();
@@ -188,6 +290,7 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     connect(allButton, &QPushButton::clicked, this, [this] { selectAll(true); });
     connect(noneButton, &QPushButton::clicked, this, [this] { selectAll(false); });
     connect(autoButton, &QPushButton::clicked, this, &WaveformWindow::autoScale);
+    connect(m_scopeButton, &QPushButton::clicked, this, &WaveformWindow::scopeRequested);
     connect(csvButton, &QPushButton::clicked, this, &WaveformWindow::exportCsv);
     connect(pngButton, &QPushButton::clicked, this, &WaveformWindow::exportImage);
     m_view->installEventFilter(this);
@@ -196,6 +299,12 @@ WaveformWindow::WaveformWindow(QWidget* parent)
         if (!m_building)
             rebuild();
     });
+}
+
+void WaveformWindow::closeEvent(QCloseEvent* event)
+{
+    stopLive();
+    QWidget::closeEvent(event);
 }
 
 bool WaveformWindow::eventFilter(QObject* watched, QEvent* event)
@@ -213,10 +322,14 @@ bool WaveformWindow::eventFilter(QObject* watched, QEvent* event)
 
 void WaveformWindow::setResult(const SimulationResult& result)
 {
+    stopLive();
     m_result = result;
     populateList();
     rebuild();
     setWindowTitle(QStringLiteral("波形查看器 — %1 — 电路仿真大师").arg(kindName(result.kind)));
+    if (m_scopeButton)
+        m_scopeButton->setEnabled(result.kind == AnalysisKind::Transient
+                                  && !result.waves.isEmpty());
 }
 
 void WaveformWindow::populateList()
@@ -354,7 +467,9 @@ void WaveformWindow::rebuild()
         logX = true;
     } else {
         auto* valueAxis = new QValueAxis();
-        applyNiceTicks(valueAxis, xmin * xFactor, xmax * xFactor);
+        // 时间轴严格止于仿真结束时间，按 10 格等分
+        valueAxis->setRange(xmin * xFactor, xmax * xFactor);
+        valueAxis->setTickCount(11);
         valueAxis->setLabelFormat(QStringLiteral("%.4g"));
         valueAxis->setTitleText(QStringLiteral("时间 (%1)").arg(xUnit));
         axisX = valueAxis;
@@ -385,19 +500,19 @@ void WaveformWindow::rebuild()
     auto* axisY = new QValueAxis();
     QString yTitle;
     if (ac) {
-        applyNiceTicks(axisY, others.min, others.max);
+        applyFixedTicks(axisY, others.min, others.max, 6);
         yTitle = QStringLiteral("幅值 (dB)");
     } else if (dualAxis) {
-        applyNiceTicks(axisY, volts.min * voltageScale, volts.max * voltageScale);
+        applyFixedTicks(axisY, volts.min * voltageScale, volts.max * voltageScale, 6);
         yTitle = QStringLiteral("电压 (%1V)").arg(voltagePrefix);
     } else if (volts.valid()) {
-        applyNiceTicks(axisY, volts.min * voltageScale, volts.max * voltageScale);
+        applyFixedTicks(axisY, volts.min * voltageScale, volts.max * voltageScale, 6);
         yTitle = QStringLiteral("电压 (%1V)").arg(voltagePrefix);
     } else if (amps.valid()) {
-        applyNiceTicks(axisY, amps.min * currentScale, amps.max * currentScale);
+        applyFixedTicks(axisY, amps.min * currentScale, amps.max * currentScale, 6);
         yTitle = QStringLiteral("电流 (%1A)").arg(currentPrefix);
     } else {
-        applyNiceTicks(axisY, others.min, others.max);
+        applyFixedTicks(axisY, others.min, others.max, 6);
         yTitle = QStringLiteral("数值");
     }
     axisY->setLabelFormat(QStringLiteral("%.4g"));
@@ -406,7 +521,7 @@ void WaveformWindow::rebuild()
     QValueAxis* axisY2 = nullptr;
     if (dualAxis) {
         axisY2 = new QValueAxis();
-        applyNiceTicks(axisY2, amps.min * currentScale, amps.max * currentScale);
+        applyFixedTicks(axisY2, amps.min * currentScale, amps.max * currentScale, 6);
         axisY2->setLabelFormat(QStringLiteral("%.4g"));
         axisY2->setTitleText(QStringLiteral("电流 (%1A)").arg(currentPrefix));
         axisY2->setGridLineVisible(false);
@@ -451,6 +566,291 @@ void WaveformWindow::rebuild()
                         .arg(m_result.waves.size())
                         .arg(selected.size())
                         .arg(pointCount));
+}
+
+void WaveformWindow::applyLiveScales()
+{
+    if (!m_liveAxisY)
+        return;
+
+    const bool leftIsCurrent = !m_liveHasVoltage && m_liveHasCurrent;
+    if (leftIsCurrent)
+        m_liveAxisY->setTitleText(QStringLiteral("电流 (A)"));
+    else
+        m_liveAxisY->setTitleText(QStringLiteral("电压 (V)"));
+
+    m_liveAxisY->setTickCount(7);
+    m_liveAxisY->setRange(-3.0 * (leftIsCurrent ? m_liveAmpDiv : m_liveVoltDiv),
+                          3.0 * (leftIsCurrent ? m_liveAmpDiv : m_liveVoltDiv));
+
+    if (m_liveAxisY2) {
+        m_liveAxisY2->setTickCount(7);
+        m_liveAxisY2->setTitleText(QStringLiteral("电流 (A)"));
+        m_liveAxisY2->setRange(-3.0 * m_liveAmpDiv, 3.0 * m_liveAmpDiv);
+    }
+}
+
+void WaveformWindow::restartLiveEngine()
+{
+    m_live = std::make_unique<LiveTransient>();
+
+    // 由时间窗自动推导步长：每个窗口约 500 个采样点
+    const double step = std::max(m_liveWindow / 500.0, 1e-12);
+    QString error;
+    if (!m_live->start(m_liveCircuit, step, &error)) {
+        m_live.reset();
+        m_info->setText(QStringLiteral("无法启动实时仿真：%1").arg(error));
+        return;
+    }
+
+    for (Signal& buffer : m_liveBuffers) {
+        buffer.x.clear();
+        buffer.y.clear();
+    }
+    updateLiveDecimation();
+    for (QLineSeries* series : m_liveSeries)
+        series->clear();
+}
+
+void WaveformWindow::updateLiveDecimation()
+{
+    const double h = m_live ? m_live->step() : 1e-5;
+    const double pointsPerWindow = m_liveWindow / std::max(h, 1e-12);
+    m_liveDecimation = std::max(1, int(std::ceil(pointsPerWindow / 4000.0)));
+    m_liveSampleCounter = 0;
+}
+
+double WaveformWindow::liveTime() const
+{
+    return m_live ? m_live->time() : 0.0;
+}
+
+void WaveformWindow::startLive(const Circuit& circuit,
+                               const QVector<QPair<QString, QString>>& probes)
+{
+    stopLive();
+    m_probes = probes;
+    m_liveCircuit = circuit;
+
+    if (!m_liveTimer)
+        return;
+
+    m_liveBuffers.clear();
+    for (const QPair<QString, QString>& probe : probes) {
+        Signal wave;
+        wave.name = probe.first;
+        wave.unit = probe.second.startsWith(QLatin1String("V(")) ? QStringLiteral("V")
+                                                                  : QStringLiteral("A");
+        m_liveBuffers.append(wave);
+    }
+
+    m_building = true;
+    m_list->clear();
+    for (int i = 0; i < probes.size(); ++i) {
+        auto* item = new QListWidgetItem(swatch(colorFor(i)), probes.at(i).first);
+        item->setFlags(Qt::ItemIsEnabled);
+        m_list->addItem(item);
+    }
+    m_building = false;
+
+    m_chart->removeAllSeries();
+    const QList<QAbstractAxis*> oldAxes = m_chart->axes();
+    for (QAbstractAxis* axis : oldAxes) {
+        m_chart->removeAxis(axis);
+        delete axis;
+    }
+
+    bool hasVoltage = false;
+    bool hasCurrent = false;
+    for (const Signal& wave : m_liveBuffers) {
+        if (wave.unit == QLatin1String("V"))
+            hasVoltage = true;
+        else
+            hasCurrent = true;
+    }
+    m_liveHasVoltage = hasVoltage;
+    m_liveHasCurrent = hasCurrent;
+    m_liveVoltDiv = m_liveVoltDivBox->currentData().toDouble();
+    m_liveAmpDiv = m_liveAmpDivBox->currentData().toDouble();
+    if (m_liveVoltWidget)
+        m_liveVoltWidget->setVisible(hasVoltage);
+    if (m_liveAmpWidget)
+        m_liveAmpWidget->setVisible(hasCurrent);
+
+    m_liveAxisX = new QValueAxis();
+    m_liveAxisX->setLabelFormat(QStringLiteral("%.4g"));
+    m_liveAxisX->setTickCount(11);
+    m_chart->addAxis(m_liveAxisX, Qt::AlignBottom);
+
+    m_liveAxisY = new QValueAxis();
+    m_liveAxisY->setLabelFormat(QStringLiteral("%.4g"));
+    m_liveAxisY->setTickCount(7);
+    m_liveAxisY->setTitleText(hasVoltage ? QStringLiteral("电压 (V)")
+                                         : QStringLiteral("电流 (A)"));
+    m_chart->addAxis(m_liveAxisY, Qt::AlignLeft);
+
+    m_liveAxisY2 = nullptr;
+    if (hasVoltage && hasCurrent) {
+        m_liveAxisY2 = new QValueAxis();
+        m_liveAxisY2->setLabelFormat(QStringLiteral("%.4g"));
+        m_liveAxisY2->setTickCount(7);
+        m_liveAxisY2->setTitleText(QStringLiteral("电流 (A)"));
+        m_liveAxisY2->setGridLineVisible(false);
+        m_chart->addAxis(m_liveAxisY2, Qt::AlignRight);
+    }
+
+    m_liveSeries.clear();
+    for (int i = 0; i < probes.size(); ++i) {
+        auto* series = new QLineSeries();
+        series->setName(probes.at(i).first);
+        series->setPen(QPen(colorFor(i), 1.8));
+        m_chart->addSeries(series);
+        series->attachAxis(m_liveAxisX);
+        const bool current = m_liveBuffers.at(i).unit == QLatin1String("A") && m_liveAxisY2;
+        series->attachAxis(current ? m_liveAxisY2 : m_liveAxisY);
+        m_liveSeries.append(series);
+    }
+
+    m_liveDiv = m_liveWindowBox->currentData().toDouble();
+    m_liveWindow = m_liveDiv * 10.0;
+    m_liveAxisX->setRange(0.0, m_liveWindow);
+    applyLiveScales();
+
+    m_chart->setTitle(QString());
+    m_liveControls->setVisible(true);
+    m_scopeButton->setVisible(false);
+    if (m_autoButton)
+        m_autoButton->setEnabled(false);
+    setWindowTitle(QStringLiteral("实时示波器 — 电路仿真大师"));
+    m_info->setText(QStringLiteral("实时仿真启动…"));
+
+    restartLiveEngine();
+    m_liveClock.start();
+    setLivePlaying(true);
+    liveTick();
+}
+
+void WaveformWindow::stopLive()
+{
+    if (m_liveTimer)
+        m_liveTimer->stop();
+    m_livePlaying = false;
+    m_live.reset();
+    m_liveBuffers.clear();
+    m_liveSeries.clear();
+    m_liveAxisX = nullptr;
+    m_liveAxisY = nullptr;
+    m_liveAxisY2 = nullptr;
+    if (m_liveControls)
+        m_liveControls->setVisible(false);
+    if (m_scopeButton)
+        m_scopeButton->setVisible(true);
+    if (m_autoButton)
+        m_autoButton->setEnabled(true);
+}
+
+void WaveformWindow::setLivePlaying(bool playing)
+{
+    m_livePlaying = playing;
+    if (m_liveButton)
+        m_liveButton->setText(playing ? QStringLiteral("暂停") : QStringLiteral("继续"));
+    if (!m_liveTimer)
+        return;
+    if (playing) {
+        m_liveClock.restart();
+        m_liveTimer->start();
+    } else {
+        m_liveTimer->stop();
+    }
+}
+
+void WaveformWindow::liveTick()
+{
+    if (!m_live || !m_livePlaying)
+        return;
+
+    double dt = double(m_liveClock.restart()) / 1000.0;
+    dt = std::min(dt, 0.1);
+    const double h = m_live->step();
+    int steps = int(std::lround(dt * m_liveSpeed / std::max(h, 1e-12)));
+    steps = std::max(1, std::min(steps, 200));
+
+    QString error;
+    const QStringList names = m_live->signalNames();
+    QVector<int> indices;
+    for (const QPair<QString, QString>& probe : m_probes)
+        indices.append(names.indexOf(probe.second));
+
+    for (int k = 0; k < steps; ++k) {
+        if (!m_live->advance(1, &error)) {
+            setLivePlaying(false);
+            m_info->setText(QStringLiteral("实时仿真中止：%1").arg(error));
+            return;
+        }
+        const bool keep = (m_liveSampleCounter % m_liveDecimation == 0) || (k == steps - 1);
+        ++m_liveSampleCounter;
+        if (!keep)
+            continue;
+
+        const double sampleTime = m_live->time();
+        const QVector<double> values = m_live->values();
+        for (int i = 0; i < m_liveBuffers.size(); ++i) {
+            const int index = indices.at(i);
+            if (index < 0 || index >= values.size())
+                continue;
+            m_liveBuffers[i].x.append(sampleTime);
+            m_liveBuffers[i].y.append(values.at(index));
+        }
+    }
+
+    const double time = m_live->time();
+    const double cutoff = time - 2.0 * m_liveWindow;
+    for (int i = 0; i < m_liveBuffers.size(); ++i) {
+        int drop = 0;
+        while (drop < m_liveBuffers.at(i).x.size()
+               && m_liveBuffers.at(i).x.at(drop) < cutoff)
+            ++drop;
+        if (drop > 0) {
+            m_liveBuffers[i].x.remove(0, drop);
+            m_liveBuffers[i].y.remove(0, drop);
+        }
+    }
+
+    double timeScale = 1.0;
+    QString timeUnit = QStringLiteral("s");
+    if (m_liveWindow < 1e-6) {
+        timeScale = 1e9;
+        timeUnit = QStringLiteral("ns");
+    } else if (m_liveWindow < 1e-3) {
+        timeScale = 1e6;
+        timeUnit = QStringLiteral("µs");
+    } else if (m_liveWindow < 1.0) {
+        timeScale = 1e3;
+        timeUnit = QStringLiteral("ms");
+    }
+    const QString timeTitle = QStringLiteral("时间 (%1)").arg(timeUnit);
+    if (m_liveAxisX->titleText() != timeTitle)
+        m_liveAxisX->setTitleText(timeTitle);
+
+    // 时间轴固定为 0..窗口，数据在其中向左滚动
+    const double timeOffset = std::max(0.0, time - m_liveWindow);
+    m_liveAxisX->setRange(0.0, m_liveWindow * timeScale);
+
+    for (int i = 0; i < m_liveSeries.size(); ++i) {
+        QVector<QPointF> points;
+        const Signal& wave = m_liveBuffers.at(i);
+        points.reserve(wave.x.size());
+        for (int k = 0; k < wave.x.size(); ++k) {
+            if (wave.x.at(k) < timeOffset)
+                continue;
+            points.append(QPointF((wave.x.at(k) - timeOffset) * timeScale, wave.y.at(k)));
+        }
+        m_liveSeries[i]->replace(points);
+    }
+
+    m_info->setText(QStringLiteral("t = %1  ·  %2/div")
+                        .arg(formatEng(time, QStringLiteral("s"), 3),
+                             formatEng(m_liveDiv, QStringLiteral("s"), 2)));
 }
 
 void WaveformWindow::autoScale()
