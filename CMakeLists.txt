@@ -56,10 +56,28 @@ target_compile_options(csm_ui PRIVATE -Wall -Wextra -Wno-unused-parameter)
 qt_add_executable(CircuitMaster src/main.cpp)
 target_link_libraries(CircuitMaster PRIVATE csm_ui)
 
-qt_add_resources(CircuitMaster "app_icons"
+qt_add_resources(csm_ui "app_icons"
     PREFIX "/icons"
     BASE "assets"
     FILES assets/icon.svg
+)
+
+qt_add_resources(csm_ui "toolbar_icons"
+    PREFIX "/icons"
+    BASE "assets/icons"
+    FILES
+        assets/icons/new.svg
+        assets/icons/open.svg
+        assets/icons/save.svg
+        assets/icons/select.svg
+        assets/icons/wire.svg
+        assets/icons/run.svg
+        assets/icons/settings.svg
+        assets/icons/zoom_in.svg
+        assets/icons/zoom_out.svg
+        assets/icons/zoom_fit.svg
+        assets/icons/delete.svg
+        assets/icons/grid.svg
 )
 set_target_properties(CircuitMaster PROPERTIES WIN32_EXECUTABLE TRUE MACOSX_BUNDLE TRUE)
 

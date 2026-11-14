@@ -12,6 +12,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QPixmap>
+#include <QIcon>
 #include <QLineEdit>
 #include <QSet>
 #include <QTest>
@@ -22,6 +23,44 @@ class UiTest : public QObject {
     Q_OBJECT
 
 private slots:
+    void toolbarIconsAvailable()
+    {
+        const QStringList names = {QStringLiteral("new"),    QStringLiteral("open"),
+                                   QStringLiteral("save"),   QStringLiteral("select"),
+                                   QStringLiteral("wire"),   QStringLiteral("run"),
+                                   QStringLiteral("settings"), QStringLiteral("zoom_in"),
+                                   QStringLiteral("zoom_out"), QStringLiteral("zoom_fit"),
+                                   QStringLiteral("delete"), QStringLiteral("grid")};
+        for (const QString& name : names) {
+            const QIcon icon(QStringLiteral(":/icons/%1.svg").arg(name));
+            QVERIFY2(!icon.isNull(), qPrintable(QStringLiteral("缺少图标: ") + name));
+
+            // 资源存在不代表能渲染：检查生成的位图确实有像素
+            const QImage image = icon.pixmap(22, 22).toImage();
+            int opaque = 0;
+            for (int y = 0; y < image.height(); ++y) {
+                for (int x = 0; x < image.width(); ++x) {
+                    if (qAlpha(image.pixel(x, y)) > 0)
+                        ++opaque;
+                }
+            }
+            QVERIFY2(opaque > 0, qPrintable(QStringLiteral("图标渲染为空: ") + name));
+        }
+
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        QTest::qWait(200);
+
+        QAction* wireAction = nullptr;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text() == QStringLiteral("连线"))
+                wireAction = action;
+        }
+        QVERIFY(wireAction);
+        QVERIFY(!wireAction->icon().isNull());
+    }
+
     void captureMainWindow()
     {
         MainWindow window;

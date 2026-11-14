@@ -188,9 +188,13 @@ Circuit exampleAcLowpass()
     return circuit;
 }
 
-QIcon themedIcon(const QString& name, QStyle::StandardPixmap fallback)
+/// 优先使用内置 SVG 图标，缺失时回退到系统主题图标。
+QIcon actionIcon(const QString& name, const QString& themeName, QStyle::StandardPixmap fallback)
 {
-    QIcon icon = QIcon::fromTheme(name);
+    QIcon icon(QStringLiteral(":/icons/%1.svg").arg(name));
+    if (!icon.isNull())
+        return icon;
+    icon = QIcon::fromTheme(themeName);
     if (icon.isNull())
         icon = qApp->style()->standardIcon(fallback);
     return icon;
@@ -257,16 +261,21 @@ MainWindow::MainWindow(QWidget* parent)
 
 void MainWindow::createActions()
 {
-    m_actNew = new QAction(themedIcon(QStringLiteral("document-new"), QStyle::SP_FileIcon),
-                           QStringLiteral("新建(&N)"), this);
+    m_actNew = new QAction(
+        actionIcon(QStringLiteral("new"), QStringLiteral("document-new"), QStyle::SP_FileIcon),
+        QStringLiteral("新建(&N)"), this);
     m_actNew->setShortcut(QKeySequence::New);
 
-    m_actOpen = new QAction(themedIcon(QStringLiteral("document-open"), QStyle::SP_DialogOpenButton),
-                            QStringLiteral("打开(&O)…"), this);
+    m_actOpen = new QAction(
+        actionIcon(QStringLiteral("open"), QStringLiteral("document-open"),
+                   QStyle::SP_DialogOpenButton),
+        QStringLiteral("打开(&O)…"), this);
     m_actOpen->setShortcut(QKeySequence::Open);
 
-    m_actSave = new QAction(themedIcon(QStringLiteral("document-save"), QStyle::SP_DialogSaveButton),
-                            QStringLiteral("保存(&S)"), this);
+    m_actSave = new QAction(
+        actionIcon(QStringLiteral("save"), QStringLiteral("document-save"),
+                   QStyle::SP_DialogSaveButton),
+        QStringLiteral("保存(&S)"), this);
     m_actSave->setShortcut(QKeySequence::Save);
 
     m_actSaveAs = new QAction(QStringLiteral("另存为(&A)…"), this);
@@ -278,8 +287,9 @@ void MainWindow::createActions()
     m_actQuit = new QAction(QStringLiteral("退出(&Q)"), this);
     m_actQuit->setShortcut(QKeySequence::Quit);
 
-    m_actDelete = new QAction(themedIcon(QStringLiteral("edit-delete"), QStyle::SP_TrashIcon),
-                              QStringLiteral("删除"), this);
+    m_actDelete = new QAction(
+        actionIcon(QStringLiteral("delete"), QStringLiteral("edit-delete"), QStyle::SP_TrashIcon),
+        QStringLiteral("删除"), this);
     m_actDelete->setShortcut(QKeySequence::Delete);
 
     m_actRotate = new QAction(QStringLiteral("旋转 90°"), this);
@@ -289,18 +299,25 @@ void MainWindow::createActions()
     m_actSelectAll = new QAction(QStringLiteral("全选"), this);
     m_actSelectAll->setShortcut(QKeySequence::SelectAll);
 
-    m_actZoomIn = new QAction(themedIcon(QStringLiteral("zoom-in"), QStyle::SP_ArrowUp),
-                              QStringLiteral("放大"), this);
+    m_actZoomIn = new QAction(
+        actionIcon(QStringLiteral("zoom_in"), QStringLiteral("zoom-in"), QStyle::SP_ArrowUp),
+        QStringLiteral("放大"), this);
     m_actZoomIn->setShortcut(QKeySequence::ZoomIn);
 
-    m_actZoomOut = new QAction(themedIcon(QStringLiteral("zoom-out"), QStyle::SP_ArrowDown),
-                               QStringLiteral("缩小"), this);
+    m_actZoomOut = new QAction(
+        actionIcon(QStringLiteral("zoom_out"), QStringLiteral("zoom-out"), QStyle::SP_ArrowDown),
+        QStringLiteral("缩小"), this);
     m_actZoomOut->setShortcut(QKeySequence::ZoomOut);
 
-    m_actZoomFit = new QAction(QStringLiteral("适应窗口"), this);
+    m_actZoomFit = new QAction(
+        actionIcon(QStringLiteral("zoom_fit"), QStringLiteral("zoom-fit-best"),
+                   QStyle::SP_FileDialogContentsView),
+        QStringLiteral("适应窗口"), this);
     m_actZoomFit->setShortcut(QKeySequence(QStringLiteral("Ctrl+0")));
 
-    m_actGrid = new QAction(QStringLiteral("显示网格"), this);
+    m_actGrid = new QAction(
+        actionIcon(QStringLiteral("grid"), QStringLiteral("view-grid"), QStyle::SP_FileDialogListView),
+        QStringLiteral("显示网格"), this);
     m_actGrid->setCheckable(true);
     m_actGrid->setChecked(true);
 
@@ -308,21 +325,27 @@ void MainWindow::createActions()
     m_actNodeNumbers->setCheckable(true);
     m_actNodeNumbers->setChecked(true);
 
-    m_actRun = new QAction(themedIcon(QStringLiteral("media-playback-start"), QStyle::SP_MediaPlay),
-                           QStringLiteral("运行仿真"), this);
+    m_actRun = new QAction(
+        actionIcon(QStringLiteral("run"), QStringLiteral("media-playback-start"), QStyle::SP_MediaPlay),
+        QStringLiteral("运行仿真"), this);
     m_actRun->setShortcut(QKeySequence(Qt::Key_F5));
 
     m_actSettings = new QAction(
-        themedIcon(QStringLiteral("preferences-system"), QStyle::SP_FileDialogDetailedView),
+        actionIcon(QStringLiteral("settings"), QStringLiteral("preferences-system"),
+                   QStyle::SP_FileDialogDetailedView),
         QStringLiteral("分析设置…"), this);
 
-    m_actSelectTool = new QAction(QStringLiteral("选择"), this);
+    m_actSelectTool = new QAction(
+        actionIcon(QStringLiteral("select"), QStringLiteral("edit-select"), QStyle::SP_ArrowUp),
+        QStringLiteral("选择"), this);
     m_actSelectTool->setCheckable(true);
     m_actSelectTool->setChecked(true);
     m_actSelectTool->setShortcut(QKeySequence(Qt::Key_V));
     m_actSelectTool->setToolTip(QStringLiteral("选择/移动元件 (V)"));
 
-    m_actWireTool = new QAction(QStringLiteral("连线"), this);
+    m_actWireTool = new QAction(
+        actionIcon(QStringLiteral("wire"), QStringLiteral("draw-line"), QStyle::SP_ArrowRight),
+        QStringLiteral("连线"), this);
     m_actWireTool->setCheckable(true);
     m_actWireTool->setShortcut(QKeySequence(Qt::Key_W));
     m_actWireTool->setToolTip(QStringLiteral("绘制导线 (W)"));
@@ -431,7 +454,7 @@ void MainWindow::createToolBar()
 {
     QToolBar* bar = addToolBar(QStringLiteral("主工具栏"));
     bar->setMovable(false);
-    bar->setIconSize(QSize(20, 20));
+    bar->setIconSize(QSize(22, 22));
     bar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
 
     bar->addAction(m_actNew);
