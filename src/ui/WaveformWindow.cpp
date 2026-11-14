@@ -431,7 +431,6 @@ void WaveformWindow::applyAnalysisFields()
         return;
 
     m_options.kind = AnalysisKind(m_kindBox->currentData().toInt());
-    m_options.display = DisplayMode::Plot;
 
     const auto parse = [](QLineEdit* edit, UnitKind unit, double* out) {
         if (!edit || edit->text().trimmed().isEmpty())

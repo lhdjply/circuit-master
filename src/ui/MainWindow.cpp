@@ -184,9 +184,6 @@ QJsonObject analysisToJson(const SimulationOptions& options)
     object.insert(QStringLiteral("fStart"), options.fStart);
     object.insert(QStringLiteral("fStop"), options.fStop);
     object.insert(QStringLiteral("acPoints"), options.acPoints);
-    object.insert(QStringLiteral("display"),
-                  options.display == DisplayMode::Scope ? QStringLiteral("scope")
-                                                        : QStringLiteral("plot"));
     return object;
 }
 
@@ -199,9 +196,6 @@ SimulationOptions optionsFromJson(const QJsonObject& analysis)
     options.fStart = analysis.value(QStringLiteral("fStart")).toDouble(options.fStart);
     options.fStop = analysis.value(QStringLiteral("fStop")).toDouble(options.fStop);
     options.acPoints = analysis.value(QStringLiteral("acPoints")).toInt(options.acPoints);
-    options.display = analysis.value(QStringLiteral("display")).toString() == QLatin1String("scope")
-        ? DisplayMode::Scope
-        : DisplayMode::Plot;
     return options;
 }
 

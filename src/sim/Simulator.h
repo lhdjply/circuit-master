@@ -17,14 +17,8 @@ enum class AnalysisKind {
     AC,
 };
 
-enum class DisplayMode {
-    Plot,
-    Scope,
-};
-
 struct SimulationOptions {
     AnalysisKind kind = AnalysisKind::Transient;
-    DisplayMode display = DisplayMode::Plot;
     double tStop = 0.01;
     double tStep = 1e-5;
     double fStart = 10.0;
