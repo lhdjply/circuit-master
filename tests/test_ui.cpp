@@ -476,7 +476,7 @@ private slots:
 
         QCOMPARE(counts.value(QStringLiteral("基础")), 3);
         QCOMPARE(counts.value(QStringLiteral("电源")), 2);
-        QCOMPARE(counts.value(QStringLiteral("半导体")), 7);
+        QCOMPARE(counts.value(QStringLiteral("半导体")), 8);
 
         int sum = 0;
         for (int n : counts)
@@ -501,14 +501,15 @@ private slots:
 
         // 五种三端器件摆一排，确认符号能画出来、引脚数正确
         const QVector<ComponentType> types = {
-            ComponentType::Npn,  ComponentType::Pnp, ComponentType::Nmos,
-            ComponentType::Pmos, ComponentType::Igbt};
+            ComponentType::Npn,  ComponentType::Pnp,  ComponentType::Nmos,
+            ComponentType::Pmos, ComponentType::Igbt, ComponentType::Led,
+            ComponentType::Diode};
         for (int i = 0; i < types.size(); ++i) {
             // 两行摆放，避免被右侧属性面板挡住
             const QPointF pos(150 + (i % 3) * 120, i < 3 ? 250 : 400);
             ComponentItem* item = scene->placeComponent(types.at(i), pos);
             QVERIFY(item);
-            QCOMPARE(item->pinScenePositions().size(), 3);
+            QCOMPARE(item->pinScenePositions().size(), pinCount(types.at(i)));
             QCOMPARE(item->component().refdes.left(1), typeSymbol(types.at(i)));
         }
         settle();

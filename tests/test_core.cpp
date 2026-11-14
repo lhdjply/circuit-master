@@ -277,6 +277,79 @@ private slots:
                  qPrintable(QString::number(vb->y.last())));
     }
 
+    void ledForwardVoltage()
+    {
+        // 5 V 电源经 1 kΩ 点亮 LED（Vf = 2 V）：
+        // 电流约 (5 − 2)/1k = 3 mA，LED 两端应接近 2 V
+        Circuit c;
+
+        Component v;
+        v.id = 1;
+        v.type = ComponentType::VoltageSource;
+        v.pos = QPointF(100, 300);
+        v.rotation = 90;
+        v.refdes = QStringLiteral("V1");
+        v.function = SourceFunction::Constant;
+        v.dcValue = 5.0;
+        c.components.append(v);
+
+        Component r;
+        r.id = 2;
+        r.type = ComponentType::Resistor;
+        r.pos = QPointF(250, 200);
+        r.refdes = QStringLiteral("R1");
+        r.value = 1000.0;
+        c.components.append(r);
+
+        Component led;
+        led.id = 3;
+        led.type = ComponentType::Led;
+        led.pos = QPointF(400, 300);
+        led.rotation = 90;
+        led.refdes = QStringLiteral("D1");
+        led.vf = 2.0;
+        c.components.append(led);
+
+        Component g;
+        g.id = 4;
+        g.type = ComponentType::Ground;
+        g.pos = QPointF(100, 400);
+        g.refdes = QStringLiteral("GND");
+        c.components.append(g);
+        Component g2 = g;
+        g2.id = 5;
+        g2.pos = QPointF(400, 400);
+        c.components.append(g2);
+
+        // LED 竖直放置（rot 90）：引脚 0（阳极）在上、引脚 1（阴极）在下接地
+        c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(220, 200)}});
+        c.wires.append(Wire{{QPointF(280, 200), QPointF(400, 200), QPointF(400, 270)}});
+        c.wires.append(Wire{{QPointF(400, 330), QPointF(400, 400)}});
+        c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
+
+        const Netlist net = c.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        QVERIFY2(net.warnings.isEmpty(), qPrintable(net.warnings.join(QStringLiteral("; "))));
+
+        SimulationOptions tr;
+        tr.kind = AnalysisKind::Transient;
+        tr.tStop = 1e-5;
+        tr.tStep = 1e-6;
+        const SimulationResult r2 = Simulator::run(c, tr);
+        QVERIFY2(r2.ok, qPrintable(r2.error));
+
+        const int top = net.nodeOf(led.id, 0); // 阳极
+        const Signal* vled = r2.signal(QStringLiteral("V(%1)").arg(top));
+        QVERIFY(vled);
+        // 正向压降应当落在 1.7~2.4 V（模型按 20 mA 时 2.0 V 标定）
+        QVERIFY2(vled->y.last() > 1.7 && vled->y.last() < 2.4,
+                 qPrintable(QString::number(vled->y.last())));
+
+        // 串联电阻上的压降约为 5 − Vf，电流在 1.5~3.5 mA
+        const double current = (5.0 - vled->y.last()) / 1000.0;
+        QVERIFY2(current > 1.5e-3 && current < 3.5e-3, qPrintable(QString::number(current)));
+    }
+
     void pnpTransistorMirrorsNpn()
     {
         // PNP：发射极接 +12 V，恒流源从基极抽出 10 µA，集电极经 1 kΩ 到地

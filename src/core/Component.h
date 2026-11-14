@@ -11,6 +11,7 @@ enum class ComponentType {
     Capacitor,
     Inductor,
     Diode,
+    Led,
     Npn,
     Pnp,
     Nmos,

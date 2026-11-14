@@ -129,6 +129,34 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         break;
     }
 
+    case ComponentType::Led: {
+        // 和普通二极管完全一致的画法：实心三角形朝右 + 右侧阴极竖条
+        p->drawLine(QPointF(-30.0, 0.0), QPointF(-8.0, 0.0));
+        p->drawLine(QPointF(8.0, 0.0), QPointF(30.0, 0.0));
+        QPolygonF triangle;
+        triangle << QPointF(-8.0, -11.0) << QPointF(-8.0, 11.0) << QPointF(8.0, 0.0);
+        p->setBrush(color);
+        p->drawPolygon(triangle);
+        p->setBrush(Qt::NoBrush);
+        p->setPen(symbolPen(color, 2.8));
+        p->drawLine(QPointF(8.0, -11.0), QPointF(8.0, 11.0));
+
+        // 两个 45° 斜向右上的箭头，表示发光
+        p->setPen(symbolPen(color, 1.6));
+        for (int i = 0; i < 2; ++i) {
+            const double dy = i * 7.0;
+            p->drawLine(QPointF(12.0, -12.0 - dy), QPointF(22.0, -20.0 - dy));
+            QPolygonF head;
+            head << QPointF(22.0, -20.0 - dy) << QPointF(16.0, -18.0 - dy)
+                 << QPointF(20.0, -14.0 - dy);
+            p->setBrush(color);
+            p->drawPolygon(head);
+            p->setBrush(Qt::NoBrush);
+        }
+        p->setPen(pen);
+        break;
+    }
+
     case ComponentType::Diode: {
         p->drawLine(QPointF(-30.0, 0.0), QPointF(-8.0, 0.0));
         p->drawLine(QPointF(8.0, 0.0), QPointF(30.0, 0.0));

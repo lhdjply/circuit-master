@@ -137,6 +137,9 @@ ComponentItem* SchematicScene::placeComponent(ComponentType type, const QPointF&
     case ComponentType::OpAmp:
         comp.value = 1e5;
         break;
+    case ComponentType::Led:
+        comp.vf = 2.0;
+        break;
     case ComponentType::Npn:
     case ComponentType::Pnp:
         comp.beta = 100.0;

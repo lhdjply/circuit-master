@@ -604,6 +604,7 @@ void MainWindow::buildLibrary()
         {ComponentType::Capacitor, QStringLiteral("电容  C"), QStringLiteral("基础")},
         {ComponentType::Inductor, QStringLiteral("电感  L"), QStringLiteral("基础")},
         {ComponentType::Diode, QStringLiteral("二极管  D"), QStringLiteral("半导体")},
+        {ComponentType::Led, QStringLiteral("发光二极管  LED"), QStringLiteral("半导体")},
         {ComponentType::Npn, QStringLiteral("NPN 三极管  Q"), QStringLiteral("半导体")},
         {ComponentType::Pnp, QStringLiteral("PNP 三极管  Q"), QStringLiteral("半导体")},
         {ComponentType::Nmos, QStringLiteral("N 沟道 MOS  M"), QStringLiteral("半导体")},

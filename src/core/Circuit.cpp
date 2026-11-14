@@ -22,6 +22,7 @@ QString typeToTag(ComponentType type)
     case ComponentType::Inductor:      return QStringLiteral("L");
     case ComponentType::Diode:         return QStringLiteral("D");
     case ComponentType::OpAmp:         return QStringLiteral("U");
+    case ComponentType::Led:           return QStringLiteral("LED");
     case ComponentType::Npn:           return QStringLiteral("Q");
     case ComponentType::Pnp:           return QStringLiteral("QP");
     case ComponentType::Nmos:          return QStringLiteral("M");
@@ -43,6 +44,7 @@ ComponentType tagToType(const QString& tag)
     if (tag == QLatin1String("L")) return ComponentType::Inductor;
     if (tag == QLatin1String("D")) return ComponentType::Diode;
     if (tag == QLatin1String("U")) return ComponentType::OpAmp;
+    if (tag == QLatin1String("LED")) return ComponentType::Led;
     if (tag == QLatin1String("Q")) return ComponentType::Npn;
     if (tag == QLatin1String("QP")) return ComponentType::Pnp;
     if (tag == QLatin1String("MP")) return ComponentType::Pmos;
@@ -138,6 +140,8 @@ QString Circuit::toSpiceNetlist() const
     lines << QString();
 
     bool hasDiode = false;
+    bool hasLed = false;
+    double ledVf = 2.0;
     bool hasBjt = false;
     bool hasPnp = false;
     bool hasMos = false;
@@ -181,6 +185,12 @@ QString Circuit::toSpiceNetlist() const
         }
 
         // 三极管 / MOSFET / IGBT 按 SPICE 标准器件行导出，并附 .model 卡
+        if (comp.type == ComponentType::Led) {
+            hasLed = true;
+            ledVf = comp.vf;
+            lines << QStringLiteral("%1 %2 %3 DLED").arg(comp.refdes).arg(nodes.at(0)).arg(nodes.at(1));
+            continue;
+        }
         if (comp.type == ComponentType::Npn) {
             hasBjt = true;
             lines << QStringLiteral("%1 %2 %3 %4 QNPN")
@@ -269,6 +279,12 @@ QString Circuit::toSpiceNetlist() const
         lines << QString();
         lines << QStringLiteral("* 1N4148 小信号二极管模型");
         lines << QStringLiteral(".model D1N4148 D(IS=2.52E-9 N=1.752 RS=0.568)");
+    }
+    if (hasLed) {
+        // 由正向压降反推饱和电流：20 mA 时压降正好是 Vf，n 取 2（LED 的典型值）
+        const double nvt = 2.0 * 0.025865;
+        const double is = 0.02 / (std::exp(ledVf / nvt) - 1.0);
+        lines << QStringLiteral(".model DLED D(IS=%1 N=2)").arg(spiceNumber(is));
     }
     if (hasBjt) {
         lines << QStringLiteral(".model QNPN NPN(IS=1E-14 BF=%1)").arg(spiceNumber(bjtBeta));

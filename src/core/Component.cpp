@@ -48,6 +48,7 @@ QString typeName(ComponentType type)
     case ComponentType::Inductor:      return QStringLiteral("电感");
     case ComponentType::Diode:         return QStringLiteral("二极管");
     case ComponentType::OpAmp:         return QStringLiteral("运算放大器");
+    case ComponentType::Led:           return QStringLiteral("发光二极管");
     case ComponentType::Npn:           return QStringLiteral("NPN 三极管");
     case ComponentType::Pnp:           return QStringLiteral("PNP 三极管");
     case ComponentType::Nmos:          return QStringLiteral("N 沟道 MOS");
@@ -71,6 +72,7 @@ QString typeSymbol(ComponentType type)
     case ComponentType::Inductor:      return QStringLiteral("L");
     case ComponentType::Diode:         return QStringLiteral("D");
     case ComponentType::OpAmp:         return QStringLiteral("U");
+    case ComponentType::Led:           return QStringLiteral("D");
     case ComponentType::Npn:           return QStringLiteral("Q");
     case ComponentType::Pnp:           return QStringLiteral("Q");
     case ComponentType::Nmos:          return QStringLiteral("M");
@@ -209,6 +211,7 @@ QString Component::unitName() const
     case ComponentType::CurrentSource: return QStringLiteral("A");
     case ComponentType::Diode:         return QStringLiteral("A");
     case ComponentType::OpAmp:         return QString();
+    case ComponentType::Led:           return QStringLiteral("V");
     case ComponentType::Npn:
     case ComponentType::Pnp:           return QStringLiteral("A/A");
     case ComponentType::Nmos:
@@ -251,6 +254,9 @@ QString Component::displayValue() const
 
     case ComponentType::OpAmp:
         return QStringLiteral("A = ") + formatEng(value, QString(), 3);
+
+    case ComponentType::Led:
+        return QStringLiteral("Vf = ") + formatEng(vf, QStringLiteral("V"), 3);
 
     case ComponentType::Npn:
     case ComponentType::Pnp:

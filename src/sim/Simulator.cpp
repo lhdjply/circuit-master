@@ -29,22 +29,40 @@ struct DiodeModel {
     double is = 2.52e-9; // 1N4148
     double emission = 1.752; // 发射系数 n
     double vt = 0.025865;   // 热电压
+    double vmax = 0.9;      // 指数项的电压上限（LED 要放宽）
 
     double nvt() const { return emission * vt; }
     double vcrit() const { return nvt() * std::log(nvt() / (std::sqrt(2.0) * is)); }
 
     double current(double v) const
     {
-        const double vv = std::max(-5.0, std::min(v, 0.9));
+        const double vv = std::max(-5.0, std::min(v, vmax));
         return is * (std::exp(vv / nvt()) - 1.0);
     }
 
     double conductance(double v) const
     {
-        const double vv = std::max(-5.0, std::min(v, 0.9));
+        const double vv = std::max(-5.0, std::min(v, vmax));
         return is * std::exp(vv / nvt()) / nvt();
     }
 };
+
+/// 发光二极管模型：由「额定电流下的正向压降」反推饱和电流。
+/// 取 n = 2（LED 的典型发射系数），20 mA 时压降正好等于 Vf。
+constexpr double kLedRatedCurrent = 0.02;
+constexpr double kLedEmission = 2.0;
+
+DiodeModel ledModel(double vf, double vt)
+{
+    DiodeModel dm;
+    dm.emission = kLedEmission;
+    dm.vt = vt;
+    dm.vmax = std::max(4.0, vf + 1.5); // 给指数项留够余量
+    const double nvt = dm.nvt();
+    const double target = std::max(vf, 0.8);
+    dm.is = kLedRatedCurrent / (std::exp(target / nvt) - 1.0);
+    return dm;
+}
 
 /// 三极管 / MOSFET / IGBT 的工作点：电流 + 线性化后的跨导
 struct BjtOp {
@@ -216,7 +234,9 @@ MosOp mosOperating(double vgs, double vds, double vth, double k)
     return op;
 }
 
-double pnjlim(double vnew, double vold, double vt, double vcrit)
+/// 结电压限幅。vmax 是最终允许的上限：硅二极管约 0.9 V，
+/// LED 的正向压降能到 2~3 V，必须放宽，否则状态永远上不去、迭代不收敛。
+double pnjlim(double vnew, double vold, double vt, double vcrit, double vmax = 1.0)
 {
     if (!std::isfinite(vnew))
         return vold;
@@ -228,7 +248,7 @@ double pnjlim(double vnew, double vold, double vt, double vcrit)
             vnew = vt * std::log(std::max(vnew / vt, 1e-12));
         }
     }
-    return std::max(-5.0, std::min(vnew, 1.0));
+    return std::max(-5.0, std::min(vnew, vmax));
 }
 
 Problem buildProblem(const Circuit& circuit, const Netlist& net)
@@ -309,10 +329,15 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
             addI(b, n1, n2, comp.sourceValueAt(t));
             break;
 
-        case ComponentType::Diode: {
+        case ComponentType::Diode:
+        case ComponentType::Led: {
+            // LED 与普通二极管方程相同，只是模型参数按 Vf 反推
+            const DiodeModel model = comp.type == ComponentType::Led
+                ? ledModel(comp.vf, dm.vt)
+                : dm;
             const double vd = st.diodeV.value(comp.id, 0.0);
-            const double g = dm.conductance(vd);
-            const double id = dm.current(vd);
+            const double g = model.conductance(vd);
+            const double id = model.current(vd);
             addG(a, n1, n2, g);
             addI(b, n1, n2, id - g * vd);
             break;
@@ -455,14 +480,17 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
         bool hasDiode = false;
         double diodeDelta = 0.0;
         for (const Component* cp : p.elements) {
-            if (cp->type != ComponentType::Diode)
+            if (cp->type != ComponentType::Diode && cp->type != ComponentType::Led)
                 continue;
             hasDiode = true;
             const int n1 = p.nodeOf(cp->id, 0);
             const int n2 = p.nodeOf(cp->id, 1);
             const double vNew = p.voltage(x, n1) - p.voltage(x, n2);
             const double vOld = st.diodeV.value(cp->id, 0.0);
-            const double vLim = pnjlim(vNew, vOld, dm.nvt(), dm.vcrit());
+            const DiodeModel model = cp->type == ComponentType::Led
+                ? ledModel(cp->vf, dm.vt)
+                : dm;
+            const double vLim = pnjlim(vNew, vOld, model.nvt(), model.vcrit(), model.vmax);
             diodeDelta = std::max(diodeDelta, std::abs(vLim - vOld));
             st.diodeV.insert(cp->id, vLim);
         }
@@ -564,8 +592,13 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
             current = comp.sourceValueAt(t);
             break;
         case ComponentType::Diode:
-            current = dm.current(v);
+        case ComponentType::Led: {
+            const DiodeModel model = comp.type == ComponentType::Led
+                ? ledModel(comp.vf, dm.vt)
+                : dm;
+            current = model.current(v);
             break;
+        }
         case ComponentType::Switch:
             current = v / (comp.closed ? 1e-3 : 1e9);
             break;
@@ -703,7 +736,13 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
             addI(b, n1, n2, Cx(1.0, 0.0));
             break;
         case ComponentType::Diode:
-            addG(a, n1, n2, Cx(dm.conductance(st.diodeV.value(comp.id, 0.6)), 0.0));
+        case ComponentType::Led: {
+            const DiodeModel model = comp.type == ComponentType::Led
+                ? ledModel(comp.vf, dm.vt)
+                : dm;
+            addG(a, n1, n2, Cx(model.conductance(st.diodeV.value(comp.id, 0.6)), 0.0));
+            break;
+        }
             break;
         case ComponentType::Npn:
         case ComponentType::Pnp: {

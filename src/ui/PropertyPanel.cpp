@@ -199,6 +199,9 @@ void PropertyPanel::refreshFromItem()
 
     m_refdes->setText(c.refdes);
     switch (c.type) {
+    case ComponentType::Led:
+        m_value->setText(quantityText(c.vf, UnitKind::Volt));
+        break;
     case ComponentType::Npn:
     case ComponentType::Pnp:
         m_value->setText(QString::number(c.beta, 'g', 6));
@@ -246,12 +249,13 @@ void PropertyPanel::updateVisibility()
     const bool source = isSource(c.type);
     const bool analog = c.type == ComponentType::Resistor || c.type == ComponentType::Capacitor
         || c.type == ComponentType::Inductor || c.type == ComponentType::OpAmp
-        || isThreeTerminalDevice(c.type);
+        || c.type == ComponentType::Led || isThreeTerminalDevice(c.type);
 
     const bool isMos = c.type == ComponentType::Nmos || c.type == ComponentType::Pmos
         || c.type == ComponentType::Igbt;
     m_form->setRowVisible(m_k, isMos);
-    m_form->setRowVisible(m_vf, c.type == ComponentType::Igbt);
+    m_form->setRowVisible(m_vf, c.type == ComponentType::Igbt
+                                      || c.type == ComponentType::Led);
 
     if (m_valueLabel) {
         switch (c.type) {
@@ -280,6 +284,11 @@ void PropertyPanel::updateVisibility()
         case ComponentType::Pmos:
         case ComponentType::Igbt:
             m_valueLabel->setText(QStringLiteral("开启电压 Vth"));
+            m_value->setPlaceholderText(QStringLiteral("例如 2"));
+            break;
+        case ComponentType::Led:
+            // LED 只暴露正向压降一个参数，见下面的 applyValue
+            m_valueLabel->setText(QStringLiteral("正向压降 Vf"));
             m_value->setPlaceholderText(QStringLiteral("例如 2"));
             break;
         default:
@@ -346,6 +355,23 @@ void PropertyPanel::applyValue()
     if (!m_item || m_updating)
         return;
     const ComponentType type = m_item->component().type;
+
+    if (type == ComponentType::Led) {
+        QString reason;
+        bool ok = false;
+        const double vf = parseQuantity(m_value->text(), UnitKind::Volt, &ok, &reason);
+        if (!ok) {
+            markInvalid(m_value, reason);
+            return;
+        }
+        markValid(m_value);
+        Component c = m_item->component();
+        c.vf = vf;
+        m_item->setComponent(c);
+        updateSubtitle();
+        emit changed();
+        return;
+    }
 
     if (isThreeTerminalDevice(type)) {
         // 三端器件：β 是无量纲数，Vth 带电压单位

@@ -153,6 +153,7 @@ ctest --test-dir build --output-on-failure
 | 电容 C | 容值（F），瞬态使用后向欧拉伴随模型 |
 | 电感 L | 感值（H），以支路电流为未知量 |
 | 二极管 D | 1N4148 简化模型（IS=2.52 nA，N=1.752） |
+| 发光二极管 LED | 与二极管同方程，由正向压降反推模型；参数：Vf（默认 2 V） |
 | 三极管 Q | NPN / PNP，Ebers-Moll 模型；参数：电流放大系数 β（默认 100） |
 | MOS 管 M | N / P 沟道增强型，level-1 平方律模型；参数：开启电压 Vth、跨导参数 K |
 | IGBT Z | 栅极按 MOS 模型、输出侧带导通压降 Vf；参数：Vth、K、Vf |
