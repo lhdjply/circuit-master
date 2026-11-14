@@ -49,8 +49,11 @@ private slots:
         QTest::qWait(200);
 
         QVERIFY(dialog.isVisible());
-        QVERIFY(dialog.grab().save(QCoreApplication::applicationDirPath()
-                                   + QStringLiteral("/shots/update_dialog.png")));
+
+        // 截图目录由 captureMainWindow 创建，而本用例在它之前运行
+        QDir dir(QCoreApplication::applicationDirPath());
+        QVERIFY(dir.mkpath(QStringLiteral("shots")));
+        QVERIFY(dialog.grab().save(dir.filePath(QStringLiteral("shots/update_dialog.png"))));
 
         // 帮助菜单里应当有「检查更新…」
         MainWindow window;
@@ -94,7 +97,10 @@ private slots:
                                    QStringLiteral("delete"), QStringLiteral("grid"),
                                    QStringLiteral("undo"),   QStringLiteral("redo")};
         for (const QString& name : names) {
-            const QIcon icon(QStringLiteral(":/icons/%1.svg").arg(name));
+            // 用应用真正的取图标入口，而不是裸 QIcon(path)：后者要求系统装了
+            // Qt 的 SVG 图标插件，测的就变成环境而不是代码了
+            const QString path = QStringLiteral(":/icons/%1.svg").arg(name);
+            const QIcon icon = svgIcon(path);
             QVERIFY2(!icon.isNull(), qPrintable(QStringLiteral("缺少图标: ") + name));
 
             // 资源存在不代表能渲染：检查生成的位图确实有像素

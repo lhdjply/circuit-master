@@ -249,7 +249,10 @@ QIcon svgIcon(const QString& path, bool forceFallback)
 {
     if (!forceFallback) {
         QIcon icon(path);
-        if (!icon.isNull())
+        // 光看 isNull() 不够：没有 SVG 图标插件时 QIcon 可能既不为空、又渲染不出
+        // 任何像素（pixmap 尺寸为 0）。两种情况下都要走下面的兜底。
+        if (!icon.isNull() && !icon.pixmap(24, 24).isNull()
+            && icon.pixmap(24, 24).width() > 0)
             return icon;
     }
 
