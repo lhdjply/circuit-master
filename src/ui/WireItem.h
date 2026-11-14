@@ -20,9 +20,14 @@ public:
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override;
 
     const QVector<QPointF>& points() const { return m_points; }
+    QVector<QPointF> scenePoints() const;
     void setPoints(const QVector<QPointF>& points);
 
+signals:
+    void wireChanged();
+
 protected:
+    QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
     void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
     void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;
 

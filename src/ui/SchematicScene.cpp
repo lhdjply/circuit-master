@@ -82,7 +82,7 @@ Circuit SchematicScene::toCircuit() const
 
     for (WireItem* wire : wireItems()) {
         Wire w;
-        w.points = wire->points();
+        w.points = wire->scenePoints();
         if (w.points.size() >= 2)
             circuit.wires.append(w);
     }
@@ -158,6 +158,10 @@ WireItem* SchematicScene::addWire(const QVector<QPointF>& points)
     if (points.size() < 2)
         return nullptr;
     auto* item = new WireItem(Circuit::normalizeWire(points));
+    connect(item, &WireItem::wireChanged, this, [this] {
+        refresh();
+        emit circuitChanged();
+    });
     addItem(item);
     refresh();
     emit circuitChanged();
@@ -233,7 +237,7 @@ void SchematicScene::copySelection()
             m_clipboardComponents.append(static_cast<ComponentItem*>(item)->component());
         } else if (item->type() == WireItem::Type) {
             Wire wire;
-            wire.points = static_cast<WireItem*>(item)->points();
+            wire.points = static_cast<WireItem*>(item)->scenePoints();
             if (wire.points.size() >= 2)
                 m_clipboardWires.append(wire);
         }
@@ -301,7 +305,7 @@ QPointF SchematicScene::snapToPin(const QPointF& point, double tolerance) const
         }
     }
     for (WireItem* wire : wireItems()) {
-        for (const QPointF& p : wire->points()) {
+        for (const QPointF& p : wire->scenePoints()) {
             const double d = QLineF(point, p).length();
             if (d < bestDist) {
                 bestDist = d;
@@ -327,7 +331,7 @@ void SchematicScene::recomputeJunctions()
 
     QVector<QLineF> segments;
     for (WireItem* wire : wireItems()) {
-        const QVector<QPointF>& pts = wire->points();
+        const QVector<QPointF> pts = wire->scenePoints();
         for (int i = 0; i < pts.size(); ++i) {
             ends[gridKey(pts.at(i))] += 1;
             if (i > 0)
@@ -347,7 +351,7 @@ void SchematicScene::recomputeJunctions()
     }
 
     for (WireItem* wire : wireItems()) {
-        for (const QPointF& p : wire->points()) {
+        for (const QPointF& p : wire->scenePoints()) {
             const QPoint key = gridKey(p);
             for (const QLineF& seg : segments) {
                 if (strictlyInsideSegment(seg, p))

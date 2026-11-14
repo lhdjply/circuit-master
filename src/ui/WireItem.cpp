@@ -4,6 +4,8 @@
 
 #include <QPainter>
 #include <QPainterPathStroker>
+
+#include <cmath>
 #include <QStyleOptionGraphicsItem>
 
 namespace csm {
@@ -12,7 +14,7 @@ WireItem::WireItem(const QVector<QPointF>& points, QGraphicsItem* parent)
     : QGraphicsObject(parent)
     , m_points(points)
 {
-    setFlags(ItemIsSelectable);
+    setFlags(ItemIsSelectable | ItemIsMovable | ItemSendsGeometryChanges);
     setAcceptHoverEvents(true);
     setZValue(0.0);
     rebuild();
@@ -34,6 +36,26 @@ void WireItem::rebuild()
     stroker.setWidth(10.0);
     const QPainterPath hit = stroker.createStroke(m_path);
     m_bounds = hit.boundingRect().adjusted(-3.0, -3.0, 3.0, 3.0);
+}
+
+QVector<QPointF> WireItem::scenePoints() const
+{
+    QVector<QPointF> points;
+    points.reserve(m_points.size());
+    for (const QPointF& point : m_points)
+        points.append(mapToScene(point));
+    return points;
+}
+
+QVariant WireItem::itemChange(GraphicsItemChange change, const QVariant& value)
+{
+    if (change == ItemPositionChange && scene()) {
+        const QPointF p = value.toPointF();
+        return QPointF(std::round(p.x() / 10.0) * 10.0, std::round(p.y() / 10.0) * 10.0);
+    }
+    if (change == ItemPositionHasChanged)
+        emit wireChanged();
+    return QGraphicsObject::itemChange(change, value);
 }
 
 QRectF WireItem::boundingRect() const

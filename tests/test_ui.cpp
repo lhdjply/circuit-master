@@ -338,6 +338,95 @@ private slots:
         QCOMPARE(saved->rotation, 90);
     }
 
+    void multiSelectionDrag()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        QTest::qWait(300);
+
+        QAction* rcExample = nullptr;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text().contains(QStringLiteral("RC 充电")))
+                rcExample = action;
+        }
+        QVERIFY(rcExample);
+        rcExample->trigger();
+        QTest::qWait(200);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        auto* view = window.findChild<SchematicView*>();
+        QVERIFY(scene && view);
+
+        ComponentItem* r1 = nullptr;
+        ComponentItem* c1 = nullptr;
+        for (ComponentItem* item : scene->componentItems()) {
+            if (item->component().refdes == QLatin1String("R1"))
+                r1 = item;
+            if (item->component().refdes == QLatin1String("C1"))
+                c1 = item;
+        }
+        QVERIFY(r1 && c1);
+
+        // 框选整块电路
+        const QPoint from = view->mapFromScene(QPointF(40, 100));
+        const QPoint to = view->mapFromScene(QPointF(460, 520));
+        QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, from);
+        QTest::mouseMove(view->viewport(), to, 20);
+        QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, to);
+        QTest::qWait(100);
+
+        QVERIFY(r1->isSelected());
+        QVERIFY(c1->isSelected());
+
+        WireItem* wire = scene->wireItems().first();
+        QVERIFY(wire->isSelected());
+
+        const QPointF r1Start = r1->pos();
+        const QPointF c1Start = c1->pos();
+        const QPointF wireStart = wire->scenePoints().first();
+
+        // 拖动 R1：整组（含导线）一起移动
+        const QPoint pressPoint = view->mapFromScene(r1->scenePos());
+        QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, pressPoint);
+        QTest::mouseMove(view->viewport(), pressPoint + QPoint(60, 0), 20);
+        QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier,
+                           pressPoint + QPoint(60, 0));
+        QTest::qWait(100);
+
+        QCOMPARE(r1->pos(), r1Start + QPointF(60, 0));
+        QCOMPARE(c1->pos(), c1Start + QPointF(60, 0));
+        QCOMPARE(wire->scenePoints().first(), wireStart + QPointF(60, 0));
+
+        // 移动后连接关系仍保持
+        const Netlist net = scene->toCircuit().buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        QCOMPARE(net.nodeCount, 2);
+        QVERIFY2(net.warnings.isEmpty(), qPrintable(net.warnings.join(QStringLiteral("; "))));
+
+        // 连续第二次拖动
+        const QPointF r1Mid = r1->pos();
+        const QPointF c1Mid = c1->pos();
+        const QPoint secondPress = view->mapFromScene(r1->scenePos());
+        QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, secondPress);
+        QTest::mouseMove(view->viewport(), secondPress + QPoint(40, 0), 20);
+        QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier,
+                            secondPress + QPoint(40, 0));
+        QTest::qWait(100);
+        QCOMPARE(r1->pos(), r1Mid + QPointF(40, 0));
+        QCOMPARE(c1->pos(), c1Mid + QPointF(40, 0));
+
+        // 也可以直接抓导线拖动整组
+        const QPointF wireBefore = wire->scenePoints().first();
+        const QPoint wirePress = view->mapFromScene(wire->scenePoints().first());
+        QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, wirePress);
+        QTest::mouseMove(view->viewport(), wirePress + QPoint(0, 30), 20);
+        QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier,
+                            wirePress + QPoint(0, 30));
+        QTest::qWait(100);
+        QCOMPARE(wire->scenePoints().first(), wireBefore + QPointF(0, 30));
+    }
+
     void drawWireWithMouse()
     {
         MainWindow window;
@@ -372,7 +461,7 @@ private slots:
         QTest::qWait(100);
 
         QCOMPARE(scene->wireItems().size(), 1);
-        const QVector<QPointF> points = scene->wireItems().first()->points();
+        const QVector<QPointF> points = scene->wireItems().first()->scenePoints();
         QVERIFY(points.size() >= 2);
         QCOMPARE(points.first(), QPointF(270, 300));
         QCOMPARE(points.last(), QPointF(270, 420));
