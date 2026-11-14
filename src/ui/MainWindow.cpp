@@ -1031,6 +1031,7 @@ void MainWindow::openCircuit()
     if (!analysis.isEmpty()) {
         m_options = optionsFromJson(analysis);
         updateAnalysisLabel();
+        syncMonitorOptions();
     }
 
     loadCircuitData(circuit, QFileInfo(path).fileName(), path);
@@ -1155,6 +1156,12 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
     return QMainWindow::eventFilter(watched, event);
 }
 
+void MainWindow::syncMonitorOptions()
+{
+    if (m_wavePlot)
+        m_wavePlot->setOptions(m_options);
+}
+
 void MainWindow::updateRunAction()
 {
     if (!m_actRun)
@@ -1211,7 +1218,7 @@ void MainWindow::createMonitorWindow()
 
     connect(m_waveTabs, &QTabWidget::currentChanged, this, &MainWindow::onWaveTabChanged);
 
-    m_wavePlot->setOptions(m_options);
+    syncMonitorOptions();
     connect(m_wavePlot, &WaveformWindow::analysisRequested, this,
             [this](const SimulationOptions& options) {
                 m_options = options;
@@ -1365,6 +1372,7 @@ void MainWindow::loadExample(int index)
 
     m_options = optionsFromJson(root.value(QStringLiteral("analysis")).toObject());
     updateAnalysisLabel();
+    syncMonitorOptions();
     loadCircuitData(circuit, name, QString());
     appendLog(QStringLiteral("已载入示例「%1」。按 F5 运行仿真。").arg(name));
 }

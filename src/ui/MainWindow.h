@@ -53,6 +53,8 @@ private:
     void loadExample(int index);
     void checkForUpdates(bool manual);
     void createMonitorWindow();
+    /// 把当前分析参数同步到静态波形页的输入框
+    void syncMonitorOptions();
     /// 运行仿真按钮在「运行 / 停止」之间切换外观
     void updateRunAction();
     /// 显示「波形监控」面板；tab 0 = 静态波形，1 = 动态示波器

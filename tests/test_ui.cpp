@@ -317,6 +317,49 @@ private slots:
         QVERIFY2(!monitor->isEnabled(), "停止后波形监控应不可点击");
     }
 
+    void analysisFieldsFollowFile()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        // 载入示例：示例文件里的 analysis 段应当反映到静态波形页的输入框
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text().contains(QStringLiteral("RC 充电"))) {
+                action->trigger();
+                break;
+            }
+        }
+        settle();
+
+        QTabWidget* tabs = waveTabs(window);
+        QVERIFY(tabs);
+        auto* plot = qobject_cast<WaveformWindow*>(tabs->widget(0));
+        QVERIFY(plot);
+
+        // 示例文件里 tStop = 5 ms、tStep = 10 µs
+        QLineEdit* stopEdit = nullptr;
+        QLineEdit* stepEdit = nullptr;
+        for (QLineEdit* edit : plot->findChildren<QLineEdit*>()) {
+            if (edit->text().contains(QStringLiteral("5 ms")) || edit->text().contains(QStringLiteral("5ms")))
+                stopEdit = edit;
+            if (edit->text().contains(QStringLiteral("10 µs")) || edit->text().contains(QStringLiteral("10µs")))
+                stepEdit = edit;
+        }
+        QVERIFY2(stopEdit, "停止时间应从文件读取");
+        QVERIFY2(stepEdit, "最大步长应从文件读取");
+
+        // 分析类型也应当是文件里的瞬态
+        QComboBox* kind = nullptr;
+        for (QComboBox* box : plot->findChildren<QComboBox*>()) {
+            if (box->count() == 3 && box->itemText(0) == QStringLiteral("瞬态"))
+                kind = box;
+        }
+        QVERIFY(kind);
+        QCOMPARE(kind->currentText(), QStringLiteral("瞬态"));
+    }
+
     void runWithoutProbesStillRuns()
     {
         MainWindow window;
