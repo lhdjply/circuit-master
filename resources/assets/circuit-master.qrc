@@ -13,5 +13,7 @@
     <file alias="zoom_fit.svg">icons/zoom_fit.svg</file>
     <file alias="delete.svg">icons/delete.svg</file>
     <file alias="grid.svg">icons/grid.svg</file>
+    <file alias="undo.svg">icons/undo.svg</file>
+    <file alias="redo.svg">icons/redo.svg</file>
   </qresource>
 </RCC>

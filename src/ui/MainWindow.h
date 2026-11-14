@@ -2,6 +2,7 @@
 
 #include "sim/Simulator.h"
 
+#include <QJsonObject>
 #include <QMainWindow>
 
 class QAction;
@@ -49,6 +50,13 @@ private:
     void showQuickGuide();
     void showAbout();
 
+    void pushHistory();
+    void undo();
+    void redo();
+    void resetHistory();
+    void restoreSnapshot(const QJsonObject& snapshot);
+    void updateHistoryActions();
+
     void onSelectionChanged();
     void onEditRequested(ComponentItem* item);
     void setDirty(bool dirty);
@@ -77,6 +85,11 @@ private:
     bool m_dirty = false;
     bool m_loading = false;
 
+    QVector<QJsonObject> m_history;
+    QVector<QByteArray> m_historySignatures;
+    int m_historyIndex = -1;
+    bool m_restoring = false;
+
     QAction* m_actNew = nullptr;
     QAction* m_actOpen = nullptr;
     QAction* m_actSave = nullptr;
@@ -84,6 +97,8 @@ private:
     QAction* m_actExport = nullptr;
     QAction* m_actQuit = nullptr;
 
+    QAction* m_actUndo = nullptr;
+    QAction* m_actRedo = nullptr;
     QAction* m_actDelete = nullptr;
     QAction* m_actRotate = nullptr;
     QAction* m_actSelectAll = nullptr;

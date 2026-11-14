@@ -53,6 +53,33 @@ namespace csm {
 
 namespace {
 
+/// 电路内容签名：元件按 id 排序、导线按顶点排序，保证与图元遍历顺序无关。
+QByteArray circuitSignature(const Circuit& circuit)
+{
+    QStringList parts;
+    for (const Component& comp : circuit.components) {
+        parts << QStringLiteral("C|%1|%2|%3|%4|%5|%6|%7|%8")
+                     .arg(comp.id)
+                     .arg(int(comp.type))
+                     .arg(comp.pos.x())
+                     .arg(comp.pos.y())
+                     .arg(comp.rotation)
+                     .arg(comp.refdes)
+                     .arg(QString::number(comp.value, 'g', 12))
+                     .arg(int(comp.mirrorX) | (int(comp.mirrorY) << 1));
+    }
+    QStringList wires;
+    for (const Wire& wire : circuit.wires) {
+        QStringList points;
+        for (const QPointF& p : wire.points)
+            points << QStringLiteral("%1,%2").arg(p.x()).arg(p.y());
+        wires << points.join(QLatin1Char(';'));
+    }
+    wires.sort();
+    parts << wires;
+    return parts.join(QLatin1Char('#')).toUtf8();
+}
+
 class ComponentLibrary : public QListWidget {
 public:
     explicit ComponentLibrary(QWidget* parent = nullptr)
@@ -253,6 +280,7 @@ MainWindow::MainWindow(QWidget* parent)
     createStatusBar();
 
     connect(m_scene, &SchematicScene::circuitChanged, this, [this] { setDirty(true); });
+    connect(m_scene, &SchematicScene::editCommitted, this, &MainWindow::pushHistory);
     connect(m_scene, &QGraphicsScene::selectionChanged, this, &MainWindow::onSelectionChanged);
     connect(m_scene, &SchematicScene::editRequested, this, &MainWindow::onEditRequested);
     connect(m_view, &SchematicView::componentEditRequested, this, &MainWindow::onEditRequested);
@@ -279,6 +307,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     m_dirty = false;
     updateTitle();
+    resetHistory();
 }
 
 void MainWindow::createActions()
@@ -308,6 +337,18 @@ void MainWindow::createActions()
 
     m_actQuit = new QAction(QStringLiteral("退出(&Q)"), this);
     m_actQuit->setShortcut(QKeySequence::Quit);
+
+    m_actUndo = new QAction(
+        actionIcon(QStringLiteral("undo"), QStringLiteral("edit-undo"), QStyle::SP_ArrowBack),
+        QStringLiteral("撤销"), this);
+    m_actUndo->setShortcut(QKeySequence::Undo);
+    m_actUndo->setEnabled(false);
+
+    m_actRedo = new QAction(
+        actionIcon(QStringLiteral("redo"), QStringLiteral("edit-redo"), QStyle::SP_ArrowForward),
+        QStringLiteral("重做"), this);
+    m_actRedo->setShortcut(QKeySequence::Redo);
+    m_actRedo->setEnabled(false);
 
     m_actDelete = new QAction(
         actionIcon(QStringLiteral("delete"), QStringLiteral("edit-delete"), QStyle::SP_TrashIcon),
@@ -387,6 +428,8 @@ void MainWindow::createActions()
     connect(m_actExport, &QAction::triggered, this, &MainWindow::exportNetlist);
     connect(m_actQuit, &QAction::triggered, this, &QWidget::close);
 
+    connect(m_actUndo, &QAction::triggered, this, &MainWindow::undo);
+    connect(m_actRedo, &QAction::triggered, this, &MainWindow::redo);
     connect(m_actDelete, &QAction::triggered, this, [this] { m_view->deleteSelection(); });
     connect(m_actRotate, &QAction::triggered, this, [this] { m_view->rotateSelection(); });
     connect(m_actSelectAll, &QAction::triggered, this, [this] {
@@ -415,8 +458,8 @@ void MainWindow::createActions()
     m_actRotate->setEnabled(false);
 
     // 这些快捷键只在画布获得焦点时生效，避免与属性面板输入冲突
-    for (QAction* action : {m_actDelete, m_actRotate, m_actSelectAll, m_actSelectTool,
-                            m_actWireTool}) {
+    for (QAction* action : {m_actUndo, m_actRedo, m_actDelete, m_actRotate, m_actSelectAll,
+                            m_actSelectTool, m_actWireTool}) {
         action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
         m_view->addAction(action);
     }
@@ -436,6 +479,9 @@ void MainWindow::createMenus()
     fileMenu->addAction(m_actQuit);
 
     QMenu* editMenu = menuBar()->addMenu(QStringLiteral("编辑(&E)"));
+    editMenu->addAction(m_actUndo);
+    editMenu->addAction(m_actRedo);
+    editMenu->addSeparator();
     editMenu->addAction(m_actDelete);
     editMenu->addAction(m_actRotate);
     editMenu->addSeparator();
@@ -475,6 +521,9 @@ void MainWindow::createToolBar()
     bar->addAction(m_actNew);
     bar->addAction(m_actOpen);
     bar->addAction(m_actSave);
+    bar->addSeparator();
+    bar->addAction(m_actUndo);
+    bar->addAction(m_actRedo);
     bar->addSeparator();
     bar->addAction(m_actSelectTool);
     bar->addAction(m_actWireTool);
@@ -547,7 +596,10 @@ void MainWindow::createDocks()
     propsDock->setWidget(propsScroll);
     propsDock->setMinimumWidth(290);
     addDockWidget(Qt::RightDockWidgetArea, propsDock);
-    connect(m_props, &PropertyPanel::changed, this, [this] { setDirty(true); });
+    connect(m_props, &PropertyPanel::changed, this, [this] {
+        setDirty(true);
+        pushHistory();
+    });
 
     auto* logDock = new QDockWidget(QStringLiteral("消息"), this);
     logDock->setObjectName(QStringLiteral("logDock"));
@@ -595,6 +647,93 @@ void MainWindow::updateAnalysisLabel()
         break;
     }
     m_analysisLabel->setText(text);
+}
+
+void MainWindow::pushHistory()
+{
+    if (m_loading || m_restoring)
+        return;
+
+    const Circuit circuit = m_scene->toCircuit();
+    const QByteArray signature = circuitSignature(circuit);
+    if (m_historyIndex >= 0 && m_historyIndex < m_historySignatures.size()
+        && m_historySignatures.at(m_historyIndex) == signature)
+        return; // 内容没变，不产生新记录
+
+    // 丢弃重做分支
+    while (m_history.size() > m_historyIndex + 1) {
+        m_history.removeLast();
+        m_historySignatures.removeLast();
+    }
+
+    m_history.append(circuit.toJson());
+    m_historySignatures.append(signature);
+
+    constexpr int kMaxHistory = 200;
+    while (m_history.size() > kMaxHistory) {
+        m_history.removeFirst();
+        m_historySignatures.removeFirst();
+    }
+    m_historyIndex = m_history.size() - 1;
+    updateHistoryActions();
+}
+
+void MainWindow::resetHistory()
+{
+    m_history.clear();
+    m_historySignatures.clear();
+    m_historyIndex = -1;
+    pushHistory();
+    updateHistoryActions();
+}
+
+void MainWindow::restoreSnapshot(const QJsonObject& snapshot)
+{
+    QString error;
+    const Circuit circuit = Circuit::fromJson(snapshot, &error);
+    if (!error.isEmpty()) {
+        appendLog(QStringLiteral("⚠ 无法恢复历史状态：%1").arg(error));
+        return;
+    }
+
+    m_restoring = true;
+    m_scene->load(circuit);
+    m_restoring = false;
+
+    m_props->setComponent(nullptr);
+    setDirty(true);
+}
+
+void MainWindow::undo()
+{
+    if (m_historyIndex <= 0)
+        return;
+    --m_historyIndex;
+    restoreSnapshot(m_history.at(m_historyIndex));
+    updateHistoryActions();
+    appendLog(QStringLiteral("已撤销（%1/%2）")
+                  .arg(m_historyIndex + 1)
+                  .arg(m_history.size()));
+}
+
+void MainWindow::redo()
+{
+    if (m_historyIndex < 0 || m_historyIndex >= m_history.size() - 1)
+        return;
+    ++m_historyIndex;
+    restoreSnapshot(m_history.at(m_historyIndex));
+    updateHistoryActions();
+    appendLog(QStringLiteral("已重做（%1/%2）")
+                  .arg(m_historyIndex + 1)
+                  .arg(m_history.size()));
+}
+
+void MainWindow::updateHistoryActions()
+{
+    if (!m_actUndo || !m_actRedo)
+        return;
+    m_actUndo->setEnabled(m_historyIndex > 0);
+    m_actRedo->setEnabled(m_historyIndex >= 0 && m_historyIndex < m_history.size() - 1);
 }
 
 void MainWindow::onSelectionChanged()
@@ -652,6 +791,8 @@ void MainWindow::loadCircuitData(const Circuit& circuit, const QString& title, c
     m_dirty = false;
     updateTitle();
 
+    resetHistory();
+
     QTimer::singleShot(0, this, [this] { m_view->zoomFit(); });
 }
 
@@ -669,6 +810,7 @@ void MainWindow::newCircuit()
     m_props->setComponent(nullptr);
     m_dirty = false;
     updateTitle();
+    resetHistory();
     appendLog(QStringLiteral("已新建空白电路。"));
 }
 

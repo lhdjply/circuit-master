@@ -37,7 +37,8 @@ private slots:
                                    QStringLiteral("wire"),   QStringLiteral("run"),
                                    QStringLiteral("settings"), QStringLiteral("zoom_in"),
                                    QStringLiteral("zoom_out"), QStringLiteral("zoom_fit"),
-                                   QStringLiteral("delete"), QStringLiteral("grid")};
+                                   QStringLiteral("delete"), QStringLiteral("grid"),
+                                   QStringLiteral("undo"),   QStringLiteral("redo")};
         for (const QString& name : names) {
             const QIcon icon(QStringLiteral(":/icons/%1.svg").arg(name));
             QVERIFY2(!icon.isNull(), qPrintable(QStringLiteral("缺少图标: ") + name));
@@ -280,6 +281,91 @@ private slots:
         }
 
         QVERIFY(wave->grab().save(dir + QStringLiteral("/shots/waveform_opamp.png")));
+    }
+
+    void undoRedoEdits()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        QTest::qWait(300);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        QCOMPARE(scene->componentItems().size(), 0);
+
+        QAction* undoAction = nullptr;
+        QAction* redoAction = nullptr;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text() == QStringLiteral("撤销"))
+                undoAction = action;
+            if (action->text() == QStringLiteral("重做"))
+                redoAction = action;
+        }
+        QVERIFY(undoAction && redoAction);
+        QVERIFY(!undoAction->isEnabled());
+        QVERIFY(!redoAction->isEnabled());
+
+        // 放置两个元件 → 两次历史
+        ComponentItem* r1 = scene->placeComponent(ComponentType::Resistor, QPointF(200, 200));
+        QVERIFY(r1);
+        QCOMPARE(scene->componentItems().size(), 1);
+        QVERIFY(undoAction->isEnabled());
+
+        scene->placeComponent(ComponentType::Capacitor, QPointF(300, 300));
+        QCOMPARE(scene->componentItems().size(), 2);
+
+        undoAction->trigger();
+        QTest::qWait(50);
+        QCOMPARE(scene->componentItems().size(), 1);
+        QVERIFY(redoAction->isEnabled());
+
+        undoAction->trigger();
+        QTest::qWait(50);
+        QCOMPARE(scene->componentItems().size(), 0);
+        QVERIFY(!undoAction->isEnabled());
+
+        redoAction->trigger();
+        QTest::qWait(50);
+        QCOMPARE(scene->componentItems().size(), 1);
+
+        redoAction->trigger();
+        QTest::qWait(50);
+        QCOMPARE(scene->componentItems().size(), 2);
+
+        // 移动后撤销应回到原位
+        ComponentItem* moved = nullptr;
+        for (ComponentItem* item : scene->componentItems()) {
+            if (item->component().type == ComponentType::Resistor)
+                moved = item;
+        }
+        QVERIFY(moved);
+        const QPointF original = moved->pos();
+        moved->setPos(QPointF(420, 420));
+        scene->commitEdit();
+        QTest::qWait(50);
+        QCOMPARE(moved->pos(), QPointF(420, 420));
+
+        undoAction->trigger();
+        QTest::qWait(50);
+        ComponentItem* restored = nullptr;
+        for (ComponentItem* item : scene->componentItems()) {
+            if (item->component().type == ComponentType::Resistor)
+                restored = item;
+        }
+        QVERIFY(restored);
+        QCOMPARE(restored->pos(), original);
+
+        // 删除后撤销应恢复
+        scene->clearSelection();
+        restored->setSelected(true);
+        scene->deleteSelection();
+        QTest::qWait(50);
+        QCOMPARE(scene->componentItems().size(), 1);
+
+        undoAction->trigger();
+        QTest::qWait(50);
+        QCOMPARE(scene->componentItems().size(), 2);
     }
 
     void dragComponentFromLibrary()

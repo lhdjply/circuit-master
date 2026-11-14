@@ -30,6 +30,7 @@ public:
     QVector<WireItem*> wireItems() const;
 
     void deleteSelection();
+    void commitEdit();
     void copySelection();
     void pasteClipboard();
     bool hasClipboard() const;
@@ -43,6 +44,7 @@ public:
 
 signals:
     void circuitChanged();
+    void editCommitted();
     void editRequested(ComponentItem* item);
 
 protected:

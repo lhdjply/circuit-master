@@ -128,7 +128,12 @@ void SchematicView::mouseReleaseEvent(QMouseEvent* event)
         event->accept();
         return;
     }
+
     QGraphicsView::mouseReleaseEvent(event);
+
+    // 拖动或框选结束后记录一次历史（内容无变化时会被忽略）
+    if (event->button() == Qt::LeftButton && m_tool == Tool::Select)
+        m_scene->commitEdit();
 }
 
 void SchematicView::mouseDoubleClickEvent(QMouseEvent* event)

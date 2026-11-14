@@ -150,6 +150,7 @@ ComponentItem* SchematicScene::placeComponent(ComponentType type, const QPointF&
     ComponentItem* item = addComponent(comp);
     refresh();
     emit circuitChanged();
+    commitEdit();
     return item;
 }
 
@@ -165,6 +166,7 @@ WireItem* SchematicScene::addWire(const QVector<QPointF>& points)
     addItem(item);
     refresh();
     emit circuitChanged();
+    commitEdit();
     return item;
 }
 
@@ -225,6 +227,7 @@ void SchematicScene::deleteSelection()
     }
     refresh();
     emit circuitChanged();
+    commitEdit();
 }
 
 void SchematicScene::copySelection()
@@ -275,6 +278,12 @@ void SchematicScene::pasteClipboard()
 
     refresh();
     emit circuitChanged();
+    commitEdit();
+}
+
+void SchematicScene::commitEdit()
+{
+    emit editCommitted();
 }
 
 void SchematicScene::setShowGrid(bool show)
