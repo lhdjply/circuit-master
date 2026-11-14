@@ -346,7 +346,7 @@ MainWindow::MainWindow(QWidget* parent)
 
     appendLog(QStringLiteral("电路仿真大师 %1  —  Qt6 / MNA 求解器")
                   .arg(QStringLiteral(CSM_VERSION_STRING)));
-    appendLog(QStringLiteral("提示：左键选择拖动，双击编辑参数，R 键旋转；按 F5 运行仿真。"));
+    appendLog(QStringLiteral("提示：左键选择拖动，双击编辑参数，空格键旋转；按 F5 运行仿真。"));
     appendLog(QStringLiteral("已新建空白电路：可从左侧元件库放置元件，"
                              "或通过「仿真 → 示例电路」载入示例。"));
 
@@ -407,7 +407,8 @@ void MainWindow::createActions()
     m_actDelete->setShortcut(QKeySequence::Delete);
 
     m_actRotate = new QAction(QStringLiteral("旋转 90°"), this);
-    m_actRotate->setShortcut(QKeySequence(Qt::Key_R));
+    // 空格旋转：和 KiCad 的习惯一致，选中元件后连按空格就能连续转
+    m_actRotate->setShortcut(QKeySequence(Qt::Key_Space));
     m_actRotate->setShortcutContext(Qt::WindowShortcut);
 
     m_actSelectAll = new QAction(QStringLiteral("全选"), this);
@@ -702,7 +703,7 @@ void MainWindow::createDocks()
 void MainWindow::createStatusBar()
 {
     m_hintLabel = new QLabel(
-        QStringLiteral("选择模式：拖动元件移动，双击元件编辑参数，R 键旋转"), this);
+        QStringLiteral("选择模式：拖动元件移动，双击元件编辑参数，空格键旋转"), this);
     m_coordLabel = new QLabel(QStringLiteral("x: 0   y: 0"), this);
     m_coordLabel->setMinimumWidth(120);
     m_analysisLabel = new QLabel(this);
@@ -1278,7 +1279,7 @@ void MainWindow::showQuickGuide()
     box.setText(QStringLiteral(
         "<b>三步完成一次仿真</b>"
         "<ol>"
-        "<li>从左侧<b>元件库</b>把元件拖到画布上；按 <b>R</b> 旋转。</li>"
+        "<li>从左侧<b>元件库</b>把元件拖到画布上；选中后按 <b>空格</b> 旋转。</li>"
         "<li>点击工具栏<b>连线</b>（W），在引脚处单击并拖出折线，双击结束。<br>"
         "导线端点吸附到引脚后会自动出现连接点。</li>"
         "<li>双击元件修改数值（可直接写 10kΩ、4.7µF、1mH，不写单位按默认单位），"

@@ -242,6 +242,58 @@ private slots:
             QCoreApplication::applicationDirPath() + QStringLiteral("/shots/waveform_diode.png")));
     }
 
+    void spaceRotatesSelection()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+        window.activateWindow();
+        settle();
+
+        // 快捷键应当绑定在空格上
+        QAction* rotate = nullptr;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text().contains(QStringLiteral("旋转 90°")))
+                rotate = action;
+        }
+        QVERIFY(rotate);
+        QCOMPARE(rotate->shortcut(), QKeySequence(Qt::Key_Space));
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        ComponentItem* item = scene->placeComponent(ComponentType::Resistor, QPointF(200, 200));
+        QVERIFY(item);
+        item->setSelected(true);
+        settle();
+
+        const int before = item->component().rotation;
+        QTest::keyClick(&window, Qt::Key_Space);
+        settle();
+        QCOMPARE(item->component().rotation, (before + 90) % 360);
+
+        QTest::keyClick(&window, Qt::Key_Space);
+        settle();
+        QCOMPARE(item->component().rotation, (before + 180) % 360);
+
+        // 在数值输入框里按空格必须输入空格，不能触发旋转
+        QLineEdit* valueEdit = nullptr;
+        for (QLineEdit* edit : window.findChildren<QLineEdit*>()) {
+            if (edit->placeholderText().contains(QStringLiteral("10kΩ")))
+                valueEdit = edit;
+        }
+        QVERIFY(valueEdit);
+        valueEdit->setFocus();
+        settle();
+        valueEdit->setText(QStringLiteral("2.2k"));
+        const int beforeTyping = item->component().rotation;
+        QTest::keyClick(valueEdit, Qt::Key_Space);
+        settle();
+        QVERIFY2(valueEdit->text().contains(QLatin1Char(' ')),
+                 qPrintable(valueEdit->text()));
+        QCOMPARE(item->component().rotation, beforeTyping);
+    }
+
     void editPropertiesAndRotate()
     {
         MainWindow window;

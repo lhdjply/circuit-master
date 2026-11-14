@@ -61,7 +61,7 @@ void SchematicView::updateCursorAndHint()
     switch (m_tool) {
     case Tool::Select:
         viewport()->setCursor(Qt::ArrowCursor);
-        emit hintChanged(QStringLiteral("选择模式：拖动元件移动，双击元件编辑参数，R 键旋转"));
+        emit hintChanged(QStringLiteral("选择模式：拖动元件移动，双击元件编辑参数，空格键旋转"));
         break;
     case Tool::Wire:
         viewport()->setCursor(Qt::CrossCursor);
