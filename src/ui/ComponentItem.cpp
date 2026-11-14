@@ -24,6 +24,11 @@ ComponentItem::ComponentItem(const Component& comp, QGraphicsItem* parent)
 
 QRectF ComponentItem::boundingRect() const
 {
+    if (m_comp.type == ComponentType::Probe)
+        return QRectF(-75.0, -60.0, 150.0, 120.0);
+    if (m_comp.type == ComponentType::Ground)
+        return QRectF(-40.0, -50.0, 80.0, 84.0);
+
     const int rot = ((m_comp.rotation % 360) + 360) % 360;
     if (rot == 90 || rot == 270)
         return QRectF(-168.0, -42.0, 336.0, 84.0);
@@ -58,6 +63,20 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
         painter->setPen(theme::text);
         painter->drawText(QRectF(-30.0, 26.0, 60.0, 16.0), Qt::AlignHCenter | Qt::AlignTop,
                           QStringLiteral("GND"));
+        return;
+    }
+
+    if (m_comp.type == ComponentType::Probe) {
+        // 标签随旋转方向摆放，避免压在导线上
+        const double rad = qDegreesToRadians(double(m_comp.rotation));
+        const QPointF offset(40.0 * std::sin(rad), -40.0 * std::cos(rad));
+        QFont f = painter->font();
+        f.setPointSizeF(8.5);
+        f.setBold(true);
+        painter->setFont(f);
+        painter->setPen(selected ? theme::selected : theme::text);
+        painter->drawText(QRectF(offset.x() - 40.0, offset.y() - 9.0, 80.0, 18.0),
+                          Qt::AlignCenter, m_comp.refdes);
         return;
     }
 

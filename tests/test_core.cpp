@@ -224,6 +224,126 @@ private slots:
         QVERIFY(spice.contains(QStringLiteral("100000")));
     }
 
+    void probeMapsToNodeWithoutAffectingResult()
+    {
+        Circuit c = opAmpInverting(1.0);
+        Component tp1;
+        tp1.type = ComponentType::Probe;
+        tp1.pos = QPointF(130, 320);
+        tp1.refdes = QStringLiteral("TP1");
+        addComponent(c, tp1);
+        Component tp2 = tp1;
+        tp2.pos = QPointF(240, 320);
+        tp2.refdes = QStringLiteral("TP2");
+        addComponent(c, tp2);
+        Component tp3 = tp1;
+        tp3.pos = QPointF(330, 360);
+        tp3.refdes = QStringLiteral("TP3");
+        addComponent(c, tp3);
+
+        // addComponent 按值接收，需要回读实际分配的 id
+        tp1.id = c.components.at(c.components.size() - 3).id;
+        tp2.id = c.components.at(c.components.size() - 2).id;
+        tp3.id = c.components.at(c.components.size() - 1).id;
+
+        const Netlist net = c.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        QCOMPARE(net.nodeCount, 3);
+
+        const int node1 = net.nodeOf(tp1.id, 0);
+        const int node2 = net.nodeOf(tp2.id, 0);
+        const int node3 = net.nodeOf(tp3.id, 0);
+        QVERIFY(node1 > 0);
+        QCOMPARE(node2, node1 + 1);
+        QCOMPARE(node3, node2 + 1);
+
+        const QString spice = c.toSpiceNetlist();
+        QVERIFY(!spice.contains(QStringLiteral("TP1")));
+
+        SimulationOptions tr;
+        tr.kind = AnalysisKind::Transient;
+        tr.tStop = 1e-4;
+        tr.tStep = 1e-5;
+        const SimulationResult withProbes = Simulator::run(c, tr);
+        QVERIFY2(withProbes.ok, qPrintable(withProbes.error));
+
+        Circuit plain = opAmpInverting(1.0);
+        const SimulationResult withoutProbes = Simulator::run(plain, tr);
+        QVERIFY(withoutProbes.ok);
+
+        const int outNode = net.nodeOf(c.components.at(3).id, 2);
+        const Signal* a = withProbes.signal(QStringLiteral("V(%1)").arg(outNode));
+        const Signal* b = withoutProbes.signal(QStringLiteral("V(%1)").arg(outNode));
+        QVERIFY(a && b);
+        QCOMPARE(a->y.size(), b->y.size());
+        QVERIFY(near(a->y.last(), b->y.last(), 1e-12));
+
+        Circuit loaded = Circuit::fromJson(c.toJson());
+        QVERIFY(loaded.find(tp1.id));
+        QCOMPARE(loaded.find(tp1.id)->type, ComponentType::Probe);
+    }
+
+    void currentProbeMeasuresBranch()
+    {
+        Circuit c = opAmpInverting(1.0);
+
+        // 把反馈支路的直连导线改成经电流测试点串入
+        QVector<Wire> kept;
+        for (const Wire& wire : c.wires) {
+            if (wire.points.size() == 2 && wire.points.first() == QPointF(270, 320)
+                && wire.points.last() == QPointF(270, 420))
+                continue;
+            kept.append(wire);
+        }
+        c.wires = kept;
+        c.wires.append(Wire{{QPointF(270, 320), QPointF(270, 340)}});
+        c.wires.append(Wire{{QPointF(270, 400), QPointF(270, 420)}});
+
+        Component ip;
+        ip.type = ComponentType::CurrentProbe;
+        ip.pos = QPointF(270, 370);
+        ip.rotation = 90;
+        ip.refdes = QStringLiteral("IP1");
+        addComponent(c, ip);
+        ip.id = c.components.last().id;
+
+        const Netlist net = c.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        QCOMPARE(net.nodeCount, 4);
+        QCOMPARE(net.compPins.value(ip.id).size(), 2);
+
+        SimulationOptions tr;
+        tr.kind = AnalysisKind::Transient;
+        tr.tStop = 0.25e-3;
+        tr.tStep = 5e-6;
+        const SimulationResult r = Simulator::run(c, tr);
+        QVERIFY2(r.ok, qPrintable(r.error));
+        const Signal* current = r.signal(QStringLiteral("I(IP1)"));
+        QVERIFY(current);
+        // 1 V 输入、10 倍反相 → 反馈电流 1 mA
+        QVERIFY2(near(current->y.last(), 1e-3, 1e-5),
+                 qPrintable(QString::number(current->y.last())));
+
+        SimulationOptions ac;
+        ac.kind = AnalysisKind::AC;
+        ac.fStart = 1000.0;
+        ac.fStop = 1000.0001;
+        ac.acPoints = 2;
+        const SimulationResult ra = Simulator::run(c, ac);
+        QVERIFY2(ra.ok, qPrintable(ra.error));
+        const Signal* acCurrent = ra.signal(QStringLiteral("I(IP1)"));
+        QVERIFY(acCurrent);
+        QVERIFY2(near(acCurrent->y.first(), -60.0, 0.5),
+                 qPrintable(QString::number(acCurrent->y.first())));
+
+        const QString spice = c.toSpiceNetlist();
+        QVERIFY(spice.contains(QStringLiteral("VIP1")));
+
+        const Circuit loaded = Circuit::fromJson(c.toJson());
+        QVERIFY(loaded.find(ip.id));
+        QCOMPARE(loaded.find(ip.id)->type, ComponentType::CurrentProbe);
+    }
+
     void opAmpInvertingAc()
     {
         Circuit c = opAmpInverting(1.0);

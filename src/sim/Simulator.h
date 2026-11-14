@@ -38,6 +38,7 @@ struct SimulationResult {
     QStringList log;
     QString report;      // 工作点文字报告
     QStringList nodeLabels; // 节点 1..N 的连接说明，用于界面提示
+    QVector<int> probeWaves; // 测试点对应的波形下标（已排在 waves 前部）
     double elapsedMs = 0.0;
 
     const Signal* signal(const QString& name) const

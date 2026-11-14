@@ -15,6 +15,8 @@ enum class ComponentType {
     Switch,
     VoltageSource,
     CurrentSource,
+    Probe,
+    CurrentProbe,
     Ground,
 };
 

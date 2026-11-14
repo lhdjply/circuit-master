@@ -15,7 +15,7 @@ constexpr double kPi = 3.14159265358979323846;
 
 QVector<QPointF> pinOffsets(ComponentType type)
 {
-    if (type == ComponentType::Ground)
+    if (type == ComponentType::Ground || type == ComponentType::Probe)
         return {QPointF(0.0, 0.0)};
     if (type == ComponentType::OpAmp)
         return {QPointF(-30.0, -20.0), QPointF(-30.0, 20.0), QPointF(30.0, 0.0)};
@@ -26,6 +26,7 @@ int pinCount(ComponentType type)
 {
     switch (type) {
     case ComponentType::Ground: return 1;
+    case ComponentType::Probe:  return 1;
     case ComponentType::OpAmp:  return 3;
     default:                    return 2;
     }
@@ -42,6 +43,8 @@ QString typeName(ComponentType type)
     case ComponentType::Switch:        return QStringLiteral("开关");
     case ComponentType::VoltageSource: return QStringLiteral("电压源");
     case ComponentType::CurrentSource: return QStringLiteral("电流源");
+    case ComponentType::Probe:         return QStringLiteral("电压测试点");
+    case ComponentType::CurrentProbe:  return QStringLiteral("电流测试点");
     case ComponentType::Ground:        return QStringLiteral("接地");
     }
     return QString();
@@ -58,6 +61,8 @@ QString typeSymbol(ComponentType type)
     case ComponentType::Switch:        return QStringLiteral("S");
     case ComponentType::VoltageSource: return QStringLiteral("V");
     case ComponentType::CurrentSource: return QStringLiteral("I");
+    case ComponentType::Probe:         return QStringLiteral("TP");
+    case ComponentType::CurrentProbe:  return QStringLiteral("IP");
     case ComponentType::Ground:        return QStringLiteral("GND");
     }
     return QString();
@@ -67,12 +72,17 @@ QString refPrefix(ComponentType type)
 {
     if (type == ComponentType::Ground)
         return QStringLiteral("GND");
+    if (type == ComponentType::Probe)
+        return QStringLiteral("TP");
+    if (type == ComponentType::CurrentProbe)
+        return QStringLiteral("IP");
     return typeSymbol(type);
 }
 
 bool isTwoTerminal(ComponentType type)
 {
-    return type != ComponentType::Ground && type != ComponentType::OpAmp;
+    return type != ComponentType::Ground && type != ComponentType::OpAmp
+        && type != ComponentType::Probe;
 }
 
 bool isSource(ComponentType type)
@@ -160,7 +170,9 @@ QString Component::unitName() const
     case ComponentType::Diode:         return QStringLiteral("A");
     case ComponentType::OpAmp:         return QString();
     case ComponentType::Switch:        return QStringLiteral("Ω");
+    case ComponentType::Probe:
     case ComponentType::Ground:        return QString();
+    case ComponentType::CurrentProbe:  return QStringLiteral("A");
     }
     return QString();
 }
@@ -197,6 +209,10 @@ QString Component::displayValue() const
 
     case ComponentType::Switch:
         return closed ? QStringLiteral("闭合") : QStringLiteral("断开");
+
+    case ComponentType::Probe:
+    case ComponentType::CurrentProbe:
+        return QString();
 
     case ComponentType::Ground:
         return QStringLiteral("0");
@@ -247,6 +263,8 @@ QString Component::spiceValueSpec() const
         return QStringLiteral("DC 0");
     }
 
+    case ComponentType::Probe:
+    case ComponentType::CurrentProbe:
     case ComponentType::Ground:
         return QString();
     }

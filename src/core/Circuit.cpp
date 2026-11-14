@@ -25,6 +25,8 @@ QString typeToTag(ComponentType type)
     case ComponentType::Switch:        return QStringLiteral("SW");
     case ComponentType::VoltageSource: return QStringLiteral("V");
     case ComponentType::CurrentSource: return QStringLiteral("I");
+    case ComponentType::Probe:         return QStringLiteral("TP");
+    case ComponentType::CurrentProbe:  return QStringLiteral("IP");
     case ComponentType::Ground:        return QStringLiteral("GND");
     }
     return QStringLiteral("R");
@@ -39,6 +41,8 @@ ComponentType tagToType(const QString& tag)
     if (tag == QLatin1String("SW")) return ComponentType::Switch;
     if (tag == QLatin1String("V")) return ComponentType::VoltageSource;
     if (tag == QLatin1String("I")) return ComponentType::CurrentSource;
+    if (tag == QLatin1String("TP")) return ComponentType::Probe;
+    if (tag == QLatin1String("IP")) return ComponentType::CurrentProbe;
     if (tag == QLatin1String("GND")) return ComponentType::Ground;
     return ComponentType::Resistor;
 }
@@ -125,11 +129,20 @@ QString Circuit::toSpiceNetlist() const
 
     bool hasDiode = false;
     for (const Component& comp : components) {
-        if (comp.type == ComponentType::Ground)
+        if (comp.type == ComponentType::Ground || comp.type == ComponentType::Probe)
             continue;
         const QVector<int> nodes = net.compPins.value(comp.id);
         if (nodes.size() < 2)
             continue;
+
+        // 电流测试点导出为 0V 电压源（理想的串入式电流表）
+        if (comp.type == ComponentType::CurrentProbe) {
+            lines << QStringLiteral("V%1 %2 %3 0")
+                         .arg(comp.refdes)
+                         .arg(nodes.at(0))
+                         .arg(nodes.at(1));
+            continue;
+        }
 
         // 运放导出为 SPICE 的 E 元件（VCVS），输出参考地
         if (comp.type == ComponentType::OpAmp) {

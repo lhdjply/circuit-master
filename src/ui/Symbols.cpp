@@ -1,5 +1,6 @@
 #include "ui/Symbols.h"
 
+#include <QFont>
 #include <QPainter>
 #include <QPixmap>
 #include <QPolygonF>
@@ -67,6 +68,11 @@ QPainterPath symbolShape(ComponentType type)
     }
     if (type == ComponentType::OpAmp) {
         path.addRoundedRect(QRectF(-34.0, -27.0, 68.0, 54.0), 5.0, 5.0);
+        return path;
+    }
+    if (type == ComponentType::Probe) {
+        path.addEllipse(QPointF(0.0, -15.0), 8.0, 8.0);
+        path.addRect(QRectF(-4.0, -10.0, 8.0, 12.0));
         return path;
     }
     path.addRoundedRect(QRectF(-33.0, -16.0, 66.0, 32.0), 5.0, 5.0);
@@ -184,6 +190,33 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         break;
     }
 
+    case ComponentType::Probe: {
+        p->drawLine(QPointF(0.0, 0.0), QPointF(0.0, -8.0));
+        p->setBrush(theme::symbolFill);
+        p->drawEllipse(QPointF(0.0, -16.0), 7.0, 7.0);
+        p->setBrush(Qt::NoBrush);
+        QFont font = p->font();
+        font.setPointSizeF(6.0);
+        font.setBold(true);
+        p->setFont(font);
+        p->drawText(QRectF(-7.0, -22.0, 14.0, 12.0), Qt::AlignCenter, QStringLiteral("V"));
+        break;
+    }
+
+    case ComponentType::CurrentProbe: {
+        p->drawLine(QPointF(-30.0, 0.0), QPointF(-12.0, 0.0));
+        p->drawLine(QPointF(12.0, 0.0), QPointF(30.0, 0.0));
+        p->setBrush(theme::symbolFill);
+        p->drawEllipse(QPointF(0.0, 0.0), 12.0, 12.0);
+        p->setBrush(Qt::NoBrush);
+        QFont font = p->font();
+        font.setPointSizeF(7.5);
+        font.setBold(true);
+        p->setFont(font);
+        p->drawText(QRectF(-8.0, -8.0, 16.0, 16.0), Qt::AlignCenter, QStringLiteral("A"));
+        break;
+    }
+
     case ComponentType::Ground: {
         p->drawLine(QPointF(0.0, 0.0), QPointF(0.0, 13.0));
         p->setPen(symbolPen(color, 2.6));
@@ -215,6 +248,8 @@ QIcon componentIcon(ComponentType type, const QSize& size)
     comp.closed = true;
 
     p.translate(size.width() / 2.0, size.height() / 2.0);
+    if (type == ComponentType::Probe)
+        p.translate(0.0, 8.0);
     const double sx = size.width() / 84.0;
     const double sy = size.height() / 54.0;
     p.scale(sx, sy);

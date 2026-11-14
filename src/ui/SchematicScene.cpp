@@ -140,6 +140,8 @@ ComponentItem* SchematicScene::placeComponent(ComponentType type, const QPointF&
     case ComponentType::Switch:
         comp.closed = true;
         break;
+    case ComponentType::Probe:
+    case ComponentType::CurrentProbe:
     case ComponentType::Diode:
     case ComponentType::Ground:
         break;
@@ -263,43 +265,7 @@ QPointF SchematicScene::snapToPin(const QPointF& point, double tolerance) const
 void SchematicScene::refresh()
 {
     recomputeJunctions();
-    recomputeNodeNumbers();
     update();
-}
-
-void SchematicScene::setShowNodeNumbers(bool show)
-{
-    if (m_showNodeNumbers == show)
-        return;
-    m_showNodeNumbers = show;
-    update();
-}
-
-void SchematicScene::recomputeNodeNumbers()
-{
-    m_nodeNumbers.clear();
-    const Circuit circuit = toCircuit();
-    if (circuit.components.isEmpty())
-        return;
-
-    const Netlist net = circuit.buildNetlist();
-    if (!net.valid)
-        return; // 没有接地时节点编号无意义
-
-    QHash<int, QPointF> representative;
-    for (const Component& comp : circuit.components) {
-        if (comp.type == ComponentType::Ground)
-            continue;
-        const QVector<int> nodes = net.compPins.value(comp.id);
-        const QVector<QPointF> pins = comp.pinPositions();
-        for (int i = 0; i < nodes.size() && i < pins.size(); ++i) {
-            if (nodes.at(i) > 0 && !representative.contains(nodes.at(i)))
-                representative.insert(nodes.at(i), pins.at(i));
-        }
-    }
-
-    for (auto it = representative.constBegin(); it != representative.constEnd(); ++it)
-        m_nodeNumbers.insert(gridKey(it.value()), it.key());
 }
 
 void SchematicScene::recomputeJunctions()
@@ -395,18 +361,6 @@ void SchematicScene::drawForeground(QPainter* painter, const QRectF& rect)
     painter->setBrush(theme::junction);
     for (const QPointF& p : m_junctions)
         painter->drawEllipse(p, 3.4, 3.4);
-
-    if (m_showNodeNumbers && painter->worldTransform().m11() > 0.55) {
-        QFont font = painter->font();
-        font.setPointSizeF(7.5);
-        font.setBold(true);
-        painter->setFont(font);
-        painter->setPen(QColor(0x94, 0xa3, 0xb8));
-        for (auto it = m_nodeNumbers.constBegin(); it != m_nodeNumbers.constEnd(); ++it) {
-            const QPointF p(it.key().x() * 10.0 + 7.0, it.key().y() * 10.0 - 7.0);
-            painter->drawText(p, QString::number(it.value()));
-        }
-    }
     painter->restore();
 }
 

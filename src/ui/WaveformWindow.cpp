@@ -173,6 +173,7 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     m_chart->setPlotAreaBackgroundVisible(true);
     m_chart->setPlotAreaBackgroundBrush(QColor(0xf8, 0xfa, 0xfc));
     m_chart->setMargins(QMargins(10, 10, 10, 10));
+    m_chart->setTitleBrush(QColor(0x64, 0x74, 0x8b));
 
     m_view = new QChartView(m_chart, chartSide);
     m_view->setRenderHint(QPainter::Antialiasing, true);
@@ -223,12 +224,16 @@ void WaveformWindow::populateList()
     m_building = true;
     m_list->clear();
 
+    const bool hasProbes = !m_result.probeWaves.isEmpty();
     for (int i = 0; i < m_result.waves.size(); ++i) {
         const Signal& s = m_result.waves.at(i);
         auto* item = new QListWidgetItem(swatch(colorFor(i)), s.name);
         item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
         const bool isVoltage = s.name.startsWith(QLatin1String("V("));
-        item->setCheckState(isVoltage ? Qt::Checked : Qt::Unchecked);
+        if (hasProbes)
+            item->setCheckState(m_result.probeWaves.contains(i) ? Qt::Checked : Qt::Unchecked);
+        else
+            item->setCheckState(isVoltage ? Qt::Checked : Qt::Unchecked);
         QString tip = s.name;
         if (s.name.startsWith(QLatin1String("V("))) {
             bool ok = false;
@@ -245,7 +250,7 @@ void WaveformWindow::populateList()
         if (m_list->item(i)->checkState() == Qt::Checked)
             anyChecked = true;
     }
-    if (!anyChecked) {
+    if (!anyChecked && !hasProbes) {
         for (int i = 0; i < std::min(3, m_list->count()); ++i)
             m_list->item(i)->setCheckState(Qt::Checked);
     }
@@ -266,6 +271,8 @@ void WaveformWindow::rebuild()
         delete axis;
     }
 
+    m_chart->setTitle(QString());
+
     QVector<int> selected;
     for (int i = 0; i < m_list->count(); ++i) {
         if (m_list->item(i)->checkState() == Qt::Checked)
@@ -274,41 +281,40 @@ void WaveformWindow::rebuild()
 
     const int pointCount = m_result.waves.isEmpty() ? 0 : m_result.waves.first().y.size();
     if (selected.isEmpty() || m_result.waves.isEmpty()) {
-        m_info->setText(QStringLiteral("请至少选择一个信号。"));
+        m_chart->setTitle(QStringLiteral(
+            "没有可显示的波形\n请在原理图中放置电压测试点（TP）或电流测试点（IP）后重新运行"));
+        m_info->setText(QStringLiteral("没有测试点，波形为空。"));
         return;
     }
 
+    struct Range {
+        double min = std::numeric_limits<double>::max();
+        double max = -std::numeric_limits<double>::max();
+        bool valid() const { return max >= min; }
+    };
+
     double xmin = std::numeric_limits<double>::max();
     double xmax = -std::numeric_limits<double>::max();
-    double ymin = std::numeric_limits<double>::max();
-    double ymax = -std::numeric_limits<double>::max();
-    bool allVoltage = true;
-    bool allCurrent = true;
+    Range volts;
+    Range amps;
+    Range others;
+
     for (int index : selected) {
         const Signal& s = m_result.waves.at(index);
-        if (s.name.startsWith(QLatin1String("V(")))
-            allCurrent = false;
-        else if (s.name.startsWith(QLatin1String("I(")))
-            allVoltage = false;
+        Range& range = s.unit == QLatin1String("V") ? volts
+            : s.unit == QLatin1String("A")          ? amps
+                                                    : others;
         for (double v : s.x) {
             xmin = std::min(xmin, v);
             xmax = std::max(xmax, v);
         }
         for (double v : s.y) {
-            ymin = std::min(ymin, v);
-            ymax = std::max(ymax, v);
+            range.min = std::min(range.min, v);
+            range.max = std::max(range.max, v);
         }
     }
     if (!(xmax > xmin))
         xmax = xmin + 1.0;
-    if (!(ymax > ymin)) {
-        ymin -= 1.0;
-        ymax += 1.0;
-    } else {
-        const double pad = (ymax - ymin) * 0.06;
-        ymin -= pad;
-        ymax += pad;
-    }
 
     const bool ac = m_result.kind == AnalysisKind::AC;
 
@@ -354,22 +360,63 @@ void WaveformWindow::rebuild()
         axisX = valueAxis;
     }
 
-    QString yTitle = QStringLiteral("数值");
-    if (ac)
-        yTitle = QStringLiteral("幅值 (dB)");
-    else if (allVoltage)
-        yTitle = QStringLiteral("电压 (V)");
-    else if (allCurrent)
-        yTitle = QStringLiteral("电流 (A)");
+    // 电压与电流同时存在时使用左右双 Y 轴，避免 mA 级电流被 V 级电压压平
+    const bool dualAxis = !ac && volts.valid() && amps.valid();
+
+    auto scaleFor = [](const Range& range, QString* prefix) {
+        const double magnitude = std::max(std::abs(range.min), std::abs(range.max));
+        if (magnitude > 0.0 && magnitude < 1e-4) {
+            *prefix = QStringLiteral("µ");
+            return 1e6;
+        }
+        if (magnitude > 0.0 && magnitude < 1.0) {
+            *prefix = QStringLiteral("m");
+            return 1e3;
+        }
+        *prefix = QString();
+        return 1.0;
+    };
+
+    QString voltagePrefix;
+    QString currentPrefix;
+    const double voltageScale = volts.valid() ? scaleFor(volts, &voltagePrefix) : 1.0;
+    const double currentScale = amps.valid() ? scaleFor(amps, &currentPrefix) : 1.0;
 
     auto* axisY = new QValueAxis();
-    applyNiceTicks(axisY, ymin, ymax);
+    QString yTitle;
+    if (ac) {
+        applyNiceTicks(axisY, others.min, others.max);
+        yTitle = QStringLiteral("幅值 (dB)");
+    } else if (dualAxis) {
+        applyNiceTicks(axisY, volts.min * voltageScale, volts.max * voltageScale);
+        yTitle = QStringLiteral("电压 (%1V)").arg(voltagePrefix);
+    } else if (volts.valid()) {
+        applyNiceTicks(axisY, volts.min * voltageScale, volts.max * voltageScale);
+        yTitle = QStringLiteral("电压 (%1V)").arg(voltagePrefix);
+    } else if (amps.valid()) {
+        applyNiceTicks(axisY, amps.min * currentScale, amps.max * currentScale);
+        yTitle = QStringLiteral("电流 (%1A)").arg(currentPrefix);
+    } else {
+        applyNiceTicks(axisY, others.min, others.max);
+        yTitle = QStringLiteral("数值");
+    }
     axisY->setLabelFormat(QStringLiteral("%.4g"));
     axisY->setTitleText(yTitle);
 
+    QValueAxis* axisY2 = nullptr;
+    if (dualAxis) {
+        axisY2 = new QValueAxis();
+        applyNiceTicks(axisY2, amps.min * currentScale, amps.max * currentScale);
+        axisY2->setLabelFormat(QStringLiteral("%.4g"));
+        axisY2->setTitleText(QStringLiteral("电流 (%1A)").arg(currentPrefix));
+        axisY2->setGridLineVisible(false);
+    }
+
     const QVector<QPair<QAbstractAxis*, Qt::Alignment>> axisList = {
-        {axisX, Qt::AlignBottom}, {axisY, Qt::AlignLeft}};
+        {axisX, Qt::AlignBottom}, {axisY, Qt::AlignLeft}, {axisY2, Qt::AlignRight}};
     for (const auto& entry : axisList) {
+        if (!entry.first)
+            continue;
         QAbstractAxis* axis = entry.first;
         axis->setGridLineColor(QColor(0xe2, 0xe8, 0xf0));
         axis->setLinePenColor(QColor(0x94, 0xa3, 0xb8));
@@ -384,14 +431,20 @@ void WaveformWindow::rebuild()
         series->setName(s.name);
         series->setPen(QPen(colorFor(index), 1.8));
         const int count = std::min(s.x.size(), s.y.size());
+        const double yScale = s.unit == QLatin1String("V") ? voltageScale
+            : s.unit == QLatin1String("A")                  ? currentScale
+                                                            : 1.0;
         for (int i = 0; i < count; ++i) {
             const double xValue = logX ? std::log10(std::max(s.x.at(i), 1e-12))
                                        : s.x.at(i) * xFactor;
-            series->append(xValue, s.y.at(i));
+            series->append(xValue, s.y.at(i) * yScale);
         }
         m_chart->addSeries(series);
         series->attachAxis(axisX);
-        series->attachAxis(axisY);
+        if (axisY2 && s.unit == QLatin1String("A"))
+            series->attachAxis(axisY2);
+        else
+            series->attachAxis(axisY);
     }
 
     m_info->setText(QStringLiteral("%1 个信号，已选 %2 个\n共 %3 个数据点")

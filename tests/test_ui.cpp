@@ -13,6 +13,7 @@
 #include <QFileInfo>
 #include <QPixmap>
 #include <QIcon>
+#include <QListWidget>
 #include <QLabel>
 #include <QLineEdit>
 #include <QSet>
@@ -73,7 +74,7 @@ private slots:
 
         auto* scene = window.findChild<SchematicScene*>();
         QVERIFY(scene);
-        QCOMPARE(scene->componentItems().size(), 4);
+        QCOMPARE(scene->componentItems().size(), 6); // 4 个元件 + 2 个测试点
         QCOMPARE(scene->wireItems().size(), 3);
 
         QDir dir(QCoreApplication::applicationDirPath());
@@ -234,6 +235,20 @@ private slots:
         auto* wave = window.findChild<WaveformWindow*>();
         QVERIFY(wave);
         QVERIFY(wave->isVisible());
+
+        auto* list = wave->findChild<QListWidget*>();
+        QVERIFY(list);
+        QCOMPARE(list->count(), 4);
+        QVERIFY(list->item(0)->text().startsWith(QStringLiteral("TP1")));
+        QVERIFY(list->item(1)->text().startsWith(QStringLiteral("TP2")));
+        QVERIFY(list->item(2)->text().startsWith(QStringLiteral("TP3")));
+        QVERIFY(list->item(3)->text().startsWith(QStringLiteral("IP1")));
+        for (int i = 0; i < list->count(); ++i) {
+            QCOMPARE(list->item(i)->checkState(), Qt::Checked);
+            QVERIFY2(!list->item(i)->text().startsWith(QStringLiteral("V(")),
+                     qPrintable(list->item(i)->text()));
+        }
+
         QVERIFY(wave->grab().save(dir + QStringLiteral("/shots/waveform_opamp.png")));
     }
 
@@ -341,6 +356,11 @@ private slots:
         auto* wave = window.findChild<WaveformWindow*>();
         QVERIFY(wave);
         QVERIFY(wave->isVisible());
+
+        // 没有测试点时波形为空
+        auto* list = wave->findChild<QListWidget*>();
+        QVERIFY(list);
+        QCOMPARE(list->count(), 0);
     }
 };
 

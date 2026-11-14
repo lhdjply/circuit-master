@@ -35,9 +35,6 @@ public:
     void setShowGrid(bool show);
     bool showGrid() const { return m_showGrid; }
 
-    void setShowNodeNumbers(bool show);
-    bool showNodeNumbers() const { return m_showNodeNumbers; }
-
     QPointF snap(const QPointF& point) const;
     QPointF snapToPin(const QPointF& point, double tolerance = 12.0) const;
 
@@ -51,12 +48,8 @@ protected:
 
 private:
     void recomputeJunctions();
-    void recomputeNodeNumbers();
-
     QVector<QPointF> m_junctions;
-    QHash<QPoint, int> m_nodeNumbers;
     bool m_showGrid = true;
-    bool m_showNodeNumbers = true;
 };
 
 } // namespace csm

@@ -88,7 +88,6 @@ private:
     QAction* m_actZoomOut = nullptr;
     QAction* m_actZoomFit = nullptr;
     QAction* m_actGrid = nullptr;
-    QAction* m_actNodeNumbers = nullptr;
 
     QAction* m_actRun = nullptr;
     QAction* m_actSettings = nullptr;

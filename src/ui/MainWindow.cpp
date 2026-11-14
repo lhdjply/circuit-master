@@ -26,6 +26,7 @@
 #include <QGraphicsScene>
 #include <QGuiApplication>
 #include <QScreen>
+#include <QSet>
 #include <QJsonDocument>
 #include <QLabel>
 #include <QListWidget>
@@ -90,6 +91,11 @@ Circuit exampleRc()
         makeComponent(3, ComponentType::Capacitor, 300, 300, 90, QStringLiteral("C1"), 1e-6));
     circuit.components.append(
         makeComponent(4, ComponentType::Ground, 200, 400, 0, QStringLiteral("GND"), 0));
+    // 测试点：输入电压、电容电压
+    circuit.components.append(
+        makeComponent(5, ComponentType::Probe, 100, 240, 90, QStringLiteral("TP1"), 0));
+    circuit.components.append(
+        makeComponent(6, ComponentType::Probe, 300, 240, 90, QStringLiteral("TP2"), 0));
 
     addStandardLoop(circuit);
     return circuit;
@@ -132,6 +138,11 @@ Circuit exampleDiode()
         makeComponent(3, ComponentType::Resistor, 300, 300, 90, QStringLiteral("R1"), 1000.0));
     circuit.components.append(
         makeComponent(4, ComponentType::Ground, 200, 400, 0, QStringLiteral("GND"), 0));
+    // 测试点：输入电压、整流输出电压
+    circuit.components.append(
+        makeComponent(5, ComponentType::Probe, 100, 240, 90, QStringLiteral("TP1"), 0));
+    circuit.components.append(
+        makeComponent(6, ComponentType::Probe, 300, 240, 90, QStringLiteral("TP2"), 0));
 
     addStandardLoop(circuit);
     return circuit;
@@ -159,6 +170,11 @@ Circuit exampleRlc()
         makeComponent(4, ComponentType::Capacitor, 200, 400, 0, QStringLiteral("C1"), 1e-6));
     circuit.components.append(
         makeComponent(5, ComponentType::Ground, 250, 400, 0, QStringLiteral("GND"), 0));
+    // 测试点：输入电压、电容两端电压
+    circuit.components.append(
+        makeComponent(6, ComponentType::Probe, 100, 240, 90, QStringLiteral("TP1"), 0));
+    circuit.components.append(
+        makeComponent(7, ComponentType::Probe, 300, 360, 90, QStringLiteral("TP2"), 0));
 
     circuit.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(170, 200)}});
     circuit.wires.append(Wire{{QPointF(230, 200), QPointF(300, 200), QPointF(300, 270)}});
@@ -184,11 +200,16 @@ Circuit exampleAcLowpass()
     circuit.components.append(
         makeComponent(4, ComponentType::Ground, 200, 400, 0, QStringLiteral("GND"), 0));
 
+    // 测试点：输入、输出
+    circuit.components.append(
+        makeComponent(5, ComponentType::Probe, 100, 240, 90, QStringLiteral("TP1"), 0));
+    circuit.components.append(
+        makeComponent(6, ComponentType::Probe, 300, 240, 90, QStringLiteral("TP2"), 0));
+
     addStandardLoop(circuit);
     return circuit;
 }
 
-/// 优先使用内置 SVG 图标，缺失时回退到系统主题图标。
 Circuit exampleOpAmp()
 {
     Circuit circuit;
@@ -210,15 +231,77 @@ Circuit exampleOpAmp()
         makeComponent(5, ComponentType::Ground, 100, 410, 0, QStringLiteral("GND"), 0));
     circuit.components.append(
         makeComponent(6, ComponentType::Ground, 220, 240, 0, QStringLiteral("GND"), 0));
+    // 测试点：输入、虚地、输出
+    circuit.components.append(
+        makeComponent(7, ComponentType::Probe, 130, 320, 0, QStringLiteral("TP1"), 0));
+    circuit.components.append(
+        makeComponent(8, ComponentType::Probe, 240, 320, 0, QStringLiteral("TP2"), 0));
+    circuit.components.append(
+        makeComponent(9, ComponentType::Probe, 330, 360, 90, QStringLiteral("TP3"), 0));
+    circuit.components.append(
+        makeComponent(10, ComponentType::CurrentProbe, 270, 370, 90, QStringLiteral("IP1"), 0));
 
     circuit.wires.append(Wire{{QPointF(100, 350), QPointF(100, 320), QPointF(150, 320)}});
     circuit.wires.append(Wire{{QPointF(210, 320), QPointF(270, 320)}});
-    circuit.wires.append(Wire{{QPointF(270, 320), QPointF(270, 420)}});
+    circuit.wires.append(Wire{{QPointF(270, 320), QPointF(270, 340)}});
+    circuit.wires.append(Wire{{QPointF(270, 400), QPointF(270, 420)}});
     circuit.wires.append(Wire{{QPointF(330, 420), QPointF(330, 300)}});
     circuit.wires.append(Wire{{QPointF(270, 280), QPointF(270, 240), QPointF(220, 240)}});
     return circuit;
 }
 
+/// 只保留测试点波形：电压测试点取节点电压，电流测试点取支路电流。
+/// 电路中没有测试点时清空波形，返回 false。
+bool applyProbeSignals(const Circuit& circuit, const Netlist& net, SimulationResult& result)
+{
+    struct ProbeRef {
+        QString signalName;
+        QString displayName;
+    };
+
+    QVector<ProbeRef> probes;
+    QSet<int> seenNodes;
+    for (const Component& comp : circuit.components) {
+        if (comp.type == ComponentType::Probe) {
+            const int node = net.nodeOf(comp.id, 0);
+            if (node <= 0 || seenNodes.contains(node))
+                continue;
+            seenNodes.insert(node);
+            probes.append({QStringLiteral("V(%1)").arg(node),
+                           QStringLiteral("%1 (V(%2))").arg(comp.refdes).arg(node)});
+        } else if (comp.type == ComponentType::CurrentProbe) {
+            probes.append({QStringLiteral("I(%1)").arg(comp.refdes),
+                           QStringLiteral("%1 (I)").arg(comp.refdes)});
+        }
+    }
+    if (probes.isEmpty()) {
+        result.waves.clear();
+        result.probeWaves.clear();
+        return false;
+    }
+    if (result.waves.isEmpty())
+        return false;
+
+    QVector<Signal> ordered;
+    for (const ProbeRef& probe : probes) {
+        const Signal* wave = result.signal(probe.signalName);
+        if (!wave)
+            continue;
+        Signal copy = *wave;
+        copy.name = probe.displayName;
+        ordered.append(copy);
+    }
+    if (ordered.isEmpty())
+        return false;
+
+    result.waves = ordered;
+    result.probeWaves.clear();
+    for (int i = 0; i < result.waves.size(); ++i)
+        result.probeWaves.append(i);
+    return true;
+}
+
+/// 优先使用内置 SVG 图标，缺失时回退到系统主题图标。
 QIcon actionIcon(const QString& name, const QString& themeName, QStyle::StandardPixmap fallback)
 {
     QIcon icon(QStringLiteral(":/icons/%1.svg").arg(name));
@@ -351,10 +434,6 @@ void MainWindow::createActions()
     m_actGrid->setCheckable(true);
     m_actGrid->setChecked(true);
 
-    m_actNodeNumbers = new QAction(QStringLiteral("显示节点编号"), this);
-    m_actNodeNumbers->setCheckable(true);
-    m_actNodeNumbers->setChecked(true);
-
     m_actRun = new QAction(
         actionIcon(QStringLiteral("run"), QStringLiteral("media-playback-start"), QStyle::SP_MediaPlay),
         QStringLiteral("运行仿真"), this);
@@ -407,8 +486,6 @@ void MainWindow::createActions()
     connect(m_actZoomOut, &QAction::triggered, this, [this] { m_view->zoomBy(1.0 / 1.2); });
     connect(m_actZoomFit, &QAction::triggered, this, [this] { m_view->zoomFit(); });
     connect(m_actGrid, &QAction::toggled, this, [this](bool on) { m_scene->setShowGrid(on); });
-    connect(m_actNodeNumbers, &QAction::toggled, this,
-            [this](bool on) { m_scene->setShowNodeNumbers(on); });
 
     connect(m_actRun, &QAction::triggered, this, &MainWindow::runSimulation);
     connect(m_actSettings, &QAction::triggered, this, &MainWindow::openSettings);
@@ -457,7 +534,6 @@ void MainWindow::createMenus()
     viewMenu->addAction(m_actZoomFit);
     viewMenu->addSeparator();
     viewMenu->addAction(m_actGrid);
-    viewMenu->addAction(m_actNodeNumbers);
 
     QMenu* simMenu = menuBar()->addMenu(QStringLiteral("仿真(&S)"));
     simMenu->addAction(m_actRun);
@@ -517,6 +593,8 @@ void MainWindow::buildLibrary()
         {ComponentType::VoltageSource, QStringLiteral("电压源  V")},
         {ComponentType::CurrentSource, QStringLiteral("电流源  I")},
         {ComponentType::Ground, QStringLiteral("接地  GND")},
+        {ComponentType::Probe, QStringLiteral("电压测试点  TP")},
+        {ComponentType::CurrentProbe, QStringLiteral("电流测试点  IP")},
     };
 
     for (const Entry& entry : entries) {
@@ -825,7 +903,7 @@ void MainWindow::runSimulation()
         appendLog(QStringLiteral("⚠ ") + warning);
 
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    const SimulationResult result = Simulator::run(circuit, m_options);
+    SimulationResult result = Simulator::run(circuit, m_options);
     QApplication::restoreOverrideCursor();
 
     appendLog(QStringLiteral("──────── 仿真 ────────"));
@@ -839,6 +917,10 @@ void MainWindow::runSimulation()
     }
 
     appendLog(QStringLiteral("✔ 完成，用时 %1 ms").arg(QString::number(result.elapsedMs, 'f', 1)));
+
+    const bool hasProbes = applyProbeSignals(circuit, net, result);
+    if (!hasProbes && result.kind != AnalysisKind::OperatingPoint)
+        appendLog(QStringLiteral("⚠ 电路中没有测试点，波形为空。请放置电压测试点（TP）或电流测试点（IP）。"));
 
     if (result.kind == AnalysisKind::OperatingPoint) {
         QDialog dialog(this);

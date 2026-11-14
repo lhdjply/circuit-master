@@ -145,11 +145,12 @@ Problem buildProblem(const Circuit& circuit, const Netlist& net)
     p.nNodes = net.nodeCount;
 
     for (const Component& comp : circuit.components) {
-        if (comp.type == ComponentType::Ground)
+        if (comp.type == ComponentType::Ground || comp.type == ComponentType::Probe)
             continue;
         p.elements.append(&comp);
         const bool needsBranch = comp.type == ComponentType::VoltageSource
-            || comp.type == ComponentType::Inductor || comp.type == ComponentType::OpAmp;
+            || comp.type == ComponentType::Inductor || comp.type == ComponentType::OpAmp
+            || comp.type == ComponentType::CurrentProbe;
         if (needsBranch) {
             int n1 = -1;
             int n2 = 0;
@@ -206,6 +207,10 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
             addBranch(a, b, p, comp.id, 0.0, comp.sourceValueAt(t));
             break;
 
+        case ComponentType::CurrentProbe:
+            addBranch(a, b, p, comp.id, 0.0, 0.0);
+            break;
+
         case ComponentType::CurrentSource:
             addI(b, n1, n2, comp.sourceValueAt(t));
             break;
@@ -239,6 +244,7 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
             addG(a, n1, n2, 1.0 / r);
             break;
         }
+        case ComponentType::Probe:
         case ComponentType::Ground:
             break;
         }
@@ -353,7 +359,8 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
             break;
         case ComponentType::Inductor:
         case ComponentType::VoltageSource:
-        case ComponentType::OpAmp: {
+        case ComponentType::OpAmp:
+        case ComponentType::CurrentProbe: {
             const int br = p.branchOf.value(comp.id, -1);
             if (br >= 0)
                 current = x[size_t(p.nNodes + br)];
@@ -368,6 +375,7 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
         case ComponentType::Switch:
             current = v / (comp.closed ? 1e-3 : 1e9);
             break;
+        case ComponentType::Probe:
         case ComponentType::Ground:
             break;
         }
@@ -471,6 +479,9 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
         case ComponentType::VoltageSource:
             addBranch(a, b, p, comp.id, Cx(0.0, 0.0), Cx(1.0, 0.0));
             break;
+        case ComponentType::CurrentProbe:
+            addBranch(a, b, p, comp.id, Cx(0.0, 0.0), Cx(0.0, 0.0));
+            break;
         case ComponentType::CurrentSource:
             addI(b, n1, n2, Cx(1.0, 0.0));
             break;
@@ -495,6 +506,7 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
         case ComponentType::Switch:
             addG(a, n1, n2, Cx(1.0 / (comp.closed ? 1e-3 : 1e9), 0.0));
             break;
+        case ComponentType::Probe:
         case ComponentType::Ground:
             break;
         }
@@ -619,6 +631,23 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
         result.waves.append(s);
     }
 
+    // 电流测试点：交流下输出支路电流幅值（dB）
+    QVector<int> currentProbeBranches;
+    for (const Component& comp : circuit.components) {
+        if (comp.type != ComponentType::CurrentProbe)
+            continue;
+        const int br = p.branchOf.value(comp.id, -1);
+        if (br < 0)
+            continue;
+        Signal s;
+        s.name = QStringLiteral("I(%1)").arg(comp.refdes);
+        s.unit = QStringLiteral("dB");
+        s.x.reserve(points);
+        s.y.reserve(points);
+        result.waves.append(s);
+        currentProbeBranches.append(br);
+    }
+
     const int n = p.nNodes + p.nBranches;
     Matrix<Cx> a(n);
     std::vector<Cx> b(size_t(n), Cx(0.0, 0.0));
@@ -644,6 +673,13 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
             const double db = 20.0 * std::log10(std::max(mag, 1e-30));
             result.waves[node - 1].x.append(f);
             result.waves[node - 1].y.append(db);
+        }
+
+        for (int k = 0; k < currentProbeBranches.size(); ++k) {
+            const double mag = std::abs(xc[size_t(p.nNodes + currentProbeBranches.at(k))]);
+            const double db = 20.0 * std::log10(std::max(mag, 1e-30));
+            result.waves[p.nNodes + k].x.append(f);
+            result.waves[p.nNodes + k].y.append(db);
         }
     }
 
