@@ -23,9 +23,36 @@ PropertyPanel::PropertyPanel(QWidget* parent)
 
 namespace {
 
-QString numberText(double v)
+QString quantityText(double value, UnitKind unit)
 {
-    return QString::number(v, 'g', 10);
+    return formatEng(value, unitSymbol(unit), 6);
+}
+
+UnitKind valueUnitFor(ComponentType type)
+{
+    switch (type) {
+    case ComponentType::Resistor:  return UnitKind::Ohm;
+    case ComponentType::Capacitor: return UnitKind::Farad;
+    case ComponentType::Inductor:  return UnitKind::Henry;
+    case ComponentType::VoltageSource: return UnitKind::Volt;
+    case ComponentType::CurrentSource: return UnitKind::Ampere;
+    default: return UnitKind::None;
+    }
+}
+
+UnitKind sourceUnitFor(ComponentType type)
+{
+    return type == ComponentType::CurrentSource ? UnitKind::Ampere : UnitKind::Volt;
+}
+
+bool parseField(QLineEdit* edit, UnitKind unit, double* value, QString* reason)
+{
+    bool ok = false;
+    const double parsed = parseQuantity(edit->text(), unit, &ok, reason);
+    if (!ok)
+        return false;
+    *value = parsed;
+    return true;
 }
 
 QLineEdit* makeEdit(const QString& placeholder = QString())
@@ -117,7 +144,10 @@ void PropertyPanel::buildUi()
     pageLayout->addLayout(m_form);
     pageLayout->addStretch(1);
 
-    auto* hint = new QLabel(QStringLiteral("提示：数值支持 10k、4.7u、1meg、2.2n 等写法。"), page);
+    auto* hint = new QLabel(
+        QStringLiteral("提示：数值可直接带单位（10kΩ、4.7µF、10mH、5V、1mA）；"
+                       "不写单位时按元件默认单位。"),
+        page);
     hint->setWordWrap(true);
     hint->setStyleSheet(QStringLiteral("color:#94a3b8; font-size:11px;"));
     pageLayout->addWidget(hint);
@@ -161,22 +191,23 @@ void PropertyPanel::refreshFromItem()
     m_title->setText(QStringLiteral("%1  ·  %2").arg(typeName(c.type), c.refdes));
 
     m_refdes->setText(c.refdes);
-    m_value->setText(numberText(c.value));
+    m_value->setText(quantityText(c.value, valueUnitFor(c.type)));
     m_function->setCurrentIndex(m_function->findData(int(c.function)));
 
-    m_dc->setText(numberText(c.dcValue));
-    m_amplitude->setText(numberText(c.amplitude));
-    m_frequency->setText(numberText(c.frequency));
-    m_phase->setText(numberText(c.phaseDeg));
-    m_offset->setText(numberText(c.offset));
-    m_delay->setText(numberText(c.delayTime));
+    const UnitKind unit = sourceUnitFor(c.type);
+    m_dc->setText(quantityText(c.dcValue, unit));
+    m_amplitude->setText(quantityText(c.amplitude, unit));
+    m_frequency->setText(quantityText(c.frequency, UnitKind::Hertz));
+    m_phase->setText(formatEng(c.phaseDeg, QStringLiteral("°"), 6));
+    m_offset->setText(quantityText(c.offset, unit));
+    m_delay->setText(quantityText(c.delayTime, UnitKind::Second));
 
-    m_pulseV1->setText(numberText(c.pulseV1));
-    m_pulseV2->setText(numberText(c.pulseV2));
-    m_rise->setText(numberText(c.pulseRise));
-    m_fall->setText(numberText(c.pulseFall));
-    m_width->setText(numberText(c.pulseWidth));
-    m_period->setText(numberText(c.pulsePeriod));
+    m_pulseV1->setText(quantityText(c.pulseV1, unit));
+    m_pulseV2->setText(quantityText(c.pulseV2, unit));
+    m_rise->setText(quantityText(c.pulseRise, UnitKind::Second));
+    m_fall->setText(quantityText(c.pulseFall, UnitKind::Second));
+    m_width->setText(quantityText(c.pulseWidth, UnitKind::Second));
+    m_period->setText(quantityText(c.pulsePeriod, UnitKind::Second));
 
     m_closed->setChecked(c.closed);
 
@@ -195,11 +226,41 @@ void PropertyPanel::updateVisibility()
         || c.type == ComponentType::Inductor || c.type == ComponentType::OpAmp;
 
     if (m_valueLabel) {
-        const bool opamp = c.type == ComponentType::OpAmp;
-        m_valueLabel->setText(opamp ? QStringLiteral("开环增益") : QStringLiteral("数值"));
-        m_value->setPlaceholderText(opamp ? QStringLiteral("例如 100k")
-                                          : QStringLiteral("例如 10k / 4.7u"));
+        switch (c.type) {
+        case ComponentType::Resistor:
+            m_valueLabel->setText(QStringLiteral("数值 (Ω)"));
+            m_value->setPlaceholderText(QStringLiteral("例如 10kΩ / 4.7k"));
+            break;
+        case ComponentType::Capacitor:
+            m_valueLabel->setText(QStringLiteral("数值 (F)"));
+            m_value->setPlaceholderText(QStringLiteral("例如 100nF / 1µF"));
+            break;
+        case ComponentType::Inductor:
+            m_valueLabel->setText(QStringLiteral("数值 (H)"));
+            m_value->setPlaceholderText(QStringLiteral("例如 10mH"));
+            break;
+        case ComponentType::OpAmp:
+            m_valueLabel->setText(QStringLiteral("开环增益"));
+            m_value->setPlaceholderText(QStringLiteral("例如 100k"));
+            break;
+        default:
+            m_valueLabel->setText(QStringLiteral("数值"));
+            break;
+        }
     }
+
+    if (isSource(c.type)) {
+        const QString unit = unitSymbol(sourceUnitFor(c.type));
+        m_dc->setPlaceholderText(QStringLiteral("例如 5%1").arg(unit));
+        m_amplitude->setPlaceholderText(QStringLiteral("例如 1%1").arg(unit));
+        m_offset->setPlaceholderText(QStringLiteral("例如 0%1").arg(unit));
+        m_pulseV1->setPlaceholderText(QStringLiteral("例如 0%1").arg(unit));
+        m_pulseV2->setPlaceholderText(QStringLiteral("例如 5%1").arg(unit));
+    }
+    m_frequency->setPlaceholderText(QStringLiteral("例如 1kHz"));
+    m_delay->setPlaceholderText(QStringLiteral("例如 1ms"));
+    for (QLineEdit* edit : {m_rise, m_fall, m_width, m_period})
+        edit->setPlaceholderText(QStringLiteral("例如 1ms"));
 
     m_form->setRowVisible(m_value, analog);
     m_form->setRowVisible(m_function, source);
@@ -245,10 +306,12 @@ void PropertyPanel::applyValue()
 {
     if (!m_item || m_updating)
         return;
+    QString reason;
     bool ok = false;
-    const double v = parseEng(m_value->text(), &ok);
+    const double v = parseQuantity(m_value->text(), valueUnitFor(m_item->component().type), &ok,
+                                   &reason);
     if (!ok) {
-        markInvalid(m_value);
+        markInvalid(m_value, reason);
         return;
     }
     markValid(m_value);
@@ -282,10 +345,10 @@ void PropertyPanel::applyDc()
 {
     if (!m_item || m_updating)
         return;
-    bool ok = false;
-    const double v = parseEng(m_dc->text(), &ok);
-    if (!ok) {
-        markInvalid(m_dc);
+    QString reason;
+    double v = 0.0;
+    if (!parseField(m_dc, sourceUnitFor(m_item->component().type), &v, &reason)) {
+        markInvalid(m_dc, reason);
         return;
     }
     markValid(m_dc);
@@ -300,13 +363,22 @@ void PropertyPanel::applySine()
 {
     if (!m_item || m_updating)
         return;
+    QString phaseText = m_phase->text();
+    phaseText.remove(QStringLiteral("°"));
+    phaseText.remove(QStringLiteral("deg"), Qt::CaseInsensitive);
+
     QLineEdit* edits[5] = {m_amplitude, m_frequency, m_phase, m_offset, m_delay};
+    const UnitKind units[5] = {sourceUnitFor(m_item->component().type), UnitKind::Hertz,
+                               UnitKind::None, sourceUnitFor(m_item->component().type),
+                               UnitKind::Second};
     double values[5] = {0, 0, 0, 0, 0};
     for (int i = 0; i < 5; ++i) {
+        QString reason;
+        const QString text = (i == 2) ? phaseText : edits[i]->text();
         bool ok = false;
-        values[i] = parseEng(edits[i]->text(), &ok);
+        values[i] = parseQuantity(text, units[i], &ok, &reason);
         if (!ok) {
-            markInvalid(edits[i]);
+            markInvalid(edits[i], reason);
             return;
         }
         markValid(edits[i]);
@@ -327,12 +399,16 @@ void PropertyPanel::applyPulse()
     if (!m_item || m_updating)
         return;
     QLineEdit* edits[6] = {m_pulseV1, m_pulseV2, m_rise, m_fall, m_width, m_period};
+    const UnitKind units[6] = {sourceUnitFor(m_item->component().type),
+                               sourceUnitFor(m_item->component().type), UnitKind::Second,
+                               UnitKind::Second, UnitKind::Second, UnitKind::Second};
     double values[6] = {0, 0, 0, 0, 0, 0};
     for (int i = 0; i < 6; ++i) {
+        QString reason;
         bool ok = false;
-        values[i] = parseEng(edits[i]->text(), &ok);
+        values[i] = parseQuantity(edits[i]->text(), units[i], &ok, &reason);
         if (!ok) {
-            markInvalid(edits[i]);
+            markInvalid(edits[i], reason);
             return;
         }
         markValid(edits[i]);
@@ -349,10 +425,12 @@ void PropertyPanel::applyPulse()
     emit changed();
 }
 
-void PropertyPanel::markInvalid(QLineEdit* edit)
+void PropertyPanel::markInvalid(QLineEdit* edit, const QString& reason)
 {
     edit->setStyleSheet(QStringLiteral("border:1px solid #dc2626; border-radius:3px;"));
-    edit->setToolTip(QStringLiteral("无法识别该数值，示例：10k、4.7u、1meg"));
+    edit->setToolTip(reason.isEmpty()
+                         ? QStringLiteral("无法识别该数值，示例：10kΩ、4.7µF、1meg")
+                         : reason);
     edit->setFocus();
 }
 

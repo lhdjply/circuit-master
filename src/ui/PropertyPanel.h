@@ -37,7 +37,7 @@ private:
     void applyDc();
     void applySine();
     void applyPulse();
-    void markInvalid(QLineEdit* edit);
+    void markInvalid(QLineEdit* edit, const QString& reason = QString());
     void markValid(QLineEdit* edit);
 
     ComponentItem* m_item = nullptr;

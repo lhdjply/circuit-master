@@ -77,7 +77,7 @@ double parseEng(const QString& text, bool* ok)
     QString suffix = m.captured(2);
     double factor = 1.0;
     for (const auto& p : kPrefixes) {
-        if (suffix.startsWith(QLatin1String(p.text))) {
+        if (suffix.startsWith(QString::fromUtf8(p.text))) {
             factor = p.factor;
             suffix.remove(0, int(qstrlen(p.text)));
             break;
@@ -92,6 +92,113 @@ double parseEng(const QString& text, bool* ok)
     if (ok)
         *ok = true;
     return value * factor;
+}
+
+QString unitSymbol(UnitKind kind)
+{
+    switch (kind) {
+    case UnitKind::Ohm:    return QStringLiteral("Ω");
+    case UnitKind::Farad:  return QStringLiteral("F");
+    case UnitKind::Henry:  return QStringLiteral("H");
+    case UnitKind::Volt:   return QStringLiteral("V");
+    case UnitKind::Ampere: return QStringLiteral("A");
+    case UnitKind::Hertz:  return QStringLiteral("Hz");
+    case UnitKind::Second: return QStringLiteral("s");
+    case UnitKind::None:   return QString();
+    }
+    return QString();
+}
+
+namespace {
+
+UnitKind unitFromSymbol(const QString& symbol)
+{
+    if (symbol.isEmpty())
+        return UnitKind::None;
+    if (symbol == QStringLiteral("Ω") || symbol.compare(QStringLiteral("ohm"), Qt::CaseInsensitive) == 0)
+        return UnitKind::Ohm;
+    if (symbol.compare(QLatin1String("F"), Qt::CaseInsensitive) == 0)
+        return UnitKind::Farad;
+    if (symbol.compare(QLatin1String("H"), Qt::CaseInsensitive) == 0)
+        return UnitKind::Henry;
+    if (symbol.compare(QLatin1String("V"), Qt::CaseInsensitive) == 0)
+        return UnitKind::Volt;
+    if (symbol.compare(QLatin1String("A"), Qt::CaseInsensitive) == 0)
+        return UnitKind::Ampere;
+    if (symbol.compare(QLatin1String("Hz"), Qt::CaseInsensitive) == 0)
+        return UnitKind::Hertz;
+    if (symbol.compare(QLatin1String("s"), Qt::CaseInsensitive) == 0
+        || symbol.compare(QLatin1String("sec"), Qt::CaseInsensitive) == 0)
+        return UnitKind::Second;
+    return UnitKind::None;
+}
+
+} // namespace
+
+double parseQuantity(const QString& text, UnitKind expected, bool* ok, QString* error)
+{
+    if (ok)
+        *ok = false;
+    if (error)
+        error->clear();
+
+    QString s = text.trimmed();
+    s.remove(QLatin1Char(' '));
+    s.replace(QLatin1Char(','), QLatin1Char('.'));
+
+    if (s.isEmpty()) {
+        if (error)
+            *error = QStringLiteral("请输入数值");
+        return 0.0;
+    }
+
+    static const QRegularExpression re(
+        QStringLiteral("^([-+]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][-+]?\\d+)?)(.*)$"));
+    const QRegularExpressionMatch match = re.match(s);
+    if (!match.hasMatch()) {
+        if (error)
+            *error = QStringLiteral("无法识别的数值：%1").arg(text);
+        return 0.0;
+    }
+
+    bool numberOk = false;
+    const double number = match.captured(1).toDouble(&numberOk);
+    if (!numberOk) {
+        if (error)
+            *error = QStringLiteral("无法识别的数值：%1").arg(text);
+        return 0.0;
+    }
+
+    QString rest = match.captured(2);
+    double factor = 1.0;
+    for (const auto& prefix : kPrefixes) {
+        if (rest.startsWith(QString::fromUtf8(prefix.text))) {
+            factor = prefix.factor;
+            rest.remove(0, int(qstrlen(prefix.text)));
+            break;
+        }
+    }
+
+    UnitKind kind = unitFromSymbol(rest);
+    if (!rest.isEmpty() && kind == UnitKind::None) {
+        if (error)
+            *error = QStringLiteral("无法识别的单位：%1").arg(rest);
+        return 0.0;
+    }
+    if (expected == UnitKind::None && !rest.isEmpty()) {
+        if (error)
+            *error = QStringLiteral("该参数没有单位，请直接输入数字");
+        return 0.0;
+    }
+    if (expected != UnitKind::None && !rest.isEmpty() && kind != expected) {
+        if (error)
+            *error = QStringLiteral("单位不匹配，应为 %1").arg(unitSymbol(expected));
+        return 0.0;
+    }
+
+    if (ok)
+        *ok = true;
+    return number * factor;
 }
 
 QString formatEng(double value, const QString& unit, int precision)

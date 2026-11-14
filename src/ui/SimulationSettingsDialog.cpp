@@ -108,13 +108,15 @@ void SimulationSettingsDialog::updateVisibility()
         m_scopeHint->setVisible(kind == AnalysisKind::Transient && scope);
 }
 
-bool SimulationSettingsDialog::parseField(QLineEdit* edit, double* out, const QString& label)
+bool SimulationSettingsDialog::parseField(QLineEdit* edit, double* out, const QString& label,
+                                          UnitKind unit)
 {
     bool ok = false;
-    const double value = parseEng(edit->text(), &ok);
+    QString reason;
+    const double value = parseQuantity(edit->text(), unit, &ok, &reason);
     if (!ok || !std::isfinite(value)) {
         QMessageBox::warning(this, QStringLiteral("参数无效"),
-                             QStringLiteral("%1 的数值无法识别：%2").arg(label, edit->text()));
+                             QStringLiteral("%1：%2").arg(label, reason));
         edit->setFocus();
         edit->selectAll();
         return false;
@@ -131,8 +133,8 @@ void SimulationSettingsDialog::accept()
     if (opt.kind == AnalysisKind::Transient) {
         opt.display = DisplayMode(m_display->currentData().toInt());
         if (opt.display == DisplayMode::Plot) {
-            if (!parseField(m_tStop, &opt.tStop, QStringLiteral("停止时间"))
-                || !parseField(m_tStep, &opt.tStep, QStringLiteral("最大步长")))
+            if (!parseField(m_tStop, &opt.tStop, QStringLiteral("停止时间"), UnitKind::Second)
+                || !parseField(m_tStep, &opt.tStep, QStringLiteral("最大步长"), UnitKind::Second))
                 return;
             if (opt.tStop <= 0.0 || opt.tStep <= 0.0) {
                 QMessageBox::warning(this, QStringLiteral("参数无效"),
@@ -144,8 +146,8 @@ void SimulationSettingsDialog::accept()
         }
     } else if (opt.kind == AnalysisKind::AC) {
         opt.display = DisplayMode::Plot;
-        if (!parseField(m_fStart, &opt.fStart, QStringLiteral("起始频率"))
-            || !parseField(m_fStop, &opt.fStop, QStringLiteral("终止频率")))
+        if (!parseField(m_fStart, &opt.fStart, QStringLiteral("起始频率"), UnitKind::Hertz)
+            || !parseField(m_fStop, &opt.fStop, QStringLiteral("终止频率"), UnitKind::Hertz))
             return;
         if (opt.fStart <= 0.0 || opt.fStop <= opt.fStart) {
             QMessageBox::warning(this, QStringLiteral("参数无效"),

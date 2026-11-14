@@ -2,6 +2,8 @@
 
 #include "sim/Simulator.h"
 
+#include "core/Units.h"
+
 #include <QDialog>
 
 class QComboBox;
@@ -24,7 +26,7 @@ protected:
 
 private:
     void updateVisibility();
-    bool parseField(QLineEdit* edit, double* out, const QString& label);
+    bool parseField(QLineEdit* edit, double* out, const QString& label, UnitKind unit);
 
     SimulationOptions m_options;
     QComboBox* m_kind = nullptr;

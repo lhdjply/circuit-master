@@ -91,6 +91,45 @@ class CoreTest : public QObject {
     Q_OBJECT
 
 private slots:
+    void quantitiesWithUnits()
+    {
+        bool ok = false;
+        QString error;
+
+        QVERIFY(near(parseQuantity(QStringLiteral("10k"), UnitKind::Ohm, &ok), 10000.0, 1e-6));
+        QVERIFY(ok);
+        QVERIFY(near(parseQuantity(QStringLiteral("10kΩ"), UnitKind::Ohm, &ok), 10000.0, 1e-6));
+        QVERIFY(ok);
+        QVERIFY(near(parseQuantity(QStringLiteral("4.7µF"), UnitKind::Farad, &ok), 4.7e-6, 1e-12));
+        QVERIFY(ok);
+        QVERIFY(near(parseQuantity(QStringLiteral("100nF"), UnitKind::Farad, &ok), 100e-9, 1e-15));
+        QVERIFY(ok);
+        QVERIFY(near(parseQuantity(QStringLiteral("10mH"), UnitKind::Henry, &ok), 0.01, 1e-9));
+        QVERIFY(ok);
+        QVERIFY(near(parseQuantity(QStringLiteral("5V"), UnitKind::Volt, &ok), 5.0, 1e-9));
+        QVERIFY(ok);
+        QVERIFY(near(parseQuantity(QStringLiteral("1mA"), UnitKind::Ampere, &ok), 1e-3, 1e-12));
+        QVERIFY(ok);
+        QVERIFY(near(parseQuantity(QStringLiteral("1kHz"), UnitKind::Hertz, &ok), 1000.0, 1e-6));
+        QVERIFY(ok);
+        QVERIFY(near(parseQuantity(QStringLiteral("2ms"), UnitKind::Second, &ok), 2e-3, 1e-12));
+        QVERIFY(ok);
+        QVERIFY(near(parseQuantity(QStringLiteral("1meg"), UnitKind::Ohm, &ok), 1e6, 1e-3));
+        QVERIFY(ok);
+        QVERIFY(near(parseQuantity(QStringLiteral("100k"), UnitKind::None, &ok), 1e5, 1e-3));
+        QVERIFY(ok);
+
+        parseQuantity(QStringLiteral("5V"), UnitKind::Ohm, &ok, &error);
+        QVERIFY(!ok);
+        QVERIFY(error.contains(QStringLiteral("Ω")));
+
+        parseQuantity(QStringLiteral("5X"), UnitKind::Volt, &ok, &error);
+        QVERIFY(!ok);
+
+        parseQuantity(QStringLiteral("5V"), UnitKind::None, &ok, &error);
+        QVERIFY(!ok);
+    }
+
     void unitsRoundTrip()
     {
         bool ok = false;

@@ -201,7 +201,7 @@ private slots:
 
         QLineEdit* valueEdit = nullptr;
         for (QLineEdit* edit : window.findChildren<QLineEdit*>()) {
-            if (edit->placeholderText().contains(QStringLiteral("4.7u")))
+            if (edit->placeholderText().contains(QStringLiteral("10kΩ")))
                 valueEdit = edit;
         }
         QVERIFY(valueEdit);
@@ -390,10 +390,10 @@ private slots:
 
         // 拖动 R1：整组（含导线）一起移动
         const QPoint pressPoint = view->mapFromScene(r1->scenePos());
+        const QPoint dragTo = view->mapFromScene(r1->pos() + QPointF(60, 0));
         QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, pressPoint);
-        QTest::mouseMove(view->viewport(), pressPoint + QPoint(60, 0), 20);
-        QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier,
-                           pressPoint + QPoint(60, 0));
+        QTest::mouseMove(view->viewport(), dragTo, 20);
+        QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, dragTo);
         QTest::qWait(100);
 
         QCOMPARE(r1->pos(), r1Start + QPointF(60, 0));
@@ -410,10 +410,10 @@ private slots:
         const QPointF r1Mid = r1->pos();
         const QPointF c1Mid = c1->pos();
         const QPoint secondPress = view->mapFromScene(r1->scenePos());
+        const QPoint secondTo = view->mapFromScene(r1->pos() + QPointF(40, 0));
         QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, secondPress);
-        QTest::mouseMove(view->viewport(), secondPress + QPoint(40, 0), 20);
-        QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier,
-                            secondPress + QPoint(40, 0));
+        QTest::mouseMove(view->viewport(), secondTo, 20);
+        QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, secondTo);
         QTest::qWait(100);
         QCOMPARE(r1->pos(), r1Mid + QPointF(40, 0));
         QCOMPARE(c1->pos(), c1Mid + QPointF(40, 0));
@@ -421,10 +421,10 @@ private slots:
         // 也可以直接抓导线拖动整组
         const QPointF wireBefore = wire->scenePoints().first();
         const QPoint wirePress = view->mapFromScene(wire->scenePoints().first());
+        const QPoint wireTo = view->mapFromScene(wire->scenePoints().first() + QPointF(0, 30));
         QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, wirePress);
-        QTest::mouseMove(view->viewport(), wirePress + QPoint(0, 30), 20);
-        QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier,
-                            wirePress + QPoint(0, 30));
+        QTest::mouseMove(view->viewport(), wireTo, 20);
+        QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, wireTo);
         QTest::qWait(100);
         QCOMPARE(wire->scenePoints().first(), wireBefore + QPointF(0, 30));
     }
@@ -524,6 +524,84 @@ private slots:
         windowBox->setCurrentIndex(windowBox->count() - 1);
         QTest::qWait(300);
         QVERIFY(wave->isLive());
+    }
+
+    void valueWithUnits()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        QTest::qWait(300);
+
+        QAction* rcExample = nullptr;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text().contains(QStringLiteral("RC 充电")))
+                rcExample = action;
+        }
+        QVERIFY(rcExample);
+        rcExample->trigger();
+        QTest::qWait(200);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        ComponentItem* resistor = nullptr;
+        for (ComponentItem* item : scene->componentItems()) {
+            if (item->component().refdes == QLatin1String("R1"))
+                resistor = item;
+        }
+        QVERIFY(resistor);
+        resistor->setSelected(true);
+        QTest::qWait(100);
+
+        QLineEdit* valueEdit = nullptr;
+        for (QLineEdit* edit : window.findChildren<QLineEdit*>()) {
+            if (edit->placeholderText().contains(QStringLiteral("10kΩ")))
+                valueEdit = edit;
+        }
+        QVERIFY(valueEdit);
+
+        valueEdit->setText(QStringLiteral("2.2kΩ"));
+        emit valueEdit->editingFinished();
+        QTest::qWait(50);
+        QCOMPARE(resistor->component().value, 2200.0);
+
+        // 单位不匹配：拒绝并标红
+        valueEdit->setText(QStringLiteral("5V"));
+        emit valueEdit->editingFinished();
+        QTest::qWait(50);
+        QCOMPARE(resistor->component().value, 2200.0);
+        QVERIFY(valueEdit->styleSheet().contains(QStringLiteral("dc2626")));
+
+        // 不带单位按默认单位（Ω）
+        valueEdit->setText(QStringLiteral("2.2k"));
+        emit valueEdit->editingFinished();
+        QTest::qWait(50);
+        QCOMPARE(resistor->component().value, 2200.0);
+        QVERIFY(valueEdit->styleSheet().isEmpty());
+
+        // 电容带单位
+        ComponentItem* capacitor = nullptr;
+        for (ComponentItem* item : scene->componentItems()) {
+            if (item->component().refdes == QLatin1String("C1"))
+                capacitor = item;
+        }
+        QVERIFY(capacitor);
+        scene->clearSelection();
+        capacitor->setSelected(true);
+        QTest::qWait(100);
+        QVERIFY(valueEdit->text().contains(QStringLiteral("µF")));
+
+        valueEdit->setText(QStringLiteral("0.0001F"));
+        emit valueEdit->editingFinished();
+        QTest::qWait(50);
+        QVERIFY(std::abs(capacitor->component().value - 100e-6) < 1e-15);
+
+        // 重新选中后数值以工程记数法显示
+        capacitor->setSelected(false);
+        capacitor->setSelected(true);
+        QTest::qWait(50);
+        QVERIFY(valueEdit->text().contains(QStringLiteral("100")));
     }
 
     void drawWireWithMouse()
