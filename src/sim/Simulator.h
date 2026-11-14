@@ -24,6 +24,10 @@ struct SimulationOptions {
     double fStart = 10.0;
     double fStop = 1e6;
     int acPoints = 150;
+    // 实时示波器的刻度（随工程保存，下次打开照旧）
+    double scopeTimeDiv = 5e-4;  // 时间/格，默认 500 µs/div
+    double scopeVoltDiv = 5.0;   // 电压/格，默认 5 V
+    double scopeAmpDiv = 1e-3;   // 电流/格，默认 1 mA
 };
 
 struct Signal {

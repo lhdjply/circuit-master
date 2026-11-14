@@ -184,6 +184,9 @@ QJsonObject analysisToJson(const SimulationOptions& options)
     object.insert(QStringLiteral("fStart"), options.fStart);
     object.insert(QStringLiteral("fStop"), options.fStop);
     object.insert(QStringLiteral("acPoints"), options.acPoints);
+    object.insert(QStringLiteral("scopeTimeDiv"), options.scopeTimeDiv);
+    object.insert(QStringLiteral("scopeVoltDiv"), options.scopeVoltDiv);
+    object.insert(QStringLiteral("scopeAmpDiv"), options.scopeAmpDiv);
     return object;
 }
 
@@ -196,6 +199,9 @@ SimulationOptions optionsFromJson(const QJsonObject& analysis)
     options.fStart = analysis.value(QStringLiteral("fStart")).toDouble(options.fStart);
     options.fStop = analysis.value(QStringLiteral("fStop")).toDouble(options.fStop);
     options.acPoints = analysis.value(QStringLiteral("acPoints")).toInt(options.acPoints);
+    options.scopeTimeDiv = analysis.value(QStringLiteral("scopeTimeDiv")).toDouble(options.scopeTimeDiv);
+    options.scopeVoltDiv = analysis.value(QStringLiteral("scopeVoltDiv")).toDouble(options.scopeVoltDiv);
+    options.scopeAmpDiv = analysis.value(QStringLiteral("scopeAmpDiv")).toDouble(options.scopeAmpDiv);
     return options;
 }
 
@@ -1233,6 +1239,13 @@ void MainWindow::createMonitorWindow()
     connect(m_waveLive, &WaveformWindow::liveStateChanged, this, [this](bool) {
         updateRunAction();
     });
+    // 刻度改动记进 m_options，保存工程时一并写入
+    connect(m_waveLive, &WaveformWindow::liveScalesChanged, this,
+            [this](double timeDiv, double voltDiv, double ampDiv) {
+                m_options.scopeTimeDiv = timeDiv;
+                m_options.scopeVoltDiv = voltDiv;
+                m_options.scopeAmpDiv = ampDiv;
+            });
 
     // 实时仿真推进时同步刷新 LED 亮度
     connect(m_waveLive, &WaveformWindow::liveUpdated, this, [this] {
@@ -1296,6 +1309,8 @@ bool MainWindow::startLiveScope()
     // 没有测试点也照样启动，只是波形为空（面板里会提示放 TP / IP）
     const QVector<QPair<QString, QString>> probes = probeSpecs(circuit, net);
 
+    m_waveLive->setLiveScalePreferences(m_options.scopeTimeDiv, m_options.scopeVoltDiv,
+                                        m_options.scopeAmpDiv);
     m_waveLive->startLive(circuit, probes);
     appendLog(QStringLiteral("动态示波器已启动：连续仿真，切回静态波形或关闭面板即停止。"));
     return true;

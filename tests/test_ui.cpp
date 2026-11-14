@@ -317,6 +317,62 @@ private slots:
         QVERIFY2(!monitor->isEnabled(), "停止后波形监控应不可点击");
     }
 
+    void scopeScalesAreRemembered()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text().contains(QStringLiteral("RC 充电"))) {
+                action->trigger();
+                break;
+            }
+        }
+        settle();
+
+        QAction* run = window.findChild<QAction*>(QStringLiteral("actRun"));
+        QVERIFY(run);
+        run->trigger();
+        settle();
+
+        auto* live = livePanel(window);
+        QVERIFY(live);
+        QVERIFY(live->isLive());
+
+        QComboBox* timeDiv = nullptr;
+        for (QComboBox* box : live->findChildren<QComboBox*>()) {
+            if (box->count() > 0 && box->itemText(0).startsWith(QStringLiteral("5 ns")))
+                timeDiv = box;
+        }
+        QVERIFY(timeDiv);
+
+        // 改成 1 ms/div
+        int target = -1;
+        for (int i = 0; i < timeDiv->count(); ++i) {
+            if (timeDiv->itemText(i) == QStringLiteral("1 ms/div"))
+                target = i;
+        }
+        QVERIFY(target >= 0);
+        timeDiv->setCurrentIndex(target);
+        settle();
+        QCOMPARE(live->liveTimeDiv(), 1e-3);
+
+        // 停止再启动，刻度应当沿用（已经存进工程参数里）
+        run->trigger();
+        settle();
+        QVERIFY(!live->isLive());
+        run->trigger();
+        settle();
+        QVERIFY(live->isLive());
+        QCOMPARE(live->liveTimeDiv(), 1e-3);
+        QCOMPARE(timeDiv->currentText(), QStringLiteral("1 ms/div"));
+
+        run->trigger();
+        settle();
+    }
+
     void analysisFieldsFollowFile()
     {
         MainWindow window;

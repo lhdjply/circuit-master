@@ -38,6 +38,12 @@ public:
     /// 以实时方式连续仿真并滚动显示（白色主题，与静态波形共用界面）
     void startLive(const class Circuit& circuit,
                    const QVector<QPair<QString, QString>>& probes);
+
+    /// 启动前预设示波器刻度（来自工程文件）
+    void setLiveScalePreferences(double timeDiv, double voltDiv, double ampDiv);
+    double liveTimeDiv() const { return m_liveDiv; }
+    double liveVoltDiv() const { return m_liveVoltDiv; }
+    double liveAmpDiv() const { return m_liveAmpDiv; }
     bool isLive() const { return m_live != nullptr; }
     /// 停止实时仿真（切换到静态波形或关闭面板时调用）
     void stopLiveScope();
@@ -53,6 +59,8 @@ signals:
     void liveUpdated();
     /// 实时仿真的运行状态变化，主窗口用它启用/禁用「停止仿真」
     void liveStateChanged(bool running);
+    /// 用户改了时间/格、电压/格、电流/格
+    void liveScalesChanged(double timeDiv, double voltDiv, double ampDiv);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;

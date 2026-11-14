@@ -313,16 +313,19 @@ WaveformWindow::WaveformWindow(QWidget* parent)
                 m_liveWindow = m_liveDiv * 10.0;
                 if (m_live)
                     restartLiveEngine();
+                emit liveScalesChanged(m_liveDiv, m_liveVoltDiv, m_liveAmpDiv);
             });
     connect(m_liveVoltDivBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this] {
                 m_liveVoltDiv = m_liveVoltDivBox->currentData().toDouble();
                 applyLiveScales();
+                emit liveScalesChanged(m_liveDiv, m_liveVoltDiv, m_liveAmpDiv);
             });
     connect(m_liveAmpDivBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this] {
                 m_liveAmpDiv = m_liveAmpDivBox->currentData().toDouble();
                 applyLiveScales();
+                emit liveScalesChanged(m_liveDiv, m_liveVoltDiv, m_liveAmpDiv);
             });
 
     m_chart = new QChart();
@@ -462,6 +465,28 @@ void WaveformWindow::applyAnalysisFields()
         }
     }
     Q_UNUSED(ok);
+}
+
+void WaveformWindow::setLiveScalePreferences(double timeDiv, double voltDiv, double ampDiv)
+{
+    const auto pick = [](QComboBox* box, double value) {
+        if (!box || box->count() == 0 || value <= 0.0)
+            return;
+        int best = 0;
+        double bestDiff = std::abs(box->itemData(0).toDouble() - value);
+        for (int i = 1; i < box->count(); ++i) {
+            const double diff = std::abs(box->itemData(i).toDouble() - value);
+            if (diff < bestDiff) {
+                bestDiff = diff;
+                best = i;
+            }
+        }
+        QSignalBlocker blocker(box);
+        box->setCurrentIndex(best);
+    };
+    pick(m_liveWindowBox, timeDiv);
+    pick(m_liveVoltDivBox, voltDiv);
+    pick(m_liveAmpDivBox, ampDiv);
 }
 
 void WaveformWindow::setResult(const SimulationResult& result)
