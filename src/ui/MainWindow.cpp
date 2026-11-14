@@ -180,6 +180,7 @@ MainWindow::MainWindow(QWidget* parent)
     connect(m_scene, &SchematicScene::circuitChanged, this, [this] { setDirty(true); });
     connect(m_scene, &QGraphicsScene::selectionChanged, this, &MainWindow::onSelectionChanged);
     connect(m_scene, &SchematicScene::editRequested, this, &MainWindow::onEditRequested);
+    connect(m_view, &SchematicView::componentEditRequested, this, &MainWindow::onEditRequested);
     connect(m_view, &SchematicView::scenePositionChanged, this, [this](const QPointF& p) {
         m_coordLabel->setText(
             QStringLiteral("x: %1   y: %2").arg(int(p.x())).arg(int(p.y())));

@@ -44,6 +44,8 @@ struct Component {
     ComponentType type = ComponentType::Resistor;
     QPointF pos;
     int rotation = 0; // 0 / 90 / 180 / 270
+    bool mirrorX = false; // 水平镜像（屏幕左右翻转）
+    bool mirrorY = false; // 垂直镜像（屏幕上下翻转）
 
     QString refdes;   // 例如 R1
     double value = 0.0;

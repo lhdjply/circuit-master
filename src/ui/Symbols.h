@@ -28,7 +28,8 @@ inline const QColor junction(0x25, 0x63, 0xeb);
 QPainterPath symbolShape(ComponentType type);
 
 /// 在局部坐标系中绘制元件符号（调用者负责旋转/平移）。
-void paintSymbol(QPainter* painter, const Component& component, bool selected, bool showPins);
+void paintSymbol(QPainter* painter, const Component& component, bool selected, bool showPins,
+                 int rotation = 0, bool mirrorX = false, bool mirrorY = false);
 
 /// 元件库图标。
 QIcon componentIcon(ComponentType type, const QSize& size = QSize(60, 42));

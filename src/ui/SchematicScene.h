@@ -30,6 +30,9 @@ public:
     QVector<WireItem*> wireItems() const;
 
     void deleteSelection();
+    void copySelection();
+    void pasteClipboard();
+    bool hasClipboard() const;
     void refresh();
 
     void setShowGrid(bool show);
@@ -49,6 +52,8 @@ protected:
 private:
     void recomputeJunctions();
     QVector<QPointF> m_junctions;
+    QVector<Component> m_clipboardComponents;
+    QVector<Wire> m_clipboardWires;
     bool m_showGrid = true;
 };
 

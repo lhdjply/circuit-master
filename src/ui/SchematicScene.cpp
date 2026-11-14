@@ -223,6 +223,56 @@ void SchematicScene::deleteSelection()
     emit circuitChanged();
 }
 
+void SchematicScene::copySelection()
+{
+    m_clipboardComponents.clear();
+    m_clipboardWires.clear();
+
+    for (QGraphicsItem* item : selectedItems()) {
+        if (item->type() == ComponentItem::Type) {
+            m_clipboardComponents.append(static_cast<ComponentItem*>(item)->component());
+        } else if (item->type() == WireItem::Type) {
+            Wire wire;
+            wire.points = static_cast<WireItem*>(item)->points();
+            if (wire.points.size() >= 2)
+                m_clipboardWires.append(wire);
+        }
+    }
+}
+
+bool SchematicScene::hasClipboard() const
+{
+    return !m_clipboardComponents.isEmpty() || !m_clipboardWires.isEmpty();
+}
+
+void SchematicScene::pasteClipboard()
+{
+    if (!hasClipboard())
+        return;
+
+    const QPointF offset(20.0, 20.0);
+    clearSelection();
+
+    for (Component comp : m_clipboardComponents) {
+        comp.id = 0; // 交给 addComponent 分配新 id
+        comp.pos = snap(comp.pos + offset);
+        comp.refdes = nextRefdes(comp.type);
+        ComponentItem* item = addComponent(comp);
+        item->setSelected(true);
+    }
+
+    for (Wire wire : m_clipboardWires) {
+        for (QPointF& point : wire.points)
+            point += offset;
+        WireItem* item = addWire(wire.points);
+        if (item)
+            item->setSelected(true);
+    }
+
+    refresh();
+    emit circuitChanged();
+}
+
 void SchematicScene::setShowGrid(bool show)
 {
     if (m_showGrid == show)

@@ -224,6 +224,37 @@ private slots:
         QVERIFY(spice.contains(QStringLiteral("100000")));
     }
 
+    void mirrorChangesPinGeometry()
+    {
+        Component op;
+        op.id = 1;
+        op.type = ComponentType::OpAmp;
+        op.pos = QPointF(300, 300);
+        op.refdes = QStringLiteral("U1");
+        op.value = 1e5;
+
+        QCOMPARE(op.pinPosition(0), QPointF(270, 280));
+        QCOMPARE(op.pinPosition(2), QPointF(330, 300));
+
+        op.mirrorX = true;
+        QCOMPARE(op.pinPosition(0), QPointF(330, 280));
+        QCOMPARE(op.pinPosition(1), QPointF(330, 320));
+        QCOMPARE(op.pinPosition(2), QPointF(270, 300));
+
+        op.mirrorX = false;
+        op.rotation = 90;
+        op.mirrorY = true;
+        QCOMPARE(op.pinPosition(0), QPointF(320, 330));
+
+        Circuit circuit;
+        circuit.components.append(op);
+        const Circuit loaded = Circuit::fromJson(circuit.toJson());
+        QVERIFY(!loaded.components.isEmpty());
+        QVERIFY(loaded.components.first().mirrorY);
+        QVERIFY(!loaded.components.first().mirrorX);
+        QCOMPARE(loaded.components.first().rotation, 90);
+    }
+
     void probeMapsToNodeWithoutAffectingResult()
     {
         Circuit c = opAmpInverting(1.0);

@@ -5,7 +5,9 @@
 #include "ui/Symbols.h"
 
 #include <QGraphicsPathItem>
+#include <QContextMenuEvent>
 #include <QKeyEvent>
+#include <QMenu>
 #include <QLineF>
 #include <QMouseEvent>
 #include <QPainter>
@@ -162,8 +164,81 @@ void SchematicView::wheelEvent(QWheelEvent* event)
     event->accept();
 }
 
+void SchematicView::contextMenuEvent(QContextMenuEvent* event)
+{
+    if (m_tool == Tool::Wire) {
+        event->ignore();
+        return;
+    }
+
+    ComponentItem* component = nullptr;
+    const QList<QGraphicsItem*> hitItems = items(event->pos());
+    for (QGraphicsItem* item : hitItems) {
+        if (item->type() == ComponentItem::Type) {
+            component = static_cast<ComponentItem*>(item);
+            break;
+        }
+    }
+
+    if (component && !component->isSelected()) {
+        m_scene->clearSelection();
+        component->setSelected(true);
+    }
+
+    QMenu menu(this);
+    if (component) {
+        QAction* rotate = menu.addAction(QStringLiteral("旋转 90°"));
+        QAction* flipH = menu.addAction(QStringLiteral("水平翻转"));
+        QAction* flipV = menu.addAction(QStringLiteral("垂直翻转"));
+        menu.addSeparator();
+        QAction* copy = menu.addAction(QStringLiteral("复制"));
+        QAction* paste = menu.addAction(QStringLiteral("粘贴"));
+        paste->setEnabled(m_scene->hasClipboard());
+        menu.addSeparator();
+        QAction* edit = menu.addAction(QStringLiteral("编辑参数…"));
+        QAction* remove = menu.addAction(QStringLiteral("删除"));
+
+        QAction* chosen = menu.exec(event->globalPos());
+        if (!chosen)
+            return;
+        if (chosen == rotate) {
+            component->setRotationAngle(component->rotationAngle() + 90);
+        } else if (chosen == flipH) {
+            component->setMirrored(!component->mirroredX(), component->mirroredY());
+        } else if (chosen == flipV) {
+            component->setMirrored(component->mirroredX(), !component->mirroredY());
+        } else if (chosen == copy) {
+            m_scene->copySelection();
+        } else if (chosen == paste) {
+            m_scene->pasteClipboard();
+        } else if (chosen == edit) {
+            emit componentEditRequested(component);
+        } else if (chosen == remove) {
+            m_scene->deleteSelection();
+        }
+    } else {
+        QAction* paste = menu.addAction(QStringLiteral("粘贴"));
+        paste->setEnabled(m_scene->hasClipboard());
+        if (menu.exec(event->globalPos()) == paste)
+            m_scene->pasteClipboard();
+    }
+
+    m_scene->refresh();
+}
+
 void SchematicView::keyPressEvent(QKeyEvent* event)
 {
+    if (event->matches(QKeySequence::Copy)) {
+        m_scene->copySelection();
+        event->accept();
+        return;
+    }
+    if (event->matches(QKeySequence::Paste)) {
+        m_scene->pasteClipboard();
+        event->accept();
+        return;
+    }
+
     if (event->key() == Qt::Key_Escape) {
         if (m_tool == Tool::Wire) {
             cancelWire();

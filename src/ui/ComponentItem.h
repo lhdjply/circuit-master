@@ -25,9 +25,12 @@ public:
     void setRefdes(const QString& refdes);
     void setValue(double value);
     void setRotationAngle(int degrees);
+    void setMirrored(bool horizontal, bool vertical);
     void setClosed(bool closed);
 
     int rotationAngle() const { return m_comp.rotation; }
+    bool mirroredX() const { return m_comp.mirrorX; }
+    bool mirroredY() const { return m_comp.mirrorY; }
     QVector<QPointF> pinScenePositions() const;
 
 signals:

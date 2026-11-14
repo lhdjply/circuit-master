@@ -51,8 +51,11 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
     const bool selected = isSelected();
 
     painter->save();
+    // 屏幕坐标系镜像后再旋转：M = S · R
+    painter->scale(m_comp.mirrorX ? -1.0 : 1.0, m_comp.mirrorY ? -1.0 : 1.0);
     painter->rotate(double(m_comp.rotation));
-    paintSymbol(painter, m_comp, selected, true);
+    paintSymbol(painter, m_comp, selected, true, m_comp.rotation, m_comp.mirrorX,
+                m_comp.mirrorY);
     painter->restore();
 
     if (m_comp.type == ComponentType::Ground) {
@@ -173,12 +176,18 @@ void ComponentItem::setClosed(bool closed)
 
 QVector<QPointF> ComponentItem::pinScenePositions() const
 {
-    QVector<QPointF> out;
-    const QVector<QPointF> offsets = pinOffsets(m_comp.type);
-    out.reserve(offsets.size());
-    for (const QPointF& off : offsets)
-        out.append(mapToScene(off));
-    return out;
+    return m_comp.pinPositions();
+}
+
+void ComponentItem::setMirrored(bool horizontal, bool vertical)
+{
+    if (m_comp.mirrorX == horizontal && m_comp.mirrorY == vertical)
+        return;
+    prepareGeometryChange();
+    m_comp.mirrorX = horizontal;
+    m_comp.mirrorY = vertical;
+    update();
+    emit componentChanged();
 }
 
 QVariant ComponentItem::itemChange(GraphicsItemChange change, const QVariant& value)

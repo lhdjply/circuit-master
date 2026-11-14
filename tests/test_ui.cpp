@@ -277,6 +277,67 @@ private slots:
         QVERIFY(wave->grab().save(dir + QStringLiteral("/shots/waveform_opamp.png")));
     }
 
+    void copyPasteAndMirror()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        QTest::qWait(300);
+
+        QAction* rcExample = nullptr;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text().contains(QStringLiteral("RC 充电")))
+                rcExample = action;
+        }
+        QVERIFY(rcExample);
+        rcExample->trigger();
+        QTest::qWait(200);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        ComponentItem* resistor = nullptr;
+        for (ComponentItem* item : scene->componentItems()) {
+            if (item->component().refdes == QLatin1String("R1"))
+                resistor = item;
+        }
+        QVERIFY(resistor);
+
+        scene->clearSelection();
+        resistor->setSelected(true);
+        const int before = scene->componentItems().size();
+        scene->copySelection();
+        scene->pasteClipboard();
+        QTest::qWait(50);
+
+        QCOMPARE(scene->componentItems().size(), before + 1);
+        ComponentItem* pasted = nullptr;
+        for (ComponentItem* item : scene->componentItems()) {
+            if (item->component().refdes == QLatin1String("R2"))
+                pasted = item;
+        }
+        QVERIFY(pasted);
+        QCOMPARE(pasted->component().value, 1000.0);
+        QCOMPARE(pasted->pos(), QPointF(220, 220));
+        QVERIFY(pasted->isSelected());
+
+        // 水平翻转：左右引脚交换
+        resistor->setMirrored(true, false);
+        QCOMPARE(resistor->pinScenePositions().at(0), QPointF(230, 200));
+        QCOMPARE(resistor->pinScenePositions().at(1), QPointF(170, 200));
+        QCOMPARE(resistor->component().rotation, 0);
+
+        // 翻转后再旋转
+        resistor->setRotationAngle(90);
+        QCOMPARE(resistor->pinScenePositions().at(0), QPointF(200, 170));
+
+        const Circuit circuit = scene->toCircuit();
+        const Component* saved = circuit.find(resistor->component().id);
+        QVERIFY(saved);
+        QVERIFY(saved->mirrorX);
+        QCOMPARE(saved->rotation, 90);
+    }
+
     void drawWireWithMouse()
     {
         MainWindow window;

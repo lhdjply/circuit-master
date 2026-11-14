@@ -81,7 +81,8 @@ QPainterPath symbolShape(ComponentType type)
     return path;
 }
 
-void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPins)
+void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPins, int rotation,
+                 bool mirrorX, bool mirrorY)
 {
     const QColor color = selected ? theme::selected : theme::symbol;
     const QPen pen = symbolPen(color, selected ? 2.4 : 2.0);
@@ -199,7 +200,12 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         font.setPointSizeF(6.0);
         font.setBold(true);
         p->setFont(font);
-        p->drawText(QRectF(-7.0, -22.0, 14.0, 12.0), Qt::AlignCenter, QStringLiteral("V"));
+        p->save();
+        p->translate(0.0, -16.0);
+        p->rotate(-double(rotation));
+        p->scale(mirrorX ? -1.0 : 1.0, mirrorY ? -1.0 : 1.0);
+        p->drawText(QRectF(-7.0, -6.0, 14.0, 12.0), Qt::AlignCenter, QStringLiteral("V"));
+        p->restore();
         break;
     }
 
@@ -213,7 +219,12 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         font.setPointSizeF(7.5);
         font.setBold(true);
         p->setFont(font);
+        p->save();
+        p->translate(0.0, 0.0);
+        p->rotate(-double(rotation));
+        p->scale(mirrorX ? -1.0 : 1.0, mirrorY ? -1.0 : 1.0);
         p->drawText(QRectF(-8.0, -8.0, 16.0, 16.0), Qt::AlignCenter, QStringLiteral("A"));
+        p->restore();
         break;
     }
 

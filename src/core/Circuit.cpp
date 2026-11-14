@@ -201,6 +201,8 @@ QJsonObject Circuit::toJson() const
         o.insert(QStringLiteral("x"), c.pos.x());
         o.insert(QStringLiteral("y"), c.pos.y());
         o.insert(QStringLiteral("rotation"), c.rotation);
+        o.insert(QStringLiteral("mirrorX"), c.mirrorX);
+        o.insert(QStringLiteral("mirrorY"), c.mirrorY);
         o.insert(QStringLiteral("refdes"), c.refdes);
         o.insert(QStringLiteral("value"), c.value);
         o.insert(QStringLiteral("function"), functionToTag(c.function));
@@ -258,6 +260,8 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
         c.type = tagToType(o.value(QStringLiteral("type")).toString());
         c.pos = QPointF(o.value(QStringLiteral("x")).toDouble(), o.value(QStringLiteral("y")).toDouble());
         c.rotation = o.value(QStringLiteral("rotation")).toInt();
+        c.mirrorX = o.value(QStringLiteral("mirrorX")).toBool(false);
+        c.mirrorY = o.value(QStringLiteral("mirrorY")).toBool(false);
         c.refdes = o.value(QStringLiteral("refdes")).toString();
         c.value = o.value(QStringLiteral("value")).toDouble();
         c.function = tagToFunction(o.value(QStringLiteral("function")).toString());

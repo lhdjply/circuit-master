@@ -100,7 +100,10 @@ QPointF Component::toScene(const QPointF& local) const
     const double rad = qDegreesToRadians(double(rotation));
     const double c = std::cos(rad);
     const double s = std::sin(rad);
-    return pos + QPointF(local.x() * c - local.y() * s, local.x() * s + local.y() * c);
+    const QPointF rotated(local.x() * c - local.y() * s, local.x() * s + local.y() * c);
+    // 镜像在屏幕坐标系中进行（先旋转再左右/上下翻转）
+    return pos + QPointF(rotated.x() * (mirrorX ? -1.0 : 1.0),
+                         rotated.y() * (mirrorY ? -1.0 : 1.0));
 }
 
 QPointF Component::pinPosition(int index) const

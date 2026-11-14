@@ -37,6 +37,7 @@ signals:
     void componentPlaced(ComponentItem* item);
     void scaleChanged(double scale);
     void toolChanged();
+    void componentEditRequested(ComponentItem* item);
 
 protected:
     void mousePressEvent(QMouseEvent* event) override;
@@ -45,6 +46,7 @@ protected:
     void mouseDoubleClickEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
+    void contextMenuEvent(QContextMenuEvent* event) override;
 
 private:
     void startWire(const QPointF& scenePos);
