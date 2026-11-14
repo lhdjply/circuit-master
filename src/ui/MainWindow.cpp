@@ -1138,13 +1138,16 @@ void MainWindow::runSimulation()
         return;
     }
 
-    // 开始连续仿真，但不自动弹窗口：要看就点「波形监控」
-    if (hasProbes && m_waveLive && !m_waveLive->isLive())
+    // 开始连续仿真，但不自动弹窗口：要看就点「波形监控」。
+    // 有没有测试点都照跑，只是没测试点时波形是空的。
+    if (m_waveLive && !m_waveLive->isLive())
         startLiveScope();
-    if (hasProbes)
+    if (hasProbes) {
         appendLog(QStringLiteral("仿真运行中：点「波形监控」查看波形，点「停止仿真」结束。"));
-    else
-        appendLog(QStringLiteral("电路中没有测试点，没有可显示的波形。"));
+    } else {
+        appendLog(QStringLiteral("仿真运行中，但电路没有测试点，波形为空。"
+                                 "放置 TP / IP 后可看到曲线。"));
+    }
 }
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* event)
@@ -1285,13 +1288,8 @@ bool MainWindow::startLiveScope()
         return false;
     }
 
+    // 没有测试点也照样启动，只是波形为空（面板里会提示放 TP / IP）
     const QVector<QPair<QString, QString>> probes = probeSpecs(circuit, net);
-    if (probes.isEmpty()) {
-        QMessageBox::information(
-            this, QStringLiteral("无法运行示波器"),
-            QStringLiteral("电路中没有测试点。请放置电压测试点（TP）或电流测试点（IP）。"));
-        return false;
-    }
 
     m_waveLive->startLive(circuit, probes);
     appendLog(QStringLiteral("动态示波器已启动：连续仿真，切回静态波形或关闭面板即停止。"));

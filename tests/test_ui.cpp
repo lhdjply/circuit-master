@@ -21,6 +21,7 @@
 #include <QTabWidget>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QMessageBox>
 #include <QMimeData>
 #include <QIcon>
 #include <QListWidget>
@@ -314,6 +315,58 @@ private slots:
         QVERIFY2(!live->isLive(), "点击停止后应当结束");
         QCOMPARE(run->text(), QStringLiteral("运行仿真"));
         QVERIFY2(!monitor->isEnabled(), "停止后波形监控应不可点击");
+    }
+
+    void runWithoutProbesStillRuns()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        // 只有电源、电阻、接地：没有测试点
+        auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 300));
+        source->setRotationAngle(90);
+        Component src = source->component();
+        src.dcValue = 5.0;
+        source->setComponent(src);
+        auto* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(250, 200));
+        Component r = resistor->component();
+        r.value = 1000.0;
+        resistor->setComponent(r);
+        scene->placeComponent(ComponentType::Ground, QPointF(100, 400));
+        scene->placeComponent(ComponentType::Ground, QPointF(300, 400));
+        scene->addWire({QPointF(100, 270), QPointF(100, 200), QPointF(220, 200)});
+        scene->addWire({QPointF(280, 200), QPointF(300, 200), QPointF(300, 400)});
+        scene->addWire({QPointF(100, 330), QPointF(100, 400)});
+        settle();
+
+        QAction* run = window.findChild<QAction*>(QStringLiteral("actRun"));
+        QVERIFY(run);
+        run->trigger();
+        settle();
+
+        // 没有测试点也要真的跑起来，只是波形为空
+        auto* live = livePanel(window);
+        QVERIFY(live);
+        QVERIFY2(live->isLive(), "没有测试点也应当启动仿真");
+        QCOMPARE(run->text(), QStringLiteral("停止仿真"));
+
+        // 不应该弹模态提示框
+        for (QMessageBox* box : window.findChildren<QMessageBox*>())
+            QVERIFY2(!box->isVisible(), "不应弹出提示框打断");
+
+        // 面板里要有说明
+        auto* list = live->findChild<QListWidget*>();
+        QVERIFY(list);
+        QCOMPARE(list->count(), 0);
+
+        run->trigger();
+        settle();
+        QVERIFY(!live->isLive());
     }
 
     void ledLightsUpAfterSimulation()

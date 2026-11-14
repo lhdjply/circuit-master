@@ -936,7 +936,10 @@ void WaveformWindow::startLive(const Circuit& circuit,
     if (m_autoButton)
         m_autoButton->setEnabled(false);
     setWindowTitle(QStringLiteral("实时示波器 — 电路仿真大师"));
-    m_info->setText(QStringLiteral("实时仿真启动…"));
+    m_info->setText(m_liveBuffers.isEmpty()
+                        ? QStringLiteral("电路中没有测试点，波形为空。\n"
+                                         "放置电压测试点（TP）或电流测试点（IP）后再运行。")
+                        : QStringLiteral("实时仿真启动…"));
 
     restartLiveEngine();
     m_liveClock.start();
