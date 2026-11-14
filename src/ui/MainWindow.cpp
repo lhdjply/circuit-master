@@ -35,7 +35,10 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QDrag>
 #include <QMimeData>
+#include <QPainter>
+#include <QPixmap>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QScrollArea>
@@ -80,6 +83,8 @@ QByteArray circuitSignature(const Circuit& circuit)
     return parts.join(QLatin1Char('#')).toUtf8();
 }
 
+constexpr char kComponentMimeType[] = "application/x-csm-component";
+
 class ComponentLibrary : public QListWidget {
 public:
     explicit ComponentLibrary(QWidget* parent = nullptr)
@@ -96,9 +101,43 @@ protected:
         if (items.isEmpty())
             return nullptr;
         auto* mime = new QMimeData;
-        mime->setData(QStringLiteral("application/x-csm-component"),
+        mime->setData(QLatin1String(kComponentMimeType),
                       QByteArray::number(items.first()->data(Qt::UserRole).toInt()));
         return mime;
+    }
+
+    /// 只把元件图标作为拖影，避免把列表项的选中背景一起拖出来。
+    void startDrag(Qt::DropActions supportedActions) override
+    {
+        Q_UNUSED(supportedActions);
+
+        QListWidgetItem* item = currentItem();
+        if (!item)
+            return;
+
+        auto* mime = new QMimeData;
+        mime->setData(QLatin1String(kComponentMimeType),
+                      QByteArray::number(item->data(Qt::UserRole).toInt()));
+
+        const qreal ratio = devicePixelRatioF();
+        const QSize logical(72, 48);
+        QPixmap pixmap(QSize(int(logical.width() * ratio), int(logical.height() * ratio)));
+        pixmap.setDevicePixelRatio(ratio);
+        pixmap.fill(Qt::transparent);
+
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        item->icon().paint(&painter, QRect(QPoint(0, 0), logical), Qt::AlignCenter);
+        painter.end();
+
+        auto* drag = new QDrag(this);
+        drag->setMimeData(mime);
+        drag->setPixmap(pixmap);
+        drag->setHotSpot(QPoint(logical.width() / 2, logical.height() / 2));
+        drag->exec(Qt::CopyAction);
+
+        clearSelection();
+        setCurrentItem(nullptr);
     }
 };
 

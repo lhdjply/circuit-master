@@ -283,6 +283,48 @@ private slots:
         QVERIFY(wave->grab().save(dir + QStringLiteral("/shots/waveform_opamp.png")));
     }
 
+    void libraryDragPixmapHasNoSelectionBackground()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        QTest::qWait(300);
+
+        QListWidget* library = nullptr;
+        for (QListWidget* list : window.findChildren<QListWidget*>()) {
+            if (list->count() > 0 && list->item(0)->text().contains(QStringLiteral("电阻")))
+                library = list;
+        }
+        QVERIFY(library);
+        library->setCurrentRow(0);
+        library->item(0)->setSelected(true);
+
+        // 拖影应当只包含图标：取该行的图标按 72x48 渲染，背景透明
+        const QIcon icon = library->item(0)->icon();
+        QPixmap pixmap(72, 48);
+        pixmap.fill(Qt::transparent);
+        QPainter painter(&pixmap);
+        icon.paint(&painter, QRect(QPoint(0, 0), QSize(72, 48)), Qt::AlignCenter);
+        painter.end();
+
+        const QImage image = pixmap.toImage();
+        int opaque = 0;
+        int bluish = 0;
+        for (int y = 0; y < image.height(); ++y) {
+            for (int x = 0; x < image.width(); ++x) {
+                const QColor c = image.pixelColor(x, y);
+                if (c.alpha() > 0) {
+                    ++opaque;
+                    // 选中背景是接近 #2563eb 的实心蓝
+                    if (c.blue() > 180 && c.red() < 90 && c.green() < 130)
+                        ++bluish;
+                }
+            }
+        }
+        QVERIFY2(opaque > 0, "拖影为空");
+        QVERIFY2(bluish < opaque / 2, "拖影仍带有蓝色选中背景");
+    }
+
     void undoRedoEdits()
     {
         MainWindow window;
