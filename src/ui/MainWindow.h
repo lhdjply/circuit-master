@@ -25,6 +25,7 @@ class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
     explicit MainWindow(QWidget* parent = nullptr);
+    ~MainWindow() override;
 
     void runSimulation();
     void openScope();
@@ -92,6 +93,9 @@ private:
     int m_historyIndex = -1;
     bool m_restoring = false;
     bool m_updateCheckScheduled = false;
+    /// 正在销毁：子控件在 ~QWidget() 阶段被析构时仍会发信号（例如 QLineEdit
+    /// 失焦触发 editingFinished），那时本窗口的成员已经析构，回调必须直接返回。
+    bool m_destroying = false;
 
     QAction* m_actNew = nullptr;
     QAction* m_actOpen = nullptr;

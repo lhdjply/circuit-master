@@ -704,9 +704,27 @@ void MainWindow::updateAnalysisLabel()
     m_analysisLabel->setText(text);
 }
 
+MainWindow::~MainWindow()
+{
+    m_destroying = true;
+
+    // 子控件在 ~QWidget() 里被销毁时会失去焦点，QLineEdit 因此发出
+    // editingFinished → PropertyPanel::changed → 本窗口的槽；此时 MainWindow
+    // 的成员（m_history、m_scene…）已经析构，回调里访问它们就是 use-after-free。
+    // 销毁前先把这些连接断掉。
+    if (m_props)
+        m_props->disconnect(this);
+    if (m_scene)
+        m_scene->disconnect(this);
+    if (m_view)
+        m_view->disconnect(this);
+    if (m_wave)
+        m_wave->disconnect(this);
+}
+
 void MainWindow::pushHistory()
 {
-    if (m_loading || m_restoring)
+    if (m_destroying || m_loading || m_restoring)
         return;
 
     const Circuit circuit = m_scene->toCircuit();
