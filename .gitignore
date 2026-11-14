@@ -4,6 +4,11 @@ build-*/
 install-test/
 .dev-core/
 
+# 打包产物
+dist/
+*.deb
+*.tar.gz
+
 # Qt / CMake 临时文件
 *.autosave
 *.user

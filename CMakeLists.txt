@@ -124,6 +124,13 @@ qt_add_executable(CircuitMaster
 target_link_libraries(CircuitMaster PRIVATE csm_ui)
 set_target_properties(CircuitMaster PROPERTIES WIN32_EXECUTABLE TRUE MACOSX_BUNDLE TRUE)
 
+# Windows 的 exe 图标与版本信息来自 PE 资源段：qrc 里的图标只作用于运行期窗口，
+# 资源管理器里看到的图标要靠 .rc 编译进可执行文件。
+if(WIN32)
+    enable_language(RC)
+    target_sources(CircuitMaster PRIVATE resources/win/circuit-master.rc)
+endif()
+
 # ---------------------------------------------------------------- 测试
 # 打包时用 -DCSM_BUILD_TESTS=OFF 跳过（见 debian/rules）
 option(CSM_BUILD_TESTS "构建单元测试（需要 Qt6::Test）" ON)

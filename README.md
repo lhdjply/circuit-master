@@ -155,7 +155,14 @@ ctest --test-dir build --output-on-failure
 │   │   ├── circuit-master.qrc      图标资源清单（/icons 前缀）
 │   │   └── icons/                  应用图标 + 12 枚工具栏图标
 │   ├── examples/                   内置示例（.csm + examples.qrc）
-│   └── linux/circuit-master.desktop.in   桌面入口模板（CMake 生成）
+│   ├── linux/circuit-master.desktop.in   桌面入口模板（CMake 生成）
+│   └── win/                        Windows 资源
+│       ├── circuit-master.ico      exe 图标 / 安装程序图标（由 SVG 生成）
+│       ├── circuit-master.rc       PE 资源段（资源管理器里的 exe 图标）
+│       ├── circuit-master.iss      Inno Setup 安装脚本
+│       └── ChineseSimplified.isl   Inno Setup 简体中文语言包
+├── scripts/
+│   └── package-linux-tarball.sh    从 .deb 生成便携 tar.gz
 ├── src/
 │   ├── core/                       数据模型与网表
 │   │   ├── Component.{h,cpp}       元件定义、引脚几何、源波形
@@ -213,6 +220,39 @@ ctest --test-dir build --output-on-failure
 # 电路仿真大师 v0.1.0
 ```
 
+## 持续集成
+
+`.github/workflows/` 下有三个工作流（参考 drawio-qt 的结构）：
+
+| 工作流 | 触发 | 内容 |
+| --- | --- | --- |
+| `build.yaml` | push / PR | Linux（Ubuntu 26.04）与 Windows（MSYS2 UCRT64 / MinGW）编译，校验 Qt ≥ 6.5、QtCharts 可用、产物存在（Windows 还检查 PE 子系统为 GUI） |
+| `test.yaml` | push / PR | 两端跑 `ctest`（`QT_QPA_PLATFORM=offscreen`），失败时自动 `--rerun-failed -V` 重跑并上传日志 |
+| `release.yaml` | 任意分支 / tag | **Linux 四架构**（amd64 / arm64 / loong64 / riscv64，Deepin crimson 容器 + QEMU）`debuild` 出 `.deb` + 便携 `tar.gz`；**Windows 两架构**（x64 / arm64）`windeployqt` 打便携 zip 与 Inno Setup 安装包；随后生成校验和并发布 Release |
+
+发版流程：
+
+```bash
+# 1. 改版本号（VERSION 与 debian/changelog 必须一致，CMake 会校验）
+echo "v0.2.0" > VERSION
+dch -v 0.2.0    # 或手工编辑 debian/changelog
+# 2. 在 CHANGELOG.md 写一节 "## [v0.2.0]"，Release 正文直接取这一节
+# 3. 打 tag 触发发布
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+> 未打 tag 的推送会生成 `continuous_build` 预发布，便于随时下载最新构建。
+
+正式版（打 tag）还会额外发布一个 `latest.json` 更新清单，客户端直接读它判断版本，
+不必先连 github.com 的 API：
+
+```
+https://github.com/<owner>/<repo>/releases/latest/download/latest.json
+```
+
+内容包含 `version`、`tag`、`name`、`page`、`notes`（与 Release 正文同源）与 `published_at`。
+预发布不生成该文件（`/releases/latest` 本身就跳过预发布）。
+
 ## 打包（Debian / Ubuntu / Deepin）
 
 仓库内已包含 `debian/` 打包文件，可直接用 dpkg 工具链构建 `.deb`：
@@ -231,6 +271,19 @@ dpkg-buildpackage -us -uc -b
   与根目录 `VERSION` 不一致时 CMake 会给出警告，发版请用 `dch -v 0.2.0` 同步
 - 打包时传入 `-DCSM_BUILD_TESTS=OFF` 跳过单元测试（测试需要 Qt6::Test，与安装内容无关）
 - 安装内容全部由 CMake 的 install 规则提供：可执行文件、`.desktop`、SVG 图标、示例电路
+
+Windows 侧产物：
+
+- 便携 zip：解压即用，`windeployqt` 已带齐 Qt 运行库与插件（含 `iconengines`，否则 SVG 图标不显示）
+- 安装包 `*-setup.exe`：Inno Setup 6.5+ 编译，默认按用户安装（不弹 UAC），
+  中文界面取自 `resources/win/ChineseSimplified.isl`
+
+便携 tar.gz 由 `scripts/package-linux-tarball.sh` 从 `.deb` 生成，
+内含启动脚本（设置 `LD_LIBRARY_PATH` / `QT_PLUGIN_PATH`）、Qt 运行库、插件与内置示例：
+
+```bash
+scripts/package-linux-tarball.sh --arch amd64 --from-deb ../circuit-master_0.1.0_amd64.deb
+```
 
 安装后的文件布局：
 
