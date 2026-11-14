@@ -34,7 +34,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
-set(CMAKE_INCLUDE_CURRENT_DIR ON)
+# 不要开 CMAKE_INCLUDE_CURRENT_DIR：它把源码根目录加进头文件搜索路径。
+# Windows 的文件系统大小写不敏感，Qt 头文件链里的 #include <version> 会命中
+# 根目录的 VERSION 文件（内容 v0.1.0），被当成 C++ 编译直接报错。
+# 各目标需要的路径由 target_include_directories 显式给出。
+set(CMAKE_INCLUDE_CURRENT_DIR OFF)
 
 include(GNUInstallDirs)
 
