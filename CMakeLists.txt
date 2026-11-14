@@ -58,7 +58,10 @@ target_compile_options(csm_ui PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
 # ---------------------------------------------------------------- 资源
 # 图标与应用图标统一放在 resources/assets/icons，由 qrc 以 /icons 前缀暴露
-set(CSM_RESOURCES resources/assets/circuit-master.qrc)
+set(CSM_RESOURCES
+    resources/assets/circuit-master.qrc
+    resources/examples/examples.qrc
+)
 
 # ---------------------------------------------------------------- 可执行程序
 qt_add_executable(CircuitMaster
@@ -94,3 +97,6 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/circuit-master.desktop"
 install(FILES resources/assets/icons/icon.svg
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
         RENAME circuit-master.svg)
+install(DIRECTORY resources/examples/
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/circuit-master/examples
+        FILES_MATCHING PATTERN "*.csm")

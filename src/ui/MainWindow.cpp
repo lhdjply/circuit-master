@@ -50,204 +50,35 @@ namespace csm {
 
 namespace {
 
-Component makeComponent(int id, ComponentType type, double x, double y, int rotation,
-                        const QString& refdes, double value)
+AnalysisKind kindFromTag(const QString& tag)
 {
-    Component c;
-    c.id = id;
-    c.type = type;
-    c.pos = QPointF(x, y);
-    c.rotation = rotation;
-    c.refdes = refdes;
-    c.value = value;
-    return c;
+    if (tag == QLatin1String("operating-point"))
+        return AnalysisKind::OperatingPoint;
+    if (tag == QLatin1String("ac"))
+        return AnalysisKind::AC;
+    return AnalysisKind::Transient;
 }
 
-void addStandardLoop(Circuit& circuit)
+QString kindSuffix(AnalysisKind kind)
 {
-    circuit.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(170, 200)}});
-    circuit.wires.append(Wire{{QPointF(230, 200), QPointF(300, 200), QPointF(300, 270)}});
-    circuit.wires.append(
-        Wire{{QPointF(300, 330), QPointF(300, 400), QPointF(100, 400), QPointF(100, 330)}});
+    switch (kind) {
+    case AnalysisKind::OperatingPoint: return QStringLiteral("（工作点）");
+    case AnalysisKind::AC:             return QStringLiteral("（交流扫频）");
+    case AnalysisKind::Transient:      return QStringLiteral("（瞬态）");
+    }
+    return QString();
 }
 
-Circuit exampleRc()
+SimulationOptions optionsFromJson(const QJsonObject& analysis)
 {
-    Circuit circuit;
-
-    Component v = makeComponent(1, ComponentType::VoltageSource, 100, 300, 90, QStringLiteral("V1"), 0);
-    v.function = SourceFunction::Pulse;
-    v.pulseV1 = 0.0;
-    v.pulseV2 = 5.0;
-    v.pulseRise = 1e-6;
-    v.pulseFall = 1e-6;
-    v.pulseWidth = 4e-3;
-    v.pulsePeriod = 10e-3;
-    circuit.components.append(v);
-
-    circuit.components.append(
-        makeComponent(2, ComponentType::Resistor, 200, 200, 0, QStringLiteral("R1"), 1000.0));
-    circuit.components.append(
-        makeComponent(3, ComponentType::Capacitor, 300, 300, 90, QStringLiteral("C1"), 1e-6));
-    circuit.components.append(
-        makeComponent(4, ComponentType::Ground, 200, 400, 0, QStringLiteral("GND"), 0));
-    // 测试点：输入电压、电容电压
-    circuit.components.append(
-        makeComponent(5, ComponentType::Probe, 100, 240, 90, QStringLiteral("TP1"), 0));
-    circuit.components.append(
-        makeComponent(6, ComponentType::Probe, 300, 240, 90, QStringLiteral("TP2"), 0));
-
-    addStandardLoop(circuit);
-    return circuit;
-}
-
-Circuit exampleDivider()
-{
-    Circuit circuit;
-
-    Component v = makeComponent(1, ComponentType::VoltageSource, 100, 300, 90, QStringLiteral("V1"), 0);
-    v.function = SourceFunction::Constant;
-    v.dcValue = 12.0;
-    circuit.components.append(v);
-
-    circuit.components.append(
-        makeComponent(2, ComponentType::Resistor, 200, 200, 0, QStringLiteral("R1"), 10e3));
-    circuit.components.append(
-        makeComponent(3, ComponentType::Resistor, 300, 300, 90, QStringLiteral("R2"), 4.7e3));
-    circuit.components.append(
-        makeComponent(4, ComponentType::Ground, 200, 400, 0, QStringLiteral("GND"), 0));
-
-    addStandardLoop(circuit);
-    return circuit;
-}
-
-Circuit exampleDiode()
-{
-    Circuit circuit;
-
-    Component v = makeComponent(1, ComponentType::VoltageSource, 100, 300, 90, QStringLiteral("V1"), 0);
-    v.function = SourceFunction::Sine;
-    v.amplitude = 5.0;
-    v.frequency = 50.0;
-    v.offset = 0.0;
-    circuit.components.append(v);
-
-    circuit.components.append(
-        makeComponent(2, ComponentType::Diode, 200, 200, 0, QStringLiteral("D1"), 0));
-    circuit.components.append(
-        makeComponent(3, ComponentType::Resistor, 300, 300, 90, QStringLiteral("R1"), 1000.0));
-    circuit.components.append(
-        makeComponent(4, ComponentType::Ground, 200, 400, 0, QStringLiteral("GND"), 0));
-    // 测试点：输入电压、整流输出电压
-    circuit.components.append(
-        makeComponent(5, ComponentType::Probe, 100, 240, 90, QStringLiteral("TP1"), 0));
-    circuit.components.append(
-        makeComponent(6, ComponentType::Probe, 300, 240, 90, QStringLiteral("TP2"), 0));
-
-    addStandardLoop(circuit);
-    return circuit;
-}
-
-Circuit exampleRlc()
-{
-    Circuit circuit;
-
-    Component v = makeComponent(1, ComponentType::VoltageSource, 100, 300, 90, QStringLiteral("V1"), 0);
-    v.function = SourceFunction::Pulse;
-    v.pulseV1 = 0.0;
-    v.pulseV2 = 5.0;
-    v.pulseRise = 1e-7;
-    v.pulseFall = 1e-7;
-    v.pulseWidth = 10e-3;
-    v.pulsePeriod = 40e-3;
-    circuit.components.append(v);
-
-    circuit.components.append(
-        makeComponent(2, ComponentType::Resistor, 200, 200, 0, QStringLiteral("R1"), 10.0));
-    circuit.components.append(
-        makeComponent(3, ComponentType::Inductor, 300, 300, 90, QStringLiteral("L1"), 10e-3));
-    circuit.components.append(
-        makeComponent(4, ComponentType::Capacitor, 200, 400, 0, QStringLiteral("C1"), 1e-6));
-    circuit.components.append(
-        makeComponent(5, ComponentType::Ground, 250, 400, 0, QStringLiteral("GND"), 0));
-    // 测试点：输入电压、电容两端电压
-    circuit.components.append(
-        makeComponent(6, ComponentType::Probe, 100, 240, 90, QStringLiteral("TP1"), 0));
-    circuit.components.append(
-        makeComponent(7, ComponentType::Probe, 300, 360, 90, QStringLiteral("TP2"), 0));
-
-    circuit.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(170, 200)}});
-    circuit.wires.append(Wire{{QPointF(230, 200), QPointF(300, 200), QPointF(300, 270)}});
-    circuit.wires.append(Wire{{QPointF(300, 330), QPointF(300, 400), QPointF(230, 400)}});
-    circuit.wires.append(Wire{{QPointF(170, 400), QPointF(100, 400), QPointF(100, 330)}});
-    return circuit;
-}
-
-Circuit exampleAcLowpass()
-{
-    Circuit circuit;
-
-    Component v = makeComponent(1, ComponentType::VoltageSource, 100, 300, 90, QStringLiteral("V1"), 0);
-    v.function = SourceFunction::Sine;
-    v.amplitude = 1.0;
-    v.frequency = 1000.0;
-    circuit.components.append(v);
-
-    circuit.components.append(
-        makeComponent(2, ComponentType::Resistor, 200, 200, 0, QStringLiteral("R1"), 1000.0));
-    circuit.components.append(
-        makeComponent(3, ComponentType::Capacitor, 300, 300, 90, QStringLiteral("C1"), 100e-9));
-    circuit.components.append(
-        makeComponent(4, ComponentType::Ground, 200, 400, 0, QStringLiteral("GND"), 0));
-
-    // 测试点：输入、输出
-    circuit.components.append(
-        makeComponent(5, ComponentType::Probe, 100, 240, 90, QStringLiteral("TP1"), 0));
-    circuit.components.append(
-        makeComponent(6, ComponentType::Probe, 300, 240, 90, QStringLiteral("TP2"), 0));
-
-    addStandardLoop(circuit);
-    return circuit;
-}
-
-Circuit exampleOpAmp()
-{
-    Circuit circuit;
-
-    Component v = makeComponent(1, ComponentType::VoltageSource, 100, 380, 90, QStringLiteral("V1"), 0);
-    v.function = SourceFunction::Sine;
-    v.amplitude = 1.0;
-    v.frequency = 1000.0;
-    v.offset = 0.0;
-    circuit.components.append(v);
-
-    circuit.components.append(
-        makeComponent(2, ComponentType::Resistor, 180, 320, 0, QStringLiteral("R1"), 1e3));
-    circuit.components.append(
-        makeComponent(3, ComponentType::Resistor, 300, 420, 0, QStringLiteral("R2"), 10e3));
-    circuit.components.append(
-        makeComponent(4, ComponentType::OpAmp, 300, 300, 0, QStringLiteral("U1"), 1e5));
-    circuit.components.append(
-        makeComponent(5, ComponentType::Ground, 100, 410, 0, QStringLiteral("GND"), 0));
-    circuit.components.append(
-        makeComponent(6, ComponentType::Ground, 220, 240, 0, QStringLiteral("GND"), 0));
-    // 测试点：输入、虚地、输出
-    circuit.components.append(
-        makeComponent(7, ComponentType::Probe, 130, 320, 0, QStringLiteral("TP1"), 0));
-    circuit.components.append(
-        makeComponent(8, ComponentType::Probe, 240, 320, 0, QStringLiteral("TP2"), 0));
-    circuit.components.append(
-        makeComponent(9, ComponentType::Probe, 330, 360, 90, QStringLiteral("TP3"), 0));
-    circuit.components.append(
-        makeComponent(10, ComponentType::CurrentProbe, 270, 370, 90, QStringLiteral("IP1"), 0));
-
-    circuit.wires.append(Wire{{QPointF(100, 350), QPointF(100, 320), QPointF(150, 320)}});
-    circuit.wires.append(Wire{{QPointF(210, 320), QPointF(270, 320)}});
-    circuit.wires.append(Wire{{QPointF(270, 320), QPointF(270, 340)}});
-    circuit.wires.append(Wire{{QPointF(270, 400), QPointF(270, 420)}});
-    circuit.wires.append(Wire{{QPointF(330, 420), QPointF(330, 300)}});
-    circuit.wires.append(Wire{{QPointF(270, 280), QPointF(270, 240), QPointF(220, 240)}});
-    return circuit;
+    SimulationOptions options;
+    options.kind = kindFromTag(analysis.value(QStringLiteral("kind")).toString());
+    options.tStop = analysis.value(QStringLiteral("tStop")).toDouble(options.tStop);
+    options.tStep = analysis.value(QStringLiteral("tStep")).toDouble(options.tStep);
+    options.fStart = analysis.value(QStringLiteral("fStart")).toDouble(options.fStart);
+    options.fStop = analysis.value(QStringLiteral("fStop")).toDouble(options.fStop);
+    options.acPoints = analysis.value(QStringLiteral("acPoints")).toInt(options.acPoints);
+    return options;
 }
 
 /// 只保留测试点波形：电压测试点取节点电压，电流测试点取支路电流。
@@ -340,6 +171,7 @@ MainWindow::MainWindow(QWidget* parent)
     m_options.acPoints = 160;
 
     createActions();
+    scanExamples();
     createMenus();
     createToolBar();
     createDocks();
@@ -541,14 +373,8 @@ void MainWindow::createMenus()
     simMenu->addSeparator();
 
     QMenu* examples = simMenu->addMenu(QStringLiteral("示例电路"));
-    const QStringList names = {QStringLiteral("RC 充电与放电（瞬态）"),
-                               QStringLiteral("电阻分压（工作点）"),
-                               QStringLiteral("二极管半波整流（瞬态）"),
-                               QStringLiteral("RLC 阻尼振荡（瞬态）"),
-                               QStringLiteral("RC 低通滤波器（交流扫频）"),
-                               QStringLiteral("运放反相放大器（瞬态）")};
-    for (int i = 0; i < names.size(); ++i) {
-        QAction* action = examples->addAction(names.at(i));
+    for (int i = 0; i < m_exampleTitles.size(); ++i) {
+        QAction* action = examples->addAction(m_exampleTitles.at(i));
         connect(action, &QAction::triggered, this, [this, i] { loadExample(i); });
     }
 
@@ -959,65 +785,74 @@ void MainWindow::openSettings()
     appendLog(QStringLiteral("分析设置已更新：%1").arg(m_analysisLabel->text()));
 }
 
+void MainWindow::scanExamples()
+{
+    m_examplePaths.clear();
+    m_exampleTitles.clear();
+
+    const QDir dir(QStringLiteral(":/examples"));
+    const QStringList files = dir.entryList({QStringLiteral("*.csm")}, QDir::Files, QDir::Name);
+    for (const QString& file : files) {
+        QFile input(dir.filePath(file));
+        if (!input.open(QIODevice::ReadOnly | QIODevice::Text))
+            continue;
+        const QJsonObject root = QJsonDocument::fromJson(input.readAll()).object();
+        input.close();
+        if (root.isEmpty())
+            continue;
+
+        const QString name = root.value(QStringLiteral("name")).toString(file);
+        const AnalysisKind kind =
+            kindFromTag(root.value(QStringLiteral("analysis")).toObject()
+                            .value(QStringLiteral("kind"))
+                            .toString());
+        m_examplePaths.append(dir.filePath(file));
+        m_exampleTitles.append(name + kindSuffix(kind));
+    }
+}
+
 void MainWindow::loadExample(int index)
 {
-    Circuit circuit;
-    QString name;
-    SimulationOptions options;
+    if (index < 0 || index >= m_examplePaths.size())
+        return;
 
-    switch (index) {
-    case 0:
-        circuit = exampleRc();
-        name = QStringLiteral("RC 充电与放电");
-        options.kind = AnalysisKind::Transient;
-        options.tStop = 5e-3;
-        options.tStep = 1e-5;
-        break;
-    case 1:
-        circuit = exampleDivider();
-        name = QStringLiteral("电阻分压");
-        options.kind = AnalysisKind::OperatingPoint;
-        break;
-    case 2:
-        circuit = exampleDiode();
-        name = QStringLiteral("二极管半波整流");
-        options.kind = AnalysisKind::Transient;
-        options.tStop = 60e-3;
-        options.tStep = 2e-5;
-        break;
-    case 3:
-        circuit = exampleRlc();
-        name = QStringLiteral("RLC 阻尼振荡");
-        options.kind = AnalysisKind::Transient;
-        options.tStop = 20e-3;
-        options.tStep = 5e-6;
-        break;
-    case 4:
-        circuit = exampleAcLowpass();
-        name = QStringLiteral("RC 低通滤波器");
-        options.kind = AnalysisKind::AC;
-        options.fStart = 10.0;
-        options.fStop = 1e6;
-        options.acPoints = 160;
-        break;
-    case 5:
-        circuit = exampleOpAmp();
-        name = QStringLiteral("运放反相放大器");
-        options.kind = AnalysisKind::Transient;
-        options.tStop = 3e-3;
-        options.tStep = 5e-6;
-        break;
-    default:
+    QFile file(m_examplePaths.at(index));
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, QStringLiteral("无法打开示例"), file.errorString());
+        return;
+    }
+    const QByteArray data = file.readAll();
+    file.close();
+
+    QJsonParseError parseError;
+    const QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
+    if (doc.isNull()) {
+        QMessageBox::warning(this, QStringLiteral("示例损坏"),
+                             QStringLiteral("JSON 解析错误：%1").arg(parseError.errorString()));
+        return;
+    }
+
+    QString circuitError;
+    const QJsonObject root = doc.object();
+    const Circuit circuit = Circuit::fromJson(root, &circuitError);
+    if (!circuitError.isEmpty() || circuit.components.isEmpty()) {
+        QMessageBox::warning(this, QStringLiteral("示例损坏"),
+                             circuitError.isEmpty() ? QStringLiteral("示例中没有元件。")
+                                                    : circuitError);
         return;
     }
 
     if (m_dirty && !maybeSave())
         return;
 
-    m_options = options;
+    QString name = root.value(QStringLiteral("name")).toString();
+    if (name.isEmpty())
+        name = QFileInfo(m_examplePaths.at(index)).baseName();
+
+    m_options = optionsFromJson(root.value(QStringLiteral("analysis")).toObject());
     updateAnalysisLabel();
     loadCircuitData(circuit, name, QString());
-    appendLog(QStringLiteral("已载入%1。按 F5 运行仿真。").arg(name));
+    appendLog(QStringLiteral("已载入示例「%1」。按 F5 运行仿真。").arg(name));
 }
 
 void MainWindow::showQuickGuide()

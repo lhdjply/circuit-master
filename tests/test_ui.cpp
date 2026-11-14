@@ -191,6 +191,8 @@ private slots:
                 rotateAction = action;
         }
         QVERIFY(rotateAction);
+        // 示例中的 R1 初始为水平放置，旋转一次后应为 90°
+        QCOMPARE(resistor->component().rotation, 0);
         rotateAction->trigger();
         QCOMPARE(resistor->component().rotation, 90);
     }

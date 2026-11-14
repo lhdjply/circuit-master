@@ -1,0 +1,325 @@
+{
+    "analysis": {
+        "acPoints": 160,
+        "fStart": 10,
+        "fStop": 1000000,
+        "kind": "transient",
+        "tStep": 5e-06,
+        "tStop": 0.003
+    },
+    "components": [
+        {
+            "amplitude": 1,
+            "closed": true,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "SIN",
+            "id": 1,
+            "offset": 0,
+            "phaseDeg": 0,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 5e-04,
+            "refdes": "V1",
+            "rotation": 90,
+            "type": "V",
+            "value": 0,
+            "x": 100,
+            "y": 380
+        },
+        {
+            "amplitude": 1,
+            "closed": true,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "id": 2,
+            "offset": 0,
+            "phaseDeg": 0,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 5e-04,
+            "refdes": "R1",
+            "rotation": 0,
+            "type": "R",
+            "value": 1000,
+            "x": 180,
+            "y": 320
+        },
+        {
+            "amplitude": 1,
+            "closed": true,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "id": 3,
+            "offset": 0,
+            "phaseDeg": 0,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 5e-04,
+            "refdes": "R2",
+            "rotation": 0,
+            "type": "R",
+            "value": 10000,
+            "x": 300,
+            "y": 420
+        },
+        {
+            "amplitude": 1,
+            "closed": true,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "id": 4,
+            "offset": 0,
+            "phaseDeg": 0,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 5e-04,
+            "refdes": "U1",
+            "rotation": 0,
+            "type": "U",
+            "value": 100000,
+            "x": 300,
+            "y": 300
+        },
+        {
+            "amplitude": 1,
+            "closed": true,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "id": 5,
+            "offset": 0,
+            "phaseDeg": 0,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 5e-04,
+            "refdes": "GND",
+            "rotation": 0,
+            "type": "GND",
+            "value": 0,
+            "x": 100,
+            "y": 410
+        },
+        {
+            "amplitude": 1,
+            "closed": true,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "id": 6,
+            "offset": 0,
+            "phaseDeg": 0,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 5e-04,
+            "refdes": "GND",
+            "rotation": 0,
+            "type": "GND",
+            "value": 0,
+            "x": 220,
+            "y": 240
+        },
+        {
+            "amplitude": 1,
+            "closed": true,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "id": 7,
+            "offset": 0,
+            "phaseDeg": 0,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 5e-04,
+            "refdes": "TP1",
+            "rotation": 0,
+            "type": "TP",
+            "value": 0,
+            "x": 130,
+            "y": 320
+        },
+        {
+            "amplitude": 1,
+            "closed": true,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "id": 8,
+            "offset": 0,
+            "phaseDeg": 0,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 5e-04,
+            "refdes": "TP2",
+            "rotation": 0,
+            "type": "TP",
+            "value": 0,
+            "x": 240,
+            "y": 320
+        },
+        {
+            "amplitude": 1,
+            "closed": true,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "id": 9,
+            "offset": 0,
+            "phaseDeg": 0,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 5e-04,
+            "refdes": "TP3",
+            "rotation": 90,
+            "type": "TP",
+            "value": 0,
+            "x": 330,
+            "y": 360
+        },
+        {
+            "amplitude": 1,
+            "closed": true,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "id": 10,
+            "offset": 0,
+            "phaseDeg": 0,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 5e-04,
+            "refdes": "IP1",
+            "rotation": 90,
+            "type": "IP",
+            "value": 0,
+            "x": 270,
+            "y": 370
+        }
+    ],
+    "format": "circuit-master",
+    "name": "运放反相放大器",
+    "version": 1,
+    "wires": [
+        [
+            [
+                100,
+                350
+            ],
+            [
+                100,
+                320
+            ],
+            [
+                150,
+                320
+            ]
+        ],
+        [
+            [
+                210,
+                320
+            ],
+            [
+                270,
+                320
+            ]
+        ],
+        [
+            [
+                270,
+                320
+            ],
+            [
+                270,
+                340
+            ]
+        ],
+        [
+            [
+                270,
+                400
+            ],
+            [
+                270,
+                420
+            ]
+        ],
+        [
+            [
+                330,
+                420
+            ],
+            [
+                330,
+                300
+            ]
+        ],
+        [
+            [
+                270,
+                280
+            ],
+            [
+                270,
+                240
+            ],
+            [
+                220,
+                240
+            ]
+        ]
+    ]
+}

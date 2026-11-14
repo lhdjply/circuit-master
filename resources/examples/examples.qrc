@@ -1,0 +1,10 @@
+<RCC>
+  <qresource prefix="/examples">
+    <file>01_rc_charge.csm</file>
+    <file>02_voltage_divider.csm</file>
+    <file>03_diode_rectifier.csm</file>
+    <file>04_rlc_damping.csm</file>
+    <file>05_rc_lowpass.csm</file>
+    <file>06_opamp_inverting.csm</file>
+  </qresource>
+</RCC>

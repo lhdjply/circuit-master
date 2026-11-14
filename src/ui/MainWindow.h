@@ -26,6 +26,7 @@ public:
 
     void runSimulation();
 
+
 protected:
     void closeEvent(QCloseEvent* event) override;
 
@@ -42,6 +43,7 @@ private:
     bool saveCircuitAs();
     void exportNetlist();
     void openSettings();
+    void scanExamples();
     void loadExample(int index);
     void showQuickGuide();
     void showAbout();
@@ -68,6 +70,8 @@ private:
     QLabel* m_analysisLabel = nullptr;
 
     SimulationOptions m_options;
+    QStringList m_examplePaths;
+    QStringList m_exampleTitles;
     QString m_documentName = QStringLiteral("未命名");
     QString m_filePath;
     bool m_dirty = false;

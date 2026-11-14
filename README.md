@@ -13,7 +13,7 @@
 - 元件库：电阻、电容、电感、二极管、运算放大器、开关、电压/电流源、接地
 - 折线导线绘制：端点自动吸附引脚，T 型连接与交叉点自动生成连接圆点
 - 双击元件或选中后在右侧属性面板编辑参数，数值支持 `10k`、`4.7u`、`1meg`、`100nF` 等工程写法
-- 内置 6 个可直接运行的示例电路
+- 内置 6 个可直接运行的示例电路（位于 `resources/examples`，可直接编辑）
 
 **仿真引擎（改进节点法 MNA）**
 
@@ -34,7 +34,7 @@
 
 **文件与互操作**
 
-- `.csm` 工程文件（JSON，可读、易扩展）
+- `.csm` 工程文件（JSON，可读、易扩展；可携带分析类型与参数）
 - 一键导出 SPICE 网表（`.cir`），可交给 ngspice 等外部工具复核
 - 桌面集成：`.desktop` 文件与矢量图标，`cmake --install` 即可出现在应用菜单
 
@@ -130,6 +130,7 @@ ctest --test-dir build --output-on-failure
 │   ├── assets/
 │   │   ├── circuit-master.qrc      图标资源清单（/icons 前缀）
 │   │   └── icons/                  应用图标 + 12 枚工具栏图标
+│   ├── examples/                   内置示例（.csm + examples.qrc）
 │   └── linux/circuit-master.desktop.in   桌面入口模板（CMake 生成）
 ├── src/
 │   ├── core/                       数据模型与网表
