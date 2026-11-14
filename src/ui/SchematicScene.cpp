@@ -137,6 +137,20 @@ ComponentItem* SchematicScene::placeComponent(ComponentType type, const QPointF&
     case ComponentType::OpAmp:
         comp.value = 1e5;
         break;
+    case ComponentType::Npn:
+    case ComponentType::Pnp:
+        comp.beta = 100.0;
+        break;
+    case ComponentType::Nmos:
+    case ComponentType::Pmos:
+        comp.vth = 2.0;
+        comp.k = 2e-3;
+        break;
+    case ComponentType::Igbt:
+        comp.vth = 5.0;
+        comp.k = 0.05;
+        comp.vf = 0.7;
+        break;
     case ComponentType::Switch:
         comp.closed = true;
         break;

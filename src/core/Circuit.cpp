@@ -22,6 +22,11 @@ QString typeToTag(ComponentType type)
     case ComponentType::Inductor:      return QStringLiteral("L");
     case ComponentType::Diode:         return QStringLiteral("D");
     case ComponentType::OpAmp:         return QStringLiteral("U");
+    case ComponentType::Npn:           return QStringLiteral("Q");
+    case ComponentType::Pnp:           return QStringLiteral("QP");
+    case ComponentType::Nmos:          return QStringLiteral("M");
+    case ComponentType::Pmos:          return QStringLiteral("MP");
+    case ComponentType::Igbt:          return QStringLiteral("Z");
     case ComponentType::Switch:        return QStringLiteral("SW");
     case ComponentType::VoltageSource: return QStringLiteral("V");
     case ComponentType::CurrentSource: return QStringLiteral("I");
@@ -38,6 +43,11 @@ ComponentType tagToType(const QString& tag)
     if (tag == QLatin1String("L")) return ComponentType::Inductor;
     if (tag == QLatin1String("D")) return ComponentType::Diode;
     if (tag == QLatin1String("U")) return ComponentType::OpAmp;
+    if (tag == QLatin1String("Q")) return ComponentType::Npn;
+    if (tag == QLatin1String("QP")) return ComponentType::Pnp;
+    if (tag == QLatin1String("MP")) return ComponentType::Pmos;
+    if (tag == QLatin1String("M")) return ComponentType::Nmos;
+    if (tag == QLatin1String("Z")) return ComponentType::Igbt;
     if (tag == QLatin1String("SW")) return ComponentType::Switch;
     if (tag == QLatin1String("V")) return ComponentType::VoltageSource;
     if (tag == QLatin1String("I")) return ComponentType::CurrentSource;
@@ -128,6 +138,32 @@ QString Circuit::toSpiceNetlist() const
     lines << QString();
 
     bool hasDiode = false;
+    bool hasBjt = false;
+    bool hasPnp = false;
+    bool hasMos = false;
+    bool hasPmos = false;
+    double bjtBeta = 100.0;
+    double pnpBeta = 100.0;
+    double pmosVth = 2.0;
+    double pmosK = 2e-3;
+    double mosVth = 2.0;
+    double mosK = 2e-3;
+
+    // 同类器件共用一个 model 卡：取第一个的参数，导出前先扫一遍
+    for (const Component& comp : components) {
+        if (comp.type == ComponentType::Npn)
+            bjtBeta = comp.beta;
+        else if (comp.type == ComponentType::Pnp)
+            pnpBeta = comp.beta;
+        else if (comp.type == ComponentType::Pmos) {
+            pmosVth = comp.vth;
+            pmosK = comp.k;
+        }
+        else if (comp.type == ComponentType::Nmos || comp.type == ComponentType::Igbt) {
+            mosVth = comp.vth;
+            mosK = comp.k;
+        }
+    }
     for (const Component& comp : components) {
         if (comp.type == ComponentType::Ground || comp.type == ComponentType::Probe)
             continue;
@@ -141,6 +177,56 @@ QString Circuit::toSpiceNetlist() const
                          .arg(comp.refdes)
                          .arg(nodes.at(0))
                          .arg(nodes.at(1));
+            continue;
+        }
+
+        // 三极管 / MOSFET / IGBT 按 SPICE 标准器件行导出，并附 .model 卡
+        if (comp.type == ComponentType::Npn) {
+            hasBjt = true;
+            lines << QStringLiteral("%1 %2 %3 %4 QNPN")
+                         .arg(comp.refdes)
+                         .arg(nodes.at(0))
+                         .arg(nodes.at(1))
+                         .arg(nodes.at(2));
+            continue;
+        }
+        if (comp.type == ComponentType::Pnp) {
+            hasPnp = true;
+            lines << QStringLiteral("%1 %2 %3 %4 QPNP")
+                         .arg(comp.refdes)
+                         .arg(nodes.at(0))
+                         .arg(nodes.at(1))
+                         .arg(nodes.at(2));
+            continue;
+        }
+        if (comp.type == ComponentType::Pmos) {
+            hasPmos = true;
+            lines << QStringLiteral("%1 %2 %3 %4 PMOS")
+                         .arg(comp.refdes)
+                         .arg(nodes.at(0))
+                         .arg(nodes.at(1))
+                         .arg(nodes.at(2));
+            continue;
+        }
+        if (comp.type == ComponentType::Nmos) {
+            hasMos = true;
+            lines << QStringLiteral("%1 %2 %3 %4 NMOS")
+                         .arg(comp.refdes)
+                         .arg(nodes.at(0))
+                         .arg(nodes.at(1))
+                         .arg(nodes.at(2));
+            continue;
+        }
+        if (comp.type == ComponentType::Igbt) {
+            // SPICE 没有通用 IGBT 模型，这里用一个 N 沟道 MOSFET 近似
+            hasMos = true;
+            lines << QStringLiteral("* %1: IGBT，用 N 沟道 MOSFET 近似（Vth=%2, K=%3, Vf=%4）")
+                         .arg(comp.refdes, spiceNumber(comp.vth), spiceNumber(comp.k),
+                              spiceNumber(comp.vf));
+            lines << QStringLiteral("%1 %2 %3 %4 NMOS").arg(comp.refdes)
+                         .arg(nodes.at(0))
+                         .arg(nodes.at(1))
+                         .arg(nodes.at(2));
             continue;
         }
 
@@ -184,6 +270,21 @@ QString Circuit::toSpiceNetlist() const
         lines << QStringLiteral("* 1N4148 小信号二极管模型");
         lines << QStringLiteral(".model D1N4148 D(IS=2.52E-9 N=1.752 RS=0.568)");
     }
+    if (hasBjt) {
+        lines << QStringLiteral(".model QNPN NPN(IS=1E-14 BF=%1)").arg(spiceNumber(bjtBeta));
+    }
+    if (hasMos) {
+        lines << QStringLiteral(".model NMOS NMOS(VTO=%1 KP=%2)")
+                     .arg(spiceNumber(mosVth), spiceNumber(mosK));
+    }
+    if (hasPnp) {
+        lines << QStringLiteral(".model QPNP PNP(IS=1E-14 BF=%1)").arg(spiceNumber(pnpBeta));
+    }
+    if (hasPmos) {
+        // SPICE 的 PMOS 模型用负的开启电压
+        lines << QStringLiteral(".model PMOS PMOS(VTO=%1 KP=%2)")
+                     .arg(spiceNumber(-std::abs(pmosVth)), spiceNumber(pmosK));
+    }
     lines << QStringLiteral(".op");
     lines << QStringLiteral(".end");
     lines << QString();
@@ -220,6 +321,10 @@ QJsonObject Circuit::toJson() const
         o.insert(QStringLiteral("pulseWidth"), c.pulseWidth);
         o.insert(QStringLiteral("pulsePeriod"), c.pulsePeriod);
         o.insert(QStringLiteral("closed"), c.closed);
+        o.insert(QStringLiteral("beta"), c.beta);
+        o.insert(QStringLiteral("vth"), c.vth);
+        o.insert(QStringLiteral("k"), c.k);
+        o.insert(QStringLiteral("vf"), c.vf);
         compArray.append(o);
     }
 
@@ -279,6 +384,10 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
         c.pulseWidth = o.value(QStringLiteral("pulseWidth")).toDouble(5e-4);
         c.pulsePeriod = o.value(QStringLiteral("pulsePeriod")).toDouble(1e-3);
         c.closed = o.value(QStringLiteral("closed")).toBool(true);
+        c.beta = o.value(QStringLiteral("beta")).toDouble(100.0);
+        c.vth = o.value(QStringLiteral("vth")).toDouble(2.0);
+        c.k = o.value(QStringLiteral("k")).toDouble(2e-3);
+        c.vf = o.value(QStringLiteral("vf")).toDouble(0.7);
         if (c.id <= 0)
             continue;
         circuit.components.append(c);

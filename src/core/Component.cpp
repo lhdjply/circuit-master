@@ -19,6 +19,9 @@ QVector<QPointF> pinOffsets(ComponentType type)
         return {QPointF(0.0, 0.0)};
     if (type == ComponentType::OpAmp)
         return {QPointF(-30.0, -20.0), QPointF(-30.0, 20.0), QPointF(30.0, 0.0)};
+    // 三极管 / MOSFET / IGBT：0 = 集电极(漏极)，1 = 基极(栅极)，2 = 发射极(源极)
+    if (isThreeTerminalDevice(type))
+        return {QPointF(30.0, -30.0), QPointF(-30.0, 0.0), QPointF(30.0, 30.0)};
     return {QPointF(-30.0, 0.0), QPointF(30.0, 0.0)};
 }
 
@@ -28,6 +31,11 @@ int pinCount(ComponentType type)
     case ComponentType::Ground: return 1;
     case ComponentType::Probe:  return 1;
     case ComponentType::OpAmp:  return 3;
+    case ComponentType::Npn:
+    case ComponentType::Pnp:
+    case ComponentType::Nmos:
+    case ComponentType::Pmos:
+    case ComponentType::Igbt:   return 3;
     default:                    return 2;
     }
 }
@@ -40,6 +48,11 @@ QString typeName(ComponentType type)
     case ComponentType::Inductor:      return QStringLiteral("电感");
     case ComponentType::Diode:         return QStringLiteral("二极管");
     case ComponentType::OpAmp:         return QStringLiteral("运算放大器");
+    case ComponentType::Npn:           return QStringLiteral("NPN 三极管");
+    case ComponentType::Pnp:           return QStringLiteral("PNP 三极管");
+    case ComponentType::Nmos:          return QStringLiteral("N 沟道 MOS");
+    case ComponentType::Pmos:          return QStringLiteral("P 沟道 MOS");
+    case ComponentType::Igbt:          return QStringLiteral("IGBT");
     case ComponentType::Switch:        return QStringLiteral("开关");
     case ComponentType::VoltageSource: return QStringLiteral("电压源");
     case ComponentType::CurrentSource: return QStringLiteral("电流源");
@@ -58,6 +71,11 @@ QString typeSymbol(ComponentType type)
     case ComponentType::Inductor:      return QStringLiteral("L");
     case ComponentType::Diode:         return QStringLiteral("D");
     case ComponentType::OpAmp:         return QStringLiteral("U");
+    case ComponentType::Npn:           return QStringLiteral("Q");
+    case ComponentType::Pnp:           return QStringLiteral("Q");
+    case ComponentType::Nmos:          return QStringLiteral("M");
+    case ComponentType::Pmos:          return QStringLiteral("M");
+    case ComponentType::Igbt:          return QStringLiteral("Z");
     case ComponentType::Switch:        return QStringLiteral("S");
     case ComponentType::VoltageSource: return QStringLiteral("V");
     case ComponentType::CurrentSource: return QStringLiteral("I");
@@ -82,7 +100,26 @@ QString refPrefix(ComponentType type)
 bool isTwoTerminal(ComponentType type)
 {
     return type != ComponentType::Ground && type != ComponentType::OpAmp
-        && type != ComponentType::Probe;
+        && type != ComponentType::Probe && !isThreeTerminalDevice(type);
+}
+
+bool isThreeTerminalDevice(ComponentType type)
+{
+    switch (type) {
+    case ComponentType::Npn:
+    case ComponentType::Pnp:
+    case ComponentType::Nmos:
+    case ComponentType::Pmos:
+    case ComponentType::Igbt:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool isPType(ComponentType type)
+{
+    return type == ComponentType::Pnp || type == ComponentType::Pmos;
 }
 
 bool isSource(ComponentType type)
@@ -172,6 +209,11 @@ QString Component::unitName() const
     case ComponentType::CurrentSource: return QStringLiteral("A");
     case ComponentType::Diode:         return QStringLiteral("A");
     case ComponentType::OpAmp:         return QString();
+    case ComponentType::Npn:
+    case ComponentType::Pnp:           return QStringLiteral("A/A");
+    case ComponentType::Nmos:
+    case ComponentType::Pmos:
+    case ComponentType::Igbt:          return QStringLiteral("V");
     case ComponentType::Switch:        return QStringLiteral("Ω");
     case ComponentType::Probe:
     case ComponentType::Ground:        return QString();
@@ -210,6 +252,17 @@ QString Component::displayValue() const
     case ComponentType::OpAmp:
         return QStringLiteral("A = ") + formatEng(value, QString(), 3);
 
+    case ComponentType::Npn:
+    case ComponentType::Pnp:
+        return QStringLiteral("β = ") + QString::number(beta, 'g', 4);
+
+    case ComponentType::Nmos:
+    case ComponentType::Pmos:
+        return QStringLiteral("Vth = ") + formatEng(vth, QStringLiteral("V"), 3);
+
+    case ComponentType::Igbt:
+        return QStringLiteral("Vth = ") + formatEng(vth, QStringLiteral("V"), 3);
+
     case ComponentType::Switch:
         return closed ? QStringLiteral("闭合") : QStringLiteral("断开");
 
@@ -245,6 +298,13 @@ QString Component::spiceValueSpec() const
 
     case ComponentType::OpAmp:
         return spiceNumber(value);
+
+    case ComponentType::Npn:
+    case ComponentType::Pnp:
+    case ComponentType::Nmos:
+    case ComponentType::Pmos:
+    case ComponentType::Igbt:
+        return QStringLiteral("MODEL"); // 由 Circuit::toSpiceNetlist 负责生成整行
 
     case ComponentType::VoltageSource:
     case ComponentType::CurrentSource: {

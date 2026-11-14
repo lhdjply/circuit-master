@@ -71,6 +71,10 @@ QPainterPath symbolShape(ComponentType type)
         path.addRoundedRect(QRectF(-34.0, -27.0, 68.0, 54.0), 5.0, 5.0);
         return path;
     }
+    if (isThreeTerminalDevice(type)) {
+        path.addRoundedRect(QRectF(-34.0, -34.0, 68.0, 68.0), 5.0, 5.0);
+        return path;
+    }
     if (type == ComponentType::Probe) {
         path.addEllipse(QPointF(0.0, -15.0), 8.0, 8.0);
         path.addRect(QRectF(-4.0, -10.0, 8.0, 12.0));
@@ -152,6 +156,79 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         p->drawLine(QPointF(-10.0, -15.0), QPointF(-10.0, -9.0));
         // 反相输入 −
         p->drawLine(QPointF(-13.0, 12.0), QPointF(-7.0, 12.0));
+        break;
+    }
+
+    case ComponentType::Npn:
+    case ComponentType::Pnp: {
+        const bool pnp = comp.type == ComponentType::Pnp;
+        // 基极引线 + 竖条
+        p->drawLine(QPointF(-30.0, 0.0), QPointF(-8.0, 0.0));
+        p->setPen(symbolPen(color, 3.0));
+        p->drawLine(QPointF(-8.0, -15.0), QPointF(-8.0, 15.0));
+        p->setPen(pen);
+        // 集电极 / 发射极引线
+        p->drawLine(QPointF(30.0, -30.0), QPointF(30.0, -14.0));
+        p->drawLine(QPointF(30.0, -14.0), QPointF(-8.0, -7.0));
+        p->drawLine(QPointF(30.0, 30.0), QPointF(30.0, 14.0));
+        p->drawLine(QPointF(30.0, 14.0), QPointF(-8.0, 7.0));
+
+        // 箭头：NPN 指向发射极（朝外），PNP 指向基极（朝内）
+        QPolygonF arrow;
+        if (pnp) {
+            arrow << QPointF(-8.0, 7.0) << QPointF(6.0, 3.4) << QPointF(6.0, 10.6);
+        } else {
+            arrow << QPointF(30.0, 14.0) << QPointF(16.0, 7.4) << QPointF(16.0, 14.6);
+        }
+        p->setBrush(color);
+        p->drawPolygon(arrow);
+        p->setBrush(Qt::NoBrush);
+        break;
+    }
+
+    case ComponentType::Nmos:
+    case ComponentType::Pmos:
+    case ComponentType::Igbt: {
+        const bool pChannel = comp.type == ComponentType::Pmos;
+        // 栅极引线 + 栅极板
+        p->drawLine(QPointF(-30.0, 0.0), QPointF(-17.0, 0.0));
+        p->setPen(symbolPen(color, 2.6));
+        p->drawLine(QPointF(-17.0, -13.0), QPointF(-17.0, 13.0));
+        // 沟道：三段短竖线
+        p->setPen(symbolPen(color, 3.0));
+        for (int i = -1; i <= 1; ++i) {
+            const double y = i * 9.0;
+            p->drawLine(QPointF(-9.0, y - 4.5), QPointF(-9.0, y + 4.5));
+        }
+        p->setPen(pen);
+        // 漏极 / 源极引线
+        p->drawLine(QPointF(30.0, -30.0), QPointF(30.0, -14.0));
+        p->drawLine(QPointF(30.0, -14.0), QPointF(-9.0, -9.0));
+        p->drawLine(QPointF(30.0, 30.0), QPointF(30.0, 14.0));
+        p->drawLine(QPointF(30.0, 14.0), QPointF(-9.0, 9.0));
+
+        // 箭头：N 沟道指向沟道，P 沟道背离沟道
+        QPolygonF arrow;
+        if (pChannel) {
+            arrow << QPointF(6.0, 9.0) << QPointF(-6.0, 5.0) << QPointF(-6.0, 13.0);
+        } else {
+            arrow << QPointF(-9.0, 9.0) << QPointF(4.0, 5.0) << QPointF(4.0, 13.0);
+        }
+        p->setBrush(color);
+        p->drawPolygon(arrow);
+        p->setBrush(Qt::NoBrush);
+
+        if (comp.type == ComponentType::Igbt) {
+            // 输出侧的二极管：表示 IGBT 的导通压降
+            p->setPen(symbolPen(color, 1.6));
+            const double x = 18.0;
+            QPolygonF tri;
+            tri << QPointF(x - 5.0, 22.0) << QPointF(x + 5.0, 22.0) << QPointF(x, 13.0);
+            p->setBrush(color);
+            p->drawPolygon(tri);
+            p->setBrush(Qt::NoBrush);
+            p->drawLine(QPointF(x - 5.0, 11.0), QPointF(x + 5.0, 11.0));
+        }
         break;
     }
 

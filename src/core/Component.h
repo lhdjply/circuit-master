@@ -11,6 +11,11 @@ enum class ComponentType {
     Capacitor,
     Inductor,
     Diode,
+    Npn,
+    Pnp,
+    Nmos,
+    Pmos,
+    Igbt,
     OpAmp,
     Switch,
     VoltageSource,
@@ -38,6 +43,11 @@ bool isTwoTerminal(ComponentType type);
 bool isSource(ComponentType type);
 bool supportsRotation(ComponentType type);
 
+/// P 型器件（PNP / PMOS）：电压与电流方向与 N 型相反
+bool isPType(ComponentType type);
+/// 三端半导体器件（三极管 / MOS / IGBT）
+bool isThreeTerminalDevice(ComponentType type);
+
 /// 单个元件实例。数值一律使用 SI 基本单位存储（Ω、F、H、V、A）。
 struct Component {
     int id = 0;
@@ -49,6 +59,12 @@ struct Component {
 
     QString refdes;   // 例如 R1
     double value = 0.0;
+
+    // 三端半导体器件的模型参数（不使用 value）
+    double beta = 100.0;  // NPN 直流电流放大系数 hFE
+    double vth = 2.0;     // MOSFET / IGBT 开启电压 (V)
+    double k = 2e-3;      // MOSFET / IGBT 跨导参数 (A/V²)
+    double vf = 0.7;      // IGBT 输出侧导通压降 (V)
 
     // 独立源参数
     SourceFunction function = SourceFunction::Constant;

@@ -105,6 +105,11 @@ void PropertyPanel::buildUi()
     m_form->addRow(QStringLiteral("数值"), m_value);
     m_valueLabel = qobject_cast<QLabel*>(m_form->labelForField(m_value));
 
+    m_k = makeEdit(QStringLiteral("例如 2m"));
+    m_form->addRow(QStringLiteral("K (A/V²)"), m_k);
+    m_vf = makeEdit(QStringLiteral("例如 0.7"));
+    m_form->addRow(QStringLiteral("导通压降 Vf"), m_vf);
+
     m_function = new QComboBox(page);
     m_function->addItem(QStringLiteral("直流 (DC)"), int(SourceFunction::Constant));
     m_function->addItem(QStringLiteral("正弦 (SIN)"), int(SourceFunction::Sine));
@@ -157,6 +162,8 @@ void PropertyPanel::buildUi()
 
     connect(m_refdes, &QLineEdit::editingFinished, this, &PropertyPanel::applyRefdes);
     connect(m_value, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
+    connect(m_k, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
+    connect(m_vf, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_function, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &PropertyPanel::applyFunction);
     connect(m_closed, &QCheckBox::toggled, this, &PropertyPanel::applyClosed);
@@ -191,7 +198,22 @@ void PropertyPanel::refreshFromItem()
     m_title->setText(QStringLiteral("%1  ·  %2").arg(typeName(c.type), c.refdes));
 
     m_refdes->setText(c.refdes);
-    m_value->setText(quantityText(c.value, valueUnitFor(c.type)));
+    switch (c.type) {
+    case ComponentType::Npn:
+    case ComponentType::Pnp:
+        m_value->setText(QString::number(c.beta, 'g', 6));
+        break;
+    case ComponentType::Nmos:
+    case ComponentType::Pmos:
+    case ComponentType::Igbt:
+        m_value->setText(quantityText(c.vth, UnitKind::Volt));
+        break;
+    default:
+        m_value->setText(quantityText(c.value, valueUnitFor(c.type)));
+        break;
+    }
+    m_k->setText(QString::number(c.k, 'g', 4));
+    m_vf->setText(quantityText(c.vf, UnitKind::Volt));
     m_function->setCurrentIndex(m_function->findData(int(c.function)));
 
     const UnitKind unit = sourceUnitFor(c.type);
@@ -223,7 +245,13 @@ void PropertyPanel::updateVisibility()
     const Component c = m_item->component();
     const bool source = isSource(c.type);
     const bool analog = c.type == ComponentType::Resistor || c.type == ComponentType::Capacitor
-        || c.type == ComponentType::Inductor || c.type == ComponentType::OpAmp;
+        || c.type == ComponentType::Inductor || c.type == ComponentType::OpAmp
+        || isThreeTerminalDevice(c.type);
+
+    const bool isMos = c.type == ComponentType::Nmos || c.type == ComponentType::Pmos
+        || c.type == ComponentType::Igbt;
+    m_form->setRowVisible(m_k, isMos);
+    m_form->setRowVisible(m_vf, c.type == ComponentType::Igbt);
 
     if (m_valueLabel) {
         switch (c.type) {
@@ -242,6 +270,17 @@ void PropertyPanel::updateVisibility()
         case ComponentType::OpAmp:
             m_valueLabel->setText(QStringLiteral("开环增益"));
             m_value->setPlaceholderText(QStringLiteral("例如 100k"));
+            break;
+        case ComponentType::Npn:
+        case ComponentType::Pnp:
+            m_valueLabel->setText(QStringLiteral("电流放大 β"));
+            m_value->setPlaceholderText(QStringLiteral("例如 100"));
+            break;
+        case ComponentType::Nmos:
+        case ComponentType::Pmos:
+        case ComponentType::Igbt:
+            m_valueLabel->setText(QStringLiteral("开启电压 Vth"));
+            m_value->setPlaceholderText(QStringLiteral("例如 2"));
             break;
         default:
             m_valueLabel->setText(QStringLiteral("数值"));
@@ -306,10 +345,57 @@ void PropertyPanel::applyValue()
 {
     if (!m_item || m_updating)
         return;
+    const ComponentType type = m_item->component().type;
+
+    if (isThreeTerminalDevice(type)) {
+        // 三端器件：β 是无量纲数，Vth 带电压单位
+        Component c = m_item->component();
+        QString reason;
+        bool ok = false;
+        if (type == ComponentType::Npn || type == ComponentType::Pnp) {
+            const double beta = parseQuantity(m_value->text(), UnitKind::None, &ok, &reason);
+            if (!ok) {
+                markInvalid(m_value, reason);
+                return;
+            }
+            c.beta = beta;
+        } else {
+            const double vth = parseQuantity(m_value->text(), UnitKind::Volt, &ok, &reason);
+            if (!ok) {
+                markInvalid(m_value, reason);
+                return;
+            }
+            c.vth = vth;
+        }
+        markValid(m_value);
+
+        const double k = parseQuantity(m_k->text(), UnitKind::None, &ok, &reason);
+        if (!ok) {
+            markInvalid(m_k, reason);
+            return;
+        }
+        markValid(m_k);
+        c.k = k;
+
+        if (type == ComponentType::Igbt) {
+            const double vf = parseQuantity(m_vf->text(), UnitKind::Volt, &ok, &reason);
+            if (!ok) {
+                markInvalid(m_vf, reason);
+                return;
+            }
+            markValid(m_vf);
+            c.vf = vf;
+        }
+
+        m_item->setComponent(c);
+        updateSubtitle();
+        emit changed();
+        return;
+    }
+
     QString reason;
     bool ok = false;
-    const double v = parseQuantity(m_value->text(), valueUnitFor(m_item->component().type), &ok,
-                                   &reason);
+    const double v = parseQuantity(m_value->text(), valueUnitFor(type), &ok, &reason);
     if (!ok) {
         markInvalid(m_value, reason);
         return;

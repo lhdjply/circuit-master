@@ -183,6 +183,447 @@ private slots:
         }
     }
 
+    void bipolarTransistorAmplifies()
+    {
+        // 恒流源向基极注入 10 µA，beta = 100 → 集电极电流 1 mA
+        Circuit c;
+
+        Component v;
+        v.id = 1;
+        v.type = ComponentType::VoltageSource;
+        v.pos = QPointF(100, 300);
+        v.rotation = 90;
+        v.refdes = QStringLiteral("V1");
+        v.function = SourceFunction::Constant;
+        v.dcValue = 12.0;
+        c.components.append(v);
+
+        Component rc;
+        rc.id = 2;
+        rc.type = ComponentType::Resistor;
+        rc.pos = QPointF(200, 200);
+        rc.refdes = QStringLiteral("RC");
+        rc.value = 1000.0;
+        c.components.append(rc);
+
+        Component q;
+        q.id = 3;
+        q.type = ComponentType::Npn;
+        q.pos = QPointF(400, 300);
+        q.refdes = QStringLiteral("Q1");
+        q.beta = 100.0;
+        c.components.append(q);
+
+        Component ib;
+        ib.id = 4;
+        ib.type = ComponentType::CurrentSource;
+        ib.pos = QPointF(300, 400);
+        ib.refdes = QStringLiteral("IB");
+        ib.function = SourceFunction::Constant;
+        ib.dcValue = 10e-6;
+        c.components.append(ib);
+
+        Component g1;
+        g1.id = 5;
+        g1.type = ComponentType::Ground;
+        g1.pos = QPointF(100, 400);
+        g1.refdes = QStringLiteral("GND");
+        c.components.append(g1);
+
+        Component g2 = g1;
+        g2.id = 6;
+        g2.pos = QPointF(430, 400);
+        c.components.append(g2);
+
+        Component g3 = g1;
+        g3.id = 7;
+        g3.pos = QPointF(270, 430);
+        c.components.append(g3);
+
+        c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(170, 200)}});
+        c.wires.append(Wire{{QPointF(230, 200), QPointF(430, 200), QPointF(430, 270)}});
+        c.wires.append(Wire{{QPointF(430, 330), QPointF(430, 400)}});
+        c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
+        c.wires.append(Wire{{QPointF(270, 400), QPointF(270, 430)}});
+        c.wires.append(Wire{{QPointF(330, 400), QPointF(370, 400), QPointF(370, 300)}});
+
+        const Netlist net = c.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        QVERIFY2(net.warnings.isEmpty(), qPrintable(net.warnings.join(QStringLiteral("; "))));
+
+        SimulationOptions opt;
+        opt.kind = AnalysisKind::OperatingPoint;
+        const SimulationResult r = Simulator::run(c, opt);
+        QVERIFY2(r.ok, qPrintable(r.error));
+
+        // 用瞬态取一处稳态读数，便于断言
+        SimulationOptions tr;
+        tr.kind = AnalysisKind::Transient;
+        tr.tStop = 1e-4;
+        tr.tStep = 1e-5;
+        const SimulationResult rt = Simulator::run(c, tr);
+        QVERIFY2(rt.ok, qPrintable(rt.error));
+
+        const int collector = net.nodeOf(q.id, 0);
+        const int base = net.nodeOf(q.id, 1);
+        const Signal* vc = rt.signal(QStringLiteral("V(%1)").arg(collector));
+        const Signal* vb = rt.signal(QStringLiteral("V(%1)").arg(base));
+        QVERIFY(vc && vb);
+
+        // 集电极电压 = 12 − Ic·1kΩ；Ic = beta·Ib = 1 mA → 11 V
+        QVERIFY2(near(vc->y.last(), 11.0, 0.2), qPrintable(QString::number(vc->y.last())));
+        // 基极-发射极正向导通，约 0.6~0.75 V
+        QVERIFY2(vb->y.last() > 0.5 && vb->y.last() < 0.85,
+                 qPrintable(QString::number(vb->y.last())));
+    }
+
+    void pnpTransistorMirrorsNpn()
+    {
+        // PNP：发射极接 +12 V，恒流源从基极抽出 10 µA，集电极经 1 kΩ 到地
+        Circuit c;
+
+        Component v;
+        v.id = 1;
+        v.type = ComponentType::VoltageSource;
+        v.pos = QPointF(100, 300);
+        v.rotation = 90;
+        v.refdes = QStringLiteral("V1");
+        v.function = SourceFunction::Constant;
+        v.dcValue = 12.0;
+        c.components.append(v);
+
+        Component rc;
+        rc.id = 2;
+        rc.type = ComponentType::Resistor;
+        rc.pos = QPointF(250, 150);
+        rc.refdes = QStringLiteral("RC");
+        rc.value = 1000.0;
+        c.components.append(rc);
+
+        Component q;
+        q.id = 3;
+        q.type = ComponentType::Pnp;
+        q.pos = QPointF(400, 300);
+        q.refdes = QStringLiteral("Q1");
+        q.beta = 100.0;
+        c.components.append(q);
+
+        Component ib;
+        ib.id = 4;
+        ib.type = ComponentType::CurrentSource;
+        ib.pos = QPointF(300, 400);
+        ib.refdes = QStringLiteral("IB");
+        ib.function = SourceFunction::Constant;
+        ib.dcValue = -10e-6; // 负号 = 从基极抽出 10 µA
+        c.components.append(ib);
+
+        Component g;
+        g.id = 5;
+        g.type = ComponentType::Ground;
+        g.pos = QPointF(100, 400);
+        g.refdes = QStringLiteral("GND");
+        c.components.append(g);
+        for (const QPointF& pos : {QPointF(220, 400), QPointF(270, 430)}) {
+            Component gg = g;
+            gg.id = 6 + static_cast<int>(c.components.size());
+            gg.pos = pos;
+            c.components.append(gg);
+        }
+
+        // 发射极 → 上方电源轨 → V1 正端
+        c.wires.append(Wire{{QPointF(430, 330), QPointF(500, 330), QPointF(500, 100),
+                             QPointF(100, 100), QPointF(100, 270)}});
+        c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
+        // 集电极 → 上方 → RC → 地
+        c.wires.append(Wire{{QPointF(430, 270), QPointF(430, 150), QPointF(280, 150)}});
+        c.wires.append(Wire{{QPointF(220, 150), QPointF(220, 400)}});
+        // 基极 → 恒流源 → 地
+        c.wires.append(Wire{{QPointF(370, 300), QPointF(330, 300), QPointF(330, 400)}});
+        c.wires.append(Wire{{QPointF(270, 400), QPointF(270, 430)}});
+
+        const Netlist net = c.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        QVERIFY2(net.warnings.isEmpty(), qPrintable(net.warnings.join(QStringLiteral("; "))));
+
+        SimulationOptions tr;
+        tr.kind = AnalysisKind::Transient;
+        tr.tStop = 1e-4;
+        tr.tStep = 1e-5;
+        const SimulationResult r = Simulator::run(c, tr);
+        QVERIFY2(r.ok, qPrintable(r.error));
+
+        const int collector = net.nodeOf(q.id, 0);
+        const Signal* vc = r.signal(QStringLiteral("V(%1)").arg(collector));
+        QVERIFY(vc);
+        // 集电极电流 1 mA 流过 1 kΩ → 约 1 V
+        QVERIFY2(vc->y.last() > 0.6 && vc->y.last() < 1.6,
+                 qPrintable(QString::number(vc->y.last())));
+    }
+
+    void mosfetSwitches()
+    {
+        // VDD 10 V、漏极电阻 1 kΩ、栅极 5 V；Vth 2 V、K 2 mA/V²
+        Circuit c;
+
+        Component vdd;
+        vdd.id = 1;
+        vdd.type = ComponentType::VoltageSource;
+        vdd.pos = QPointF(100, 300);
+        vdd.rotation = 90;
+        vdd.refdes = QStringLiteral("VDD");
+        vdd.function = SourceFunction::Constant;
+        vdd.dcValue = 10.0;
+        c.components.append(vdd);
+
+        Component vg;
+        vg.id = 2;
+        vg.type = ComponentType::VoltageSource;
+        vg.pos = QPointF(250, 300);
+        vg.rotation = 90;
+        vg.refdes = QStringLiteral("VG");
+        vg.function = SourceFunction::Constant;
+        vg.dcValue = 5.0;
+        c.components.append(vg);
+
+        Component rd;
+        rd.id = 3;
+        rd.type = ComponentType::Resistor;
+        rd.pos = QPointF(400, 200);
+        rd.refdes = QStringLiteral("RD");
+        rd.value = 1000.0;
+        c.components.append(rd);
+
+        Component m;
+        m.id = 4;
+        m.type = ComponentType::Nmos;
+        m.pos = QPointF(500, 300);
+        m.refdes = QStringLiteral("M1");
+        m.vth = 2.0;
+        m.k = 2e-3;
+        c.components.append(m);
+
+        Component g1;
+        g1.id = 5;
+        g1.type = ComponentType::Ground;
+        g1.pos = QPointF(100, 400);
+        g1.refdes = QStringLiteral("GND");
+        c.components.append(g1);
+        for (const QPointF& pos : {QPointF(250, 400), QPointF(530, 400)}) {
+            Component g = g1;
+            g.id = 6 + static_cast<int>(c.components.size());
+            g.pos = pos;
+            c.components.append(g);
+        }
+
+        // VDD 顶 → 漏极电阻 → 漏极
+        c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(370, 200)}});
+        c.wires.append(Wire{{QPointF(430, 200), QPointF(530, 200), QPointF(530, 270)}});
+        c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
+        // 栅极：VG 上端直接拉到栅极引脚
+        c.wires.append(Wire{{QPointF(250, 270), QPointF(470, 270), QPointF(470, 300)}});
+        c.wires.append(Wire{{QPointF(250, 330), QPointF(250, 400)}});
+        // 源极接地
+        c.wires.append(Wire{{QPointF(530, 330), QPointF(530, 400)}});
+
+        const Netlist net = c.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        QVERIFY2(net.warnings.isEmpty(), qPrintable(net.warnings.join(QStringLiteral("; "))));
+
+        SimulationOptions tr;
+        tr.kind = AnalysisKind::Transient;
+        tr.tStop = 1e-5;
+        tr.tStep = 1e-6;
+        const SimulationResult r = Simulator::run(c, tr);
+        QVERIFY2(r.ok, qPrintable(r.error));
+
+        const int drain = net.nodeOf(m.id, 0);
+        const Signal* vd = r.signal(QStringLiteral("V(%1)").arg(drain));
+        QVERIFY(vd);
+        // 饱和/线性边界上 Id ≈ 8 mA，漏极电压约 2 V
+        QVERIFY2(vd->y.last() > 1.0 && vd->y.last() < 4.0,
+                 qPrintable(QString::number(vd->y.last())));
+    }
+
+    void pmosConductsWithNegativeGate()
+    {
+        // PMOS：源极接 +10 V，栅极电压低于源极时导通，漏极经 1 kΩ 到地
+        auto build = [](double gateVolts) {
+            Circuit c;
+            Component vdd;
+            vdd.id = 1;
+            vdd.type = ComponentType::VoltageSource;
+            vdd.pos = QPointF(100, 300);
+            vdd.rotation = 90;
+            vdd.refdes = QStringLiteral("VDD");
+            vdd.function = SourceFunction::Constant;
+            vdd.dcValue = 10.0;
+            c.components.append(vdd);
+
+            Component vg;
+            vg.id = 2;
+            vg.type = ComponentType::VoltageSource;
+            vg.pos = QPointF(250, 300);
+            vg.rotation = 90;
+            vg.refdes = QStringLiteral("VG");
+            vg.function = SourceFunction::Constant;
+            vg.dcValue = gateVolts;
+            c.components.append(vg);
+
+            Component rd;
+            rd.id = 3;
+            rd.type = ComponentType::Resistor;
+            rd.pos = QPointF(400, 150);
+            rd.refdes = QStringLiteral("RD");
+            rd.value = 1000.0;
+            c.components.append(rd);
+
+            Component m;
+            m.id = 4;
+            m.type = ComponentType::Pmos;
+            m.pos = QPointF(500, 300);
+            m.refdes = QStringLiteral("M1");
+            m.vth = 2.0;
+            m.k = 2e-3;
+            c.components.append(m);
+
+            Component g;
+            g.id = 5;
+            g.type = ComponentType::Ground;
+            g.pos = QPointF(100, 400);
+            g.refdes = QStringLiteral("GND");
+            c.components.append(g);
+            for (const QPointF& pos : {QPointF(250, 400), QPointF(370, 400)}) {
+                Component gg = g;
+                gg.id = 6 + static_cast<int>(c.components.size());
+                gg.pos = pos;
+                c.components.append(gg);
+            }
+
+            // 电源轨：VDD 正端 → 绕过漏极 → 源极
+            c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 100), QPointF(560, 100),
+                                 QPointF(560, 330), QPointF(530, 330)}});
+            c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
+            // 漏极 → RD → 地
+            c.wires.append(Wire{{QPointF(530, 270), QPointF(530, 150), QPointF(430, 150)}});
+            c.wires.append(Wire{{QPointF(370, 150), QPointF(370, 400)}});
+            // 栅极 → VG → 地
+            c.wires.append(Wire{{QPointF(470, 300), QPointF(470, 270), QPointF(250, 270)}});
+            c.wires.append(Wire{{QPointF(250, 330), QPointF(250, 400)}});
+            return c;
+        };
+
+        auto drainVoltage = [](const Circuit& c, int compId) {
+            const Netlist net = c.buildNetlist();
+            if (!net.valid)
+                return -1.0;
+            SimulationOptions tr;
+            tr.kind = AnalysisKind::Transient;
+            tr.tStop = 1e-5;
+            tr.tStep = 1e-6;
+            const SimulationResult r = Simulator::run(c, tr);
+            if (!r.ok)
+                return -1.0;
+            const Signal* v = r.signal(QStringLiteral("V(%1)").arg(net.nodeOf(compId, 0)));
+            return v ? v->y.last() : -1.0;
+        };
+
+        // 栅极 5 V（Vgs = −5 V，超过 |Vth| = 2 V）→ 导通，漏极被拉高
+        const double on = drainVoltage(build(5.0), 4);
+        // 栅极 10 V（Vgs = 0）→ 关断，漏极经 RD 落地
+        const double off = drainVoltage(build(10.0), 4);
+        QVERIFY2(on > 1.0 && on < 10.0, qPrintable(QString::number(on)));
+        QVERIFY2(off < 1.0, qPrintable(QString::number(off)));
+        QVERIFY2(on > off, "PMOS 应当在栅极电压低于源极时导通");
+    }
+
+    void igbtConductsAboveThreshold()
+    {
+        auto build = [](double gateVolts) {
+            Circuit c;
+            Component vcc;
+            vcc.id = 1;
+            vcc.type = ComponentType::VoltageSource;
+            vcc.pos = QPointF(100, 300);
+            vcc.rotation = 90;
+            vcc.refdes = QStringLiteral("VCC");
+            vcc.function = SourceFunction::Constant;
+            vcc.dcValue = 20.0;
+            c.components.append(vcc);
+
+            Component vg;
+            vg.id = 2;
+            vg.type = ComponentType::VoltageSource;
+            vg.pos = QPointF(250, 300);
+            vg.rotation = 90;
+            vg.refdes = QStringLiteral("VG");
+            vg.function = SourceFunction::Constant;
+            vg.dcValue = gateVolts;
+            c.components.append(vg);
+
+            Component rc;
+            rc.id = 3;
+            rc.type = ComponentType::Resistor;
+            rc.pos = QPointF(400, 200);
+            rc.refdes = QStringLiteral("RC");
+            rc.value = 10.0;
+            c.components.append(rc);
+
+            Component z;
+            z.id = 4;
+            z.type = ComponentType::Igbt;
+            z.pos = QPointF(500, 300);
+            z.refdes = QStringLiteral("Z1");
+            z.vth = 5.0;
+            z.k = 0.05;
+            z.vf = 0.7;
+            c.components.append(z);
+
+            Component g;
+            g.id = 5;
+            g.type = ComponentType::Ground;
+            g.pos = QPointF(100, 400);
+            g.refdes = QStringLiteral("GND");
+            c.components.append(g);
+            for (const QPointF& pos : {QPointF(250, 400), QPointF(530, 400)}) {
+                Component gg = g;
+                gg.id = 6 + static_cast<int>(c.components.size());
+                gg.pos = pos;
+                c.components.append(gg);
+            }
+
+            c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(370, 200)}});
+            c.wires.append(Wire{{QPointF(430, 200), QPointF(530, 200), QPointF(530, 270)}});
+            c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
+            c.wires.append(Wire{{QPointF(250, 270), QPointF(470, 270), QPointF(470, 300)}});
+            c.wires.append(Wire{{QPointF(250, 330), QPointF(250, 400)}});
+            c.wires.append(Wire{{QPointF(530, 330), QPointF(530, 400)}});
+            return c;
+        };
+
+        auto collectorVoltage = [](const Circuit& c, int compId) {
+            const Netlist net = c.buildNetlist();
+            if (!net.valid)
+                return -1.0;
+            SimulationOptions tr;
+            tr.kind = AnalysisKind::Transient;
+            tr.tStop = 1e-5;
+            tr.tStep = 1e-6;
+            const SimulationResult r = Simulator::run(c, tr);
+            if (!r.ok)
+                return -1.0;
+            const Signal* v = r.signal(QStringLiteral("V(%1)").arg(net.nodeOf(compId, 0)));
+            return v ? v->y.last() : -1.0;
+        };
+
+        // 栅极 10 V > Vth 5 V：导通，集电极被拉到较低电压
+        const double on = collectorVoltage(build(10.0), 4);
+        // 栅极 0 V：关断，集电极保持 20 V
+        const double off = collectorVoltage(build(0.0), 4);
+        QVERIFY2(on > 0.0 && on < 18.0, qPrintable(QString::number(on)));
+        QVERIFY2(off > 19.0, qPrintable(QString::number(off)));
+        QVERIFY2(on < off, "IGBT 应当在高栅压下导通");
+    }
+
     void versionComparison()
     {
         QVERIFY(UpdateChecker::compareVersions(QStringLiteral("0.2.0"), QStringLiteral("0.1.0")) > 0);

@@ -46,10 +46,32 @@ struct DiodeModel {
     }
 };
 
+/// 三极管 / MOSFET / IGBT 的工作点：电流 + 线性化后的跨导
+struct BjtOp {
+    double ic = 0.0;   // 集电极电流（C→E）
+    double ib = 0.0;   // 基极电流（B→E）
+    double if0 = 0.0;  // 正偏结电流
+    double ir0 = 0.0;  // 反偏结电流
+    double gf = 0.0;   // dIf/dVbe
+    double gr = 0.0;   // dIr/dVbc
+    double alphaF = 0.99;
+    double alphaR = 0.5;
+};
+
+struct MosOp {
+    double id = 0.0;  // 漏极电流（D→S）
+    double gm = 0.0;  // dId/dVgs
+    double gds = 0.0; // dId/dVds
+};
+
 struct ElementState {
     QHash<int, double> capV;    // 上一步电容电压
     QHash<int, double> indI;    // 上一步电感电流
     QHash<int, double> diodeV;  // 上一次牛顿迭代的二极管电压
+    QHash<int, double> bjtVbe;  // 三极管：上一次迭代的 vbe
+    QHash<int, double> bjtVbc;  // 三极管：上一次迭代的 vbc
+    QHash<int, double> mosVgs;  // MOSFET / IGBT：上一次迭代的 vgs(或 vge)
+    QHash<int, double> mosVds;  // MOSFET / IGBT：上一次迭代的 vds(或 vce)
 };
 
 struct Problem {
@@ -99,6 +121,24 @@ void addI(std::vector<T>& b, int n1, int n2, T current)
         b[size_t(n2 - 1)] += current;
 }
 
+/// 受控电流源：电流 g·(VctlP − VctlN) 从 outP 流向 outN。
+template <typename T>
+void addVccs(Matrix<T>& a, int outP, int outN, int ctlP, int ctlN, T g)
+{
+    const int op = outP - 1;
+    const int on = outN - 1;
+    const int cp = ctlP - 1;
+    const int cn = ctlN - 1;
+    if (op >= 0 && cp >= 0)
+        a(op, cp) += g;
+    if (op >= 0 && cn >= 0)
+        a(op, cn) -= g;
+    if (on >= 0 && cp >= 0)
+        a(on, cp) -= g;
+    if (on >= 0 && cn >= 0)
+        a(on, cn) += g;
+}
+
 /// 支路元件（电压源 / 电感）：增加一个支路电流未知量，并写入 v1 - v2 - R*i = V。
 template <typename T>
 void addBranch(Matrix<T>& a, std::vector<T>& b, const Problem& p, int compId, T r, T v)
@@ -120,6 +160,60 @@ void addBranch(Matrix<T>& a, std::vector<T>& b, const Problem& p, int compId, T 
     }
     a(ib, ib) -= r;
     b[size_t(ib)] = v;
+}
+
+constexpr double kBjtIs = 1e-14;   // 三极管饱和电流
+constexpr double kMosGmin = 1e-9;  // MOSFET 输出电导下限，避免矩阵奇异
+
+/// NPN 的 Ebers-Moll 方程与线性化系数
+BjtOp bjtOperating(double vbe, double vbc, double beta, double vt)
+{
+    BjtOp op;
+    const double safeBeta = std::max(beta, 1.0);
+    op.alphaF = safeBeta / (1.0 + safeBeta);
+    op.alphaR = 0.5;
+
+    // 结电压限幅：和二极管一样，避免 exp 溢出
+    const double vbeL = std::max(-5.0, std::min(vbe, 0.9));
+    const double vbcL = std::max(-5.0, std::min(vbc, 0.9));
+
+    op.if0 = kBjtIs * (std::exp(vbeL / vt) - 1.0);
+    op.ir0 = kBjtIs * (std::exp(vbcL / vt) - 1.0);
+    op.gf = kBjtIs * std::exp(vbeL / vt) / vt;
+    op.gr = kBjtIs * std::exp(vbcL / vt) / vt;
+
+    op.ic = op.alphaF * op.if0 - op.ir0;
+    op.ib = (1.0 - op.alphaF) * op.if0 + (1.0 - op.alphaR) * op.ir0;
+    return op;
+}
+
+/// 增强型 N 沟道 MOSFET 的 level-1（平方律）模型
+MosOp mosOperating(double vgs, double vds, double vth, double k)
+{
+    MosOp op;
+    const double vov = vgs - vth; // 过驱动电压
+
+    if (vov <= 0.0) {
+        // 截止区：只留一点点漏电导，帮牛顿迭代收敛
+        op.id = 0.0;
+        op.gm = 0.0;
+        op.gds = kMosGmin;
+        return op;
+    }
+
+    if (vds < vov) {
+        // 线性区
+        op.id = k * (vov * vds - 0.5 * vds * vds);
+        op.gm = k * vds;
+        op.gds = k * (vov - vds);
+    } else {
+        // 饱和区
+        op.id = 0.5 * k * vov * vov;
+        op.gm = k * vov;
+        op.gds = 0.0;
+    }
+    op.gds += kMosGmin;
+    return op;
 }
 
 double pnjlim(double vnew, double vold, double vt, double vcrit)
@@ -223,6 +317,65 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
             addI(b, n1, n2, id - g * vd);
             break;
         }
+        case ComponentType::Npn:
+        case ComponentType::Pnp: {
+            // 引脚：0 = 集电极 C，1 = 基极 B，2 = 发射极 E
+            // PNP 与 NPN 是镜像：结电压取反后方程相同，端电流再乘回符号
+            const double sign = isPType(comp.type) ? -1.0 : 1.0;
+            const int nc = n1;
+            const int nb = n2;
+            const int ne = p.nodeOf(comp.id, 2);
+            const double vbe = st.bjtVbe.value(comp.id, 0.0); // 已按 sign 归一化
+            const double vbc = st.bjtVbc.value(comp.id, 0.0);
+            const BjtOp op = bjtOperating(vbe, vbc, comp.beta, dm.vt);
+
+            // 集电极电流 C→E = alphaF·If(vbe) − Ir(vbc)
+            addVccs(a, nc, ne, nb, ne, op.alphaF * op.gf);
+            addVccs(a, nc, ne, nb, nc, -op.gr);
+            addI(b, nc, ne, sign * (op.alphaF * (op.if0 - op.gf * vbe)
+                                    - (op.ir0 - op.gr * vbc)));
+
+            // 基极电流 B→E = (1−alphaF)·If(vbe) + (1−alphaR)·Ir(vbc)
+            addVccs(a, nb, ne, nb, ne, (1.0 - op.alphaF) * op.gf);
+            addVccs(a, nb, ne, nb, nc, (1.0 - op.alphaR) * op.gr);
+            addI(b, nb, ne, sign * ((1.0 - op.alphaF) * (op.if0 - op.gf * vbe)
+                                    + (1.0 - op.alphaR) * (op.ir0 - op.gr * vbc)));
+            break;
+        }
+
+        case ComponentType::Nmos:
+        case ComponentType::Pmos: {
+            // 引脚：0 = 漏极 D，1 = 栅极 G，2 = 源极 S（栅极电流为 0）
+            const int nd = n1;
+            const int ng = n2;
+            const int ns = p.nodeOf(comp.id, 2);
+            const double vgs = st.mosVgs.value(comp.id, 0.0);
+            const double vds = st.mosVds.value(comp.id, 0.0);
+            const MosOp op = mosOperating(vgs, vds, comp.vth, comp.k);
+
+            const double sign = isPType(comp.type) ? -1.0 : 1.0;
+            addVccs(a, nd, ns, ng, ns, op.gm);  // 控制 vgs = Vg − Vs
+            addVccs(a, nd, ns, nd, ns, op.gds); // 控制 vds = Vd − Vs
+            addI(b, nd, ns, sign * (op.id - op.gm * vgs - op.gds * vds));
+            break;
+        }
+
+        case ComponentType::Igbt: {
+            // IGBT 用「栅极像 MOSFET、输出侧带 Vf 压降」的简化模型
+            const int nc = n1;
+            const int ng = n2;
+            const int ne = p.nodeOf(comp.id, 2);
+            const double vge = st.mosVgs.value(comp.id, 0.0);
+            const double vce = st.mosVds.value(comp.id, 0.0);
+            const double vf = std::max(comp.vf, 0.0);
+            const MosOp op = mosOperating(vge, vce - vf, comp.vth, comp.k);
+
+            addVccs(a, nc, ne, ng, ne, op.gm);
+            addVccs(a, nc, ne, nc, ne, op.gds);
+            addI(b, nc, ne, op.id - op.gm * vge - op.gds * (vce - vf));
+            break;
+        }
+
         case ComponentType::OpAmp: {
             // 三端理想运放：v_out - Rout·i_out = A·(v+ - v-)
             const int br = p.branchOf.value(comp.id, -1);
@@ -314,6 +467,47 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
             st.diodeV.insert(cp->id, vLim);
         }
 
+        // 三极管：两个 PN 结同样用 pnjlim 限幅，避免指数项把迭代踢飞。
+        // PNP 的结电压先取反再限幅，存储的始终是“归一化后”的正向结电压。
+        for (const Component* cp : p.elements) {
+            if (cp->type != ComponentType::Npn && cp->type != ComponentType::Pnp)
+                continue;
+            const double sign = isPType(cp->type) ? -1.0 : 1.0;
+            hasDiode = true;
+            const int nc = p.nodeOf(cp->id, 0);
+            const int nb = p.nodeOf(cp->id, 1);
+            const int ne = p.nodeOf(cp->id, 2);
+            const double vb = p.voltage(x, nb);
+            const double vbeOld = st.bjtVbe.value(cp->id, 0.0);
+            const double vbcOld = st.bjtVbc.value(cp->id, 0.0);
+            const double vbe = pnjlim(sign * (vb - p.voltage(x, ne)), vbeOld, dm.vt, 0.8);
+            const double vbc = pnjlim(sign * (vb - p.voltage(x, nc)), vbcOld, dm.vt, 0.8);
+            diodeDelta = std::max({diodeDelta, std::abs(vbe - vbeOld), std::abs(vbc - vbcOld)});
+            st.bjtVbe.insert(cp->id, vbe);
+            st.bjtVbc.insert(cp->id, vbc);
+        }
+
+        // MOSFET / IGBT：栅源、漏源电压每步最多变化 0.5 V，给平方律模型做阻尼
+        for (const Component* cp : p.elements) {
+            if (cp->type != ComponentType::Nmos && cp->type != ComponentType::Pmos
+                && cp->type != ComponentType::Igbt)
+                continue;
+            const double sign = isPType(cp->type) ? -1.0 : 1.0;
+            hasDiode = true;
+            const int n1 = p.nodeOf(cp->id, 0);
+            const int ng = p.nodeOf(cp->id, 1);
+            const int n2 = p.nodeOf(cp->id, 2);
+            const double vgsOld = st.mosVgs.value(cp->id, 0.0);
+            const double vdsOld = st.mosVds.value(cp->id, 0.0);
+            const double vgsNew = sign * (p.voltage(x, ng) - p.voltage(x, n2));
+            const double vdsNew = sign * (p.voltage(x, n1) - p.voltage(x, n2));
+            const double vgs = vgsOld + std::max(-0.5, std::min(vgsNew - vgsOld, 0.5));
+            const double vds = vdsOld + std::max(-0.5, std::min(vdsNew - vdsOld, 0.5));
+            diodeDelta = std::max({diodeDelta, std::abs(vgs - vgsOld), std::abs(vds - vdsOld)});
+            st.mosVgs.insert(cp->id, vgs);
+            st.mosVds.insert(cp->id, vds);
+        }
+
         const bool nodeConverged = maxDelta <= reltol * (1.0 + maxAbs) + abstol;
         const bool diodeConverged = !hasDiode || diodeDelta <= 1e-7;
         if (nodeConverged && diodeConverged && iter >= 1) {
@@ -375,6 +569,29 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
         case ComponentType::Switch:
             current = v / (comp.closed ? 1e-3 : 1e9);
             break;
+        case ComponentType::Npn:
+        case ComponentType::Pnp: {
+            const double vbe = st.bjtVbe.value(comp.id, 0.0);
+            const double vbc = st.bjtVbc.value(comp.id, 0.0);
+            const double sign = isPType(comp.type) ? -1.0 : 1.0;
+            current = sign * bjtOperating(vbe, vbc, comp.beta, dm.vt).ic;
+            break;
+        }
+        case ComponentType::Nmos:
+        case ComponentType::Pmos: {
+            const double vgs = st.mosVgs.value(comp.id, 0.0);
+            const double vds = st.mosVds.value(comp.id, 0.0);
+            const double sign = isPType(comp.type) ? -1.0 : 1.0;
+            current = sign * mosOperating(vgs, vds, comp.vth, comp.k).id;
+            break;
+        }
+        case ComponentType::Igbt: {
+            const double vge = st.mosVgs.value(comp.id, 0.0);
+            const double vce = st.mosVds.value(comp.id, 0.0);
+            const double vf = std::max(comp.vf, 0.0);
+            current = mosOperating(vge, vce - vf, comp.vth, comp.k).id;
+            break;
+        }
         case ComponentType::Probe:
         case ComponentType::Ground:
             break;
@@ -488,6 +705,51 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
         case ComponentType::Diode:
             addG(a, n1, n2, Cx(dm.conductance(st.diodeV.value(comp.id, 0.6)), 0.0));
             break;
+        case ComponentType::Npn:
+        case ComponentType::Pnp: {
+            const int nc = n1;
+            const int nb = n2;
+            const int ne = p.nodeOf(comp.id, 2);
+            const double vbe = st.bjtVbe.value(comp.id, 0.0);
+            const double vbc = st.bjtVbc.value(comp.id, 0.0);
+            const BjtOp op = bjtOperating(vbe, vbc, comp.beta, dm.vt);
+
+            // 交流分析只保留工作点处的小信号跨导
+            addVccs(a, nc, ne, nb, ne, Cx(op.alphaF * op.gf, 0.0));
+            addVccs(a, nc, ne, nb, nc, Cx(-op.gr, 0.0));
+            addVccs(a, nb, ne, nb, ne, Cx((1.0 - op.alphaF) * op.gf, 0.0));
+            addVccs(a, nb, ne, nb, nc, Cx((1.0 - op.alphaR) * op.gr, 0.0));
+            break;
+        }
+
+        case ComponentType::Nmos:
+        case ComponentType::Pmos: {
+            const int nd = n1;
+            const int ng = n2;
+            const int ns = p.nodeOf(comp.id, 2);
+            const double vgs = st.mosVgs.value(comp.id, 0.0);
+            const double vds = st.mosVds.value(comp.id, 0.0);
+            const MosOp op = mosOperating(vgs, vds, comp.vth, comp.k);
+
+            addVccs(a, nd, ns, ng, ns, Cx(op.gm, 0.0));
+            addVccs(a, nd, ns, nd, ns, Cx(op.gds, 0.0));
+            break;
+        }
+
+        case ComponentType::Igbt: {
+            const int nc = n1;
+            const int ng = n2;
+            const int ne = p.nodeOf(comp.id, 2);
+            const double vge = st.mosVgs.value(comp.id, 0.0);
+            const double vce = st.mosVds.value(comp.id, 0.0);
+            const double vf = std::max(comp.vf, 0.0);
+            const MosOp op = mosOperating(vge, vce - vf, comp.vth, comp.k);
+
+            addVccs(a, nc, ne, ng, ne, Cx(op.gm, 0.0));
+            addVccs(a, nc, ne, nc, ne, Cx(op.gds, 0.0));
+            break;
+        }
+
         case ComponentType::OpAmp: {
             const int br = p.branchOf.value(comp.id, -1);
             if (br < 0)

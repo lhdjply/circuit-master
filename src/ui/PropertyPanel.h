@@ -51,6 +51,8 @@ private:
     QFormLayout* m_form = nullptr;
     QLineEdit* m_refdes = nullptr;
     QLineEdit* m_value = nullptr;
+    QLineEdit* m_k = nullptr;
+    QLineEdit* m_vf = nullptr;
     QLabel* m_valueLabel = nullptr;
     QComboBox* m_function = nullptr;
     QLineEdit* m_dc = nullptr;

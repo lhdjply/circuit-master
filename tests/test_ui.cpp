@@ -387,6 +387,34 @@ private slots:
         QVERIFY2(bluish < opaque / 2, "拖影仍带有蓝色选中背景");
     }
 
+    void transistorSymbolsRender()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        // 五种三端器件摆一排，确认符号能画出来、引脚数正确
+        const QVector<ComponentType> types = {
+            ComponentType::Npn,  ComponentType::Pnp, ComponentType::Nmos,
+            ComponentType::Pmos, ComponentType::Igbt};
+        for (int i = 0; i < types.size(); ++i) {
+            // 两行摆放，避免被右侧属性面板挡住
+            const QPointF pos(150 + (i % 3) * 120, i < 3 ? 250 : 400);
+            ComponentItem* item = scene->placeComponent(types.at(i), pos);
+            QVERIFY(item);
+            QCOMPARE(item->pinScenePositions().size(), 3);
+            QCOMPARE(item->component().refdes.left(1), typeSymbol(types.at(i)));
+        }
+        settle();
+
+        QVERIFY(window.grab().save(QCoreApplication::applicationDirPath()
+                                   + QStringLiteral("/shots/transistors.png")));
+    }
+
     void undoRedoEdits()
     {
         MainWindow window;
