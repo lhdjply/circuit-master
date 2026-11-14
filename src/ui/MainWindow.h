@@ -9,6 +9,7 @@
 class QAction;
 class QComboBox;
 class QDockWidget;
+class QTabWidget;
 class QLabel;
 class QListWidget;
 class QListWidgetItem;
@@ -34,6 +35,7 @@ public:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     void createActions();
@@ -47,10 +49,17 @@ private:
     bool saveCircuit();
     bool saveCircuitAs();
     void exportNetlist();
-    void openSettings();
     void scanExamples();
     void loadExample(int index);
     void checkForUpdates(bool manual);
+    void createMonitorWindow();
+    /// 运行仿真按钮在「运行 / 停止」之间切换外观
+    void updateRunAction();
+    /// 显示「波形监控」面板；tab 0 = 静态波形，1 = 动态示波器
+    void showMonitor(int tab);
+    void onWaveTabChanged(int index);
+    /// 用当前电路启动实时示波器，成功返回 true
+    bool startLiveScope();
     /// 按仿真结果点亮/熄灭电路里的发光二极管
     void applyLedStates(const SimulationResult& result);
     void showQuickGuide();
@@ -76,7 +85,11 @@ private:
     SchematicScene* m_scene = nullptr;
     SchematicView* m_view = nullptr;
     PropertyPanel* m_props = nullptr;
-    WaveformWindow* m_wave = nullptr;
+    QDockWidget* m_logDock = nullptr;
+    QWidget* m_waveWindow = nullptr;   // 独立的「波形监控」窗口
+    QTabWidget* m_waveTabs = nullptr;
+    WaveformWindow* m_wavePlot = nullptr;   // 静态波形
+    WaveformWindow* m_waveLive = nullptr;   // 动态示波器
     QPlainTextEdit* m_log = nullptr;
     QListWidget* m_library = nullptr;
     QComboBox* m_libraryCategory = nullptr;
@@ -97,6 +110,8 @@ private:
     int m_historyIndex = -1;
     bool m_restoring = false;
     bool m_updateCheckScheduled = false;
+    SimulationResult m_lastResult;   // 最近一次仿真的结果，供「静态波形」使用
+    bool m_hasResult = false;
     /// 正在销毁：子控件在 ~QWidget() 阶段被析构时仍会发信号（例如 QLineEdit
     /// 失焦触发 editingFinished），那时本窗口的成员已经析构，回调必须直接返回。
     bool m_destroying = false;
@@ -120,8 +135,7 @@ private:
     QAction* m_actGrid = nullptr;
 
     QAction* m_actRun = nullptr;
-    QAction* m_actSettings = nullptr;
-    QAction* m_actScope = nullptr;
+    QAction* m_actMonitor = nullptr;   // 波形监控（静态波形 / 动态示波器 二合一）
     QAction* m_actCheckUpdates = nullptr;
     QAction* m_actGuide = nullptr;
     QAction* m_actAbout = nullptr;

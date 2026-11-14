@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/Units.h"
 #include "sim/Simulator.h"
 
 #include <QElapsedTimer>
@@ -13,6 +14,7 @@ class QChartView;
 class QLabel;
 class QListWidget;
 class QComboBox;
+class QLineEdit;
 class QPushButton;
 class QTimer;
 class QValueAxis;
@@ -29,10 +31,16 @@ public:
 
     void setResult(const SimulationResult& result);
 
+    /// 静态波形标签页里的分析参数（替代原来的「分析设置」对话框）
+    void setOptions(const SimulationOptions& options);
+    SimulationOptions options() const { return m_options; }
+
     /// 以实时方式连续仿真并滚动显示（白色主题，与静态波形共用界面）
     void startLive(const class Circuit& circuit,
                    const QVector<QPair<QString, QString>>& probes);
     bool isLive() const { return m_live != nullptr; }
+    /// 停止实时仿真（切换到静态波形或关闭面板时调用）
+    void stopLiveScope();
     double liveTime() const;
 
     /// 实时仿真每推进一批采样点后发出，主窗口用它刷新 LED 等指示
@@ -40,7 +48,11 @@ public:
 
 signals:
     void scopeRequested();
+    /// 用户在静态波形页改了参数并点了「重新仿真」
+    void analysisRequested(const SimulationOptions& options);
     void liveUpdated();
+    /// 实时仿真的运行状态变化，主窗口用它启用/禁用「停止仿真」
+    void liveStateChanged(bool running);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -55,6 +67,8 @@ private:
     void exportCsv();
     void exportImage();
     void autoScale();
+    void updateAnalysisRows();
+    void applyAnalysisFields();
     void selectAll(bool on);
 
     SimulationResult m_result;
@@ -63,6 +77,15 @@ private:
     QListWidget* m_list = nullptr;
     QLabel* m_info = nullptr;
     QPushButton* m_scopeButton = nullptr;
+    QWidget* m_analysisBar = nullptr;
+    QComboBox* m_kindBox = nullptr;
+    QLineEdit* m_tStopEdit = nullptr;
+    QLineEdit* m_tStepEdit = nullptr;
+    QLineEdit* m_fStartEdit = nullptr;
+    QLineEdit* m_fStopEdit = nullptr;
+    QLineEdit* m_pointsEdit = nullptr;
+    SimulationOptions m_options;
+    QLabel* m_tipLabel = nullptr;
     QPushButton* m_autoButton = nullptr;
     bool m_building = false;
 

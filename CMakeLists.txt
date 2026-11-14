@@ -95,7 +95,6 @@ set(CSM_UI_SOURCES
     src/ui/SchematicView.cpp
     src/ui/PropertyPanel.cpp
     src/ui/WaveformWindow.cpp
-    src/ui/SimulationSettingsDialog.cpp
     src/ui/UpdateDialog.cpp
     src/ui/MainWindow.cpp
 )
@@ -107,7 +106,6 @@ set(CSM_UI_HEADERS
     src/ui/SchematicView.h
     src/ui/PropertyPanel.h
     src/ui/WaveformWindow.h
-    src/ui/SimulationSettingsDialog.h
     src/ui/UpdateDialog.h
     src/ui/MainWindow.h
 )

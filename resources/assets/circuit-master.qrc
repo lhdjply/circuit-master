@@ -7,6 +7,8 @@
     <file alias="select.svg">icons/select.svg</file>
     <file alias="wire.svg">icons/wire.svg</file>
     <file alias="run.svg">icons/run.svg</file>
+    <file alias="stop.svg">icons/stop.svg</file>
+    <file alias="monitor.svg">icons/monitor.svg</file>
     <file alias="settings.svg">icons/settings.svg</file>
     <file alias="zoom_in.svg">icons/zoom_in.svg</file>
     <file alias="zoom_out.svg">icons/zoom_out.svg</file>

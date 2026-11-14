@@ -11,6 +11,8 @@
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QLineEdit>
+#include <QSignalBlocker>
 #include <QLineSeries>
 #include <QListWidget>
 #include <QCategoryAxis>
@@ -98,10 +100,10 @@ QString kindName(AnalysisKind kind)
 } // namespace
 
 WaveformWindow::WaveformWindow(QWidget* parent)
-    : QWidget(parent, Qt::Window)
+    : QWidget(parent)
 {
-    setWindowTitle(QStringLiteral("波形查看器 — 电路仿真大师"));
-    resize(1040, 640);
+    setWindowTitle(QStringLiteral("波形监控 — 电路仿真大师"));
+    setMinimumSize(720, 320);
 
     auto* root = new QHBoxLayout(this);
     root->setContentsMargins(0, 0, 0, 0);
@@ -154,11 +156,12 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     toolbar->addWidget(autoButton);
     toolbar->addWidget(m_scopeButton);
     toolbar->addSpacing(12);
-    auto* tip = new QLabel(QStringLiteral("在图上拖拽可框选放大，右键复位"), chartSide);
-    tip->setStyleSheet(QStringLiteral("color:#94a3b8; font-size:11px;"));
-    toolbar->addWidget(tip);
+    m_tipLabel = new QLabel(QStringLiteral("在图上拖拽可框选放大，右键复位"), chartSide);
+    m_tipLabel->setStyleSheet(QStringLiteral("color:#94a3b8; font-size:11px;"));
+    toolbar->addWidget(m_tipLabel);
     toolbar->addStretch(1);
     m_liveControls = new QWidget(chartSide);
+    Q_UNUSED(m_liveControls);
     auto* liveLayout = new QHBoxLayout(m_liveControls);
     liveLayout->setContentsMargins(0, 0, 0, 0);
     liveLayout->setSpacing(6);
@@ -183,7 +186,8 @@ WaveformWindow::WaveformWindow(QWidget* parent)
         {QStringLiteral("50 s/div"), 50.0},    {QStringLiteral("100 s/div"), 100.0},
     };
     m_liveWindowBox->setMaxVisibleItems(20);
-    m_liveWindowBox->setMinimumContentsLength(12);
+    m_liveWindowBox->setMinimumContentsLength(10);
+    m_liveWindowBox->setMinimumWidth(104);
     for (const auto& entry : divisions)
         m_liveWindowBox->addItem(entry.first, entry.second);
     m_liveWindowBox->setCurrentIndex(15); // 500 µs/div
@@ -200,6 +204,7 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     };
     for (const auto& entry : voltDivs)
         m_liveVoltDivBox->addItem(entry.first, entry.second);
+    m_liveVoltDivBox->setMinimumWidth(96);
     m_liveVoltDivBox->setCurrentIndex(11); // 5 V
 
     m_liveAmpDivBox = new QComboBox(m_liveControls);
@@ -216,6 +221,7 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     };
     for (const auto& entry : ampDivs)
         m_liveAmpDivBox->addItem(entry.first, entry.second);
+    m_liveAmpDivBox->setMinimumWidth(96);
     m_liveAmpDivBox->setCurrentIndex(9); // 1 mA
 
     auto makePair = [this](const QString& text, QComboBox* box) {
@@ -250,6 +256,57 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     connect(m_liveButton, &QPushButton::clicked, this,
             [this] { setLivePlaying(!m_livePlaying); });
     connect(stopLiveButton, &QPushButton::clicked, this, &WaveformWindow::stopLive);
+    // ── 分析参数（静态波形页）────────────────────────────────
+    m_analysisBar = new QWidget(chartSide);
+    auto* analysisLayout = new QHBoxLayout(m_analysisBar);
+    analysisLayout->setContentsMargins(10, 0, 10, 6);
+    analysisLayout->setSpacing(6);
+
+    m_kindBox = new QComboBox(m_analysisBar);
+    m_kindBox->addItem(QStringLiteral("瞬态"), int(AnalysisKind::Transient));
+    m_kindBox->addItem(QStringLiteral("交流扫频"), int(AnalysisKind::AC));
+    m_kindBox->addItem(QStringLiteral("工作点"), int(AnalysisKind::OperatingPoint));
+
+    const auto makeField = [this](const QString& placeholder, int width) {
+        auto* edit = new QLineEdit(m_analysisBar);
+        edit->setPlaceholderText(placeholder);
+        edit->setFixedWidth(width);
+        return edit;
+    };
+    m_tStopEdit = makeField(QStringLiteral("5m"), 78);
+    m_tStepEdit = makeField(QStringLiteral("自动"), 78);
+    m_fStartEdit = makeField(QStringLiteral("10"), 74);
+    m_fStopEdit = makeField(QStringLiteral("1M"), 74);
+    m_pointsEdit = makeField(QStringLiteral("100"), 60);
+
+    auto* runButton = new QPushButton(QStringLiteral("重新仿真"), m_analysisBar);
+
+    analysisLayout->addWidget(new QLabel(QStringLiteral("分析"), m_analysisBar));
+    analysisLayout->addWidget(m_kindBox);
+    analysisLayout->addWidget(new QLabel(QStringLiteral("停止时间"), m_analysisBar));
+    analysisLayout->addWidget(m_tStopEdit);
+    analysisLayout->addWidget(new QLabel(QStringLiteral("最大步长"), m_analysisBar));
+    analysisLayout->addWidget(m_tStepEdit);
+    analysisLayout->addWidget(new QLabel(QStringLiteral("起始"), m_analysisBar));
+    analysisLayout->addWidget(m_fStartEdit);
+    analysisLayout->addWidget(new QLabel(QStringLiteral("终止"), m_analysisBar));
+    analysisLayout->addWidget(m_fStopEdit);
+    analysisLayout->addWidget(new QLabel(QStringLiteral("点数"), m_analysisBar));
+    analysisLayout->addWidget(m_pointsEdit);
+    analysisLayout->addWidget(runButton);
+    analysisLayout->addStretch(1);
+
+    chartLayout->addWidget(m_analysisBar);
+
+    connect(m_kindBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this] { updateAnalysisRows(); });
+    for (QLineEdit* edit : {m_tStopEdit, m_tStepEdit, m_fStartEdit, m_fStopEdit, m_pointsEdit})
+        connect(edit, &QLineEdit::editingFinished, this, &WaveformWindow::applyAnalysisFields);
+    connect(runButton, &QPushButton::clicked, this, [this] {
+        applyAnalysisFields();
+        emit analysisRequested(m_options);
+    });
+
     connect(m_liveWindowBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this] {
                 m_liveDiv = m_liveWindowBox->currentData().toDouble();
@@ -318,6 +375,94 @@ bool WaveformWindow::eventFilter(QObject* watched, QEvent* event)
         }
     }
     return QWidget::eventFilter(watched, event);
+}
+
+void WaveformWindow::setOptions(const SimulationOptions& options)
+{
+    m_options = options;
+    if (m_kindBox) {
+        const int index = m_kindBox->findData(int(options.kind));
+        if (index >= 0) {
+            QSignalBlocker blocker(m_kindBox);
+            m_kindBox->setCurrentIndex(index);
+        }
+    }
+    const auto setText = [](QLineEdit* edit, const QString& text) {
+        if (edit)
+            edit->setText(text);
+    };
+    setText(m_tStopEdit, formatEng(m_options.tStop, QStringLiteral("s"), 4));
+    setText(m_tStepEdit, formatEng(m_options.tStep, QStringLiteral("s"), 4));
+    setText(m_fStartEdit, formatEng(m_options.fStart, QStringLiteral("Hz"), 4));
+    setText(m_fStopEdit, formatEng(m_options.fStop, QStringLiteral("Hz"), 4));
+    setText(m_pointsEdit, QString::number(m_options.acPoints));
+    updateAnalysisRows();
+}
+
+void WaveformWindow::updateAnalysisRows()
+{
+    if (!m_kindBox)
+        return;
+    const auto kind = AnalysisKind(m_kindBox->currentData().toInt());
+    const bool transient = kind == AnalysisKind::Transient;
+    const bool ac = kind == AnalysisKind::AC;
+
+    m_tStopEdit->setVisible(transient);
+    m_tStepEdit->setVisible(transient);
+    m_fStartEdit->setVisible(ac);
+    m_fStopEdit->setVisible(ac);
+    m_pointsEdit->setVisible(ac);
+
+    // 标签跟着字段一起显隐：遍历分析条里的 QLabel，按顺序配对
+    const QList<QLabel*> labels = m_analysisBar->findChildren<QLabel*>();
+    for (QLabel* label : labels) {
+        const QString text = label->text();
+        if (text == QStringLiteral("停止时间") || text == QStringLiteral("最大步长"))
+            label->setVisible(transient);
+        else if (text == QStringLiteral("起始") || text == QStringLiteral("终止")
+                 || text == QStringLiteral("点数"))
+            label->setVisible(ac);
+    }
+}
+
+void WaveformWindow::applyAnalysisFields()
+{
+    if (!m_kindBox)
+        return;
+
+    m_options.kind = AnalysisKind(m_kindBox->currentData().toInt());
+    m_options.display = DisplayMode::Plot;
+
+    const auto parse = [](QLineEdit* edit, UnitKind unit, double* out) {
+        if (!edit || edit->text().trimmed().isEmpty())
+            return true; // 空着就沿用默认值
+        bool ok = false;
+        QString reason;
+        const double value = parseQuantity(edit->text(), unit, &ok, &reason);
+        if (!ok) {
+            edit->setStyleSheet(QStringLiteral("border:1px solid #dc2626;"));
+            return false;
+        }
+        edit->setStyleSheet(QString());
+        *out = value;
+        return true;
+    };
+
+    bool ok = true;
+    if (m_options.kind == AnalysisKind::Transient) {
+        ok = parse(m_tStopEdit, UnitKind::Second, &m_options.tStop) && ok;
+        ok = parse(m_tStepEdit, UnitKind::Second, &m_options.tStep) && ok;
+    } else if (m_options.kind == AnalysisKind::AC) {
+        ok = parse(m_fStartEdit, UnitKind::Hertz, &m_options.fStart) && ok;
+        ok = parse(m_fStopEdit, UnitKind::Hertz, &m_options.fStop) && ok;
+        if (m_pointsEdit && !m_pointsEdit->text().trimmed().isEmpty()) {
+            bool pointsOk = false;
+            const int points = m_pointsEdit->text().toInt(&pointsOk);
+            if (pointsOk && points >= 2)
+                m_options.acPoints = points;
+        }
+    }
+    Q_UNUSED(ok);
 }
 
 void WaveformWindow::setResult(const SimulationResult& result)
@@ -781,6 +926,13 @@ void WaveformWindow::startLive(const Circuit& circuit,
     m_chart->setTitle(QString());
     m_liveControls->setVisible(true);
     m_scopeButton->setVisible(false);
+    if (m_tipLabel)
+        m_tipLabel->setVisible(false);
+    if (m_autoButton)
+        m_autoButton->setVisible(false);
+    // 实时模式没有「分析参数」的概念，整条收起
+    if (m_analysisBar)
+        m_analysisBar->setVisible(false);
     if (m_autoButton)
         m_autoButton->setEnabled(false);
     setWindowTitle(QStringLiteral("实时示波器 — 电路仿真大师"));
@@ -790,10 +942,17 @@ void WaveformWindow::startLive(const Circuit& circuit,
     m_liveClock.start();
     setLivePlaying(true);
     liveTick();
+    emit liveStateChanged(true);
+}
+
+void WaveformWindow::stopLiveScope()
+{
+    stopLive();
 }
 
 void WaveformWindow::stopLive()
 {
+    const bool wasLive = m_live != nullptr;
     if (m_liveTimer)
         m_liveTimer->stop();
     m_livePlaying = false;
@@ -807,8 +966,16 @@ void WaveformWindow::stopLive()
         m_liveControls->setVisible(false);
     if (m_scopeButton)
         m_scopeButton->setVisible(true);
+    if (m_tipLabel)
+        m_tipLabel->setVisible(true);
+    if (m_autoButton)
+        m_autoButton->setVisible(true);
+    if (m_analysisBar)
+        m_analysisBar->setVisible(true);
     if (m_autoButton)
         m_autoButton->setEnabled(true);
+    if (wasLive)
+        emit liveStateChanged(false);
 }
 
 void WaveformWindow::setLivePlaying(bool playing)

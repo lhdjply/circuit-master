@@ -2,7 +2,6 @@
 #include "ui/MainWindow.h"
 #include "ui/Symbols.h"
 #include "ui/UpdateDialog.h"
-#include "ui/SimulationSettingsDialog.h"
 #include "ui/SchematicScene.h"
 #include "ui/SchematicView.h"
 #include "ui/WireItem.h"
@@ -14,10 +13,12 @@
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
+#include <QTabWidget>
 #include <QDir>
 #include <QFileInfo>
 #include <QPixmap>
 #include <QComboBox>
+#include <QTabWidget>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
@@ -192,6 +193,7 @@ private slots:
         QVERIFY(window.grab().save(dir.filePath(QStringLiteral("shots/main_selected.png"))));
 
         window.runSimulation();
+        openStaticWave(window);
         auto* wave = waitWaveWindow(window);
         const QString waveShot = dir.filePath(QStringLiteral("shots/waveform.png"));
         QVERIFY(wave->grab().save(waveShot));
@@ -215,6 +217,7 @@ private slots:
         settle();
 
         window.runSimulation();
+        openStaticWave(window);
         auto* wave = waitWaveWindow(window);
         QVERIFY(wave->grab().save(
             QCoreApplication::applicationDirPath() + QStringLiteral("/shots/waveform_ac.png")));
@@ -237,9 +240,80 @@ private slots:
         settle();
 
         window.runSimulation();
+        openStaticWave(window);
         auto* wave = waitWaveWindow(window);
         QVERIFY(wave->grab().save(
             QCoreApplication::applicationDirPath() + QStringLiteral("/shots/waveform_diode.png")));
+    }
+
+    void runStartsAndStopEndsSimulation()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        QAction* monitor = window.findChild<QAction*>(QStringLiteral("actMonitor"));
+        QAction* run = window.findChild<QAction*>(QStringLiteral("actRun"));
+        QVERIFY(monitor);
+        QVERIFY(run);
+
+        QVERIFY(!monitor->isEnabled());
+        QCOMPARE(run->text(), QStringLiteral("运行仿真"));
+
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text().contains(QStringLiteral("RC 充电"))) {
+                action->trigger();
+                break;
+            }
+        }
+        settle();
+
+        // 运行：开始仿真，但不自动打开波形监控
+        run->trigger();
+        settle();
+
+        auto* live = livePanel(window);
+        QVERIFY(live);
+        QVERIFY2(live->isLive(), "运行仿真后应当连续运行");
+        QVERIFY2(!live->isVisible(), "运行仿真不应自动打开波形监控");
+        QCOMPARE(run->text(), QStringLiteral("停止仿真"));
+        QVERIFY2(monitor->isEnabled(), "运行时波形监控应可用");
+
+        // 点「波形监控」才打开窗口
+        auto* monitorWindow = window.findChild<QWidget*>(QStringLiteral("waveMonitorWindow"));
+        QVERIFY(monitorWindow);
+        monitor->setChecked(true);
+        settle();
+        QVERIFY(monitorWindow->isVisible());
+        QTabWidget* tabs = waveTabs(window);
+        QVERIFY(tabs);
+        tabs->setCurrentIndex(1);
+        settle();
+        QVERIFY(live->isVisible());
+
+        // 关闭窗口不停止仿真，只是收起界面
+        monitorWindow->close();
+        settle();
+        QVERIFY2(!monitorWindow->isVisible(), "关闭后窗口应当隐藏");
+        QVERIFY2(live->isLive(), "关闭波形监控不应停止仿真");
+        QVERIFY(!monitor->isChecked());
+
+        // 重新打开还能看到正在跑的波形
+        monitor->setChecked(true);
+        settle();
+        QVERIFY(monitorWindow->isVisible());
+        QVERIFY(live->isLive());
+        QTRY_VERIFY_WITH_TIMEOUT(live->liveTime() > 5e-4, 5000);
+        QVERIFY(monitorWindow->grab().save(QCoreApplication::applicationDirPath()
+                                           + QStringLiteral("/shots/monitor_running.png")));
+
+        // 只有「停止仿真」才停
+        run->trigger();
+        settle();
+        QVERIFY2(!live->isLive(), "点击停止后应当结束");
+        QCOMPARE(run->text(), QStringLiteral("运行仿真"));
+        QVERIFY2(!monitor->isEnabled(), "停止后波形监控应不可点击");
     }
 
     void ledLightsUpAfterSimulation()
@@ -431,6 +505,7 @@ private slots:
         QVERIFY2(gainLabelFound, "属性面板缺少开环增益字段");
 
         window.runSimulation();
+        openStaticWave(window);
         auto* wave = waitWaveWindow(window);
 
         auto* list = wave->findChild<QListWidget*>();
@@ -835,57 +910,6 @@ private slots:
         QCOMPARE(wire->scenePoints().first(), wireBefore + QPointF(0, 30));
     }
 
-    void settingsHideTimingForScope()
-    {
-        SimulationOptions options;
-        options.kind = AnalysisKind::Transient;
-        options.display = DisplayMode::Scope;
-        options.tStop = 3e-3;
-        options.tStep = 1e-5;
-
-        SimulationSettingsDialog dialog(options);
-        dialog.show();
-        settle();
-
-        QLineEdit* stopEdit = nullptr;
-        QLineEdit* stepEdit = nullptr;
-        for (QLineEdit* edit : dialog.findChildren<QLineEdit*>()) {
-            if (edit->text() == QString::number(options.tStop, 'g', 6))
-                stopEdit = edit;
-            if (edit->text() == QString::number(options.tStep, 'g', 6))
-                stepEdit = edit;
-        }
-        QVERIFY(stopEdit);
-        QVERIFY(stepEdit);
-        QVERIFY(!stopEdit->isVisible());
-        QVERIFY(!stepEdit->isVisible());
-
-        bool hintVisible = false;
-        for (QLabel* label : dialog.findChildren<QLabel*>()) {
-            if (label->text().contains(QStringLiteral("自动选择步长")) && label->isVisible())
-                hintVisible = true;
-        }
-        QVERIFY(hintVisible);
-
-        // 切回静态波形图后恢复
-        for (QComboBox* box : dialog.findChildren<QComboBox*>()) {
-            if (box->count() == 2 && box->itemText(0) == QStringLiteral("静态波形图"))
-                box->setCurrentIndex(0);
-        }
-        settle();
-        QVERIFY(stopEdit->isVisible());
-        QVERIFY(stepEdit->isVisible());
-
-        // 回到动态模式并截图
-        for (QComboBox* box : dialog.findChildren<QComboBox*>()) {
-            if (box->count() == 2 && box->itemText(1) == QStringLiteral("动态示波器"))
-                box->setCurrentIndex(1);
-        }
-        settle();
-        QVERIFY(dialog.grab().save(QCoreApplication::applicationDirPath()
-                                   + QStringLiteral("/shots/settings_scope.png")));
-    }
-
     void liveScopePicksUsableRange()
     {
         // 220 V 正弦整流：默认 5 V/格 会把波形顶出屏幕，启动时应自动选到合适档位
@@ -969,16 +993,10 @@ private slots:
         rcExample->trigger();
         settle();
 
-        QAction* scopeAction = nullptr;
-        for (QAction* action : window.findChildren<QAction*>()) {
-            if (action->text() == QStringLiteral("动态示波器"))
-                scopeAction = action;
-        }
-        QVERIFY(scopeAction);
-        scopeAction->trigger();
-        settle();
+        // 「波形监控」面板里切到动态示波器标签页
+        openMonitor(window, 1);
 
-        auto* wave = window.findChild<WaveformWindow*>();
+        auto* wave = livePanel(window);
         QVERIFY(wave);
         QVERIFY(wave->isVisible());
         QVERIFY(wave->isLive());
@@ -1178,6 +1196,7 @@ private slots:
         QCOMPARE(net.nodeOf(capacitor->component().id, 1), 0);
 
         window.runSimulation();
+        openStaticWave(window);
         auto* wave = waitWaveWindow(window);
 
         // 没有测试点时波形为空
@@ -1201,6 +1220,49 @@ private:
         settle();
     }
 
+    /// 「波形监控」面板里的标签页
+    static QTabWidget* waveTabs(MainWindow& window)
+    {
+        for (QTabWidget* tabs : window.findChildren<QTabWidget*>()) {
+            if (tabs->count() == 2 && tabs->tabText(0) == QStringLiteral("静态波形"))
+                return tabs;
+        }
+        return nullptr;
+    }
+
+    /// 打开「波形监控」并切到指定标签页（0 = 静态波形，1 = 动态示波器）
+    static void openMonitor(MainWindow& window, int tab)
+    {
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text() == QStringLiteral("波形监控")) {
+                // 可勾选动作：setChecked 会触发 toggled，不要再 trigger 一次
+                action->setChecked(true);
+                settle();
+                break;
+            }
+        }
+        QTabWidget* tabs = waveTabs(window);
+        if (!tabs)
+            QFAIL("找不到波形监控面板");
+        tabs->setCurrentIndex(tab);
+        settle();
+    }
+
+    static void openStaticWave(MainWindow& window) { openMonitor(window, 0); }
+
+    /// 波形监控里的静态波形页面
+    static WaveformWindow* plotPanel(MainWindow& window)
+    {
+        QTabWidget* tabs = waveTabs(window);
+        return tabs ? qobject_cast<WaveformWindow*>(tabs->widget(0)) : nullptr;
+    }
+
+    static WaveformWindow* livePanel(MainWindow& window)
+    {
+        QTabWidget* tabs = waveTabs(window);
+        return tabs ? qobject_cast<WaveformWindow*>(tabs->widget(1)) : nullptr;
+    }
+
     /// 等仿真把波形窗口弹出来。
     /// 这里不能直接用 QTRY_VERIFY：宏在失败时执行 `return;`，放在返回指针的
     /// 函数里编译不过。改成自己轮询，超时返回 nullptr 由调用方断言。
@@ -1210,7 +1272,7 @@ private:
         timer.start();
         WaveformWindow* wave = nullptr;
         while (timer.elapsed() < timeoutMs) {
-            wave = window.findChild<WaveformWindow*>();
+            wave = plotPanel(window);
             if (wave && wave->isVisible())
                 break;
             QTest::qWait(5); // 只睡 5ms 并处理事件，条件一满足立刻返回

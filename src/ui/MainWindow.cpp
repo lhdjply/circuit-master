@@ -10,7 +10,6 @@
 #include "ui/PropertyPanel.h"
 #include "ui/SchematicScene.h"
 #include "ui/SchematicView.h"
-#include "ui/SimulationSettingsDialog.h"
 #include "ui/Symbols.h"
 #include "ui/UpdateDialog.h"
 #include "ui/WaveformWindow.h"
@@ -321,6 +320,7 @@ MainWindow::MainWindow(QWidget* parent)
     createMenus();
     createToolBar();
     createDocks();
+    createMonitorWindow();
     createStatusBar();
 
     connect(m_scene, &SchematicScene::circuitChanged, this, [this] { setDirty(true); });
@@ -351,6 +351,13 @@ MainWindow::MainWindow(QWidget* parent)
                              "或通过「仿真 → 示例电路」载入示例。"));
 
     m_dirty = false;
+    m_hasResult = false;
+    if (m_actMonitor) {
+        m_actMonitor->setEnabled(false);
+        m_actMonitor->setChecked(false);
+    }
+    if (m_waveLive)
+        m_waveLive->stopLiveScope();
     updateTitle();
     resetHistory();
 
@@ -440,14 +447,17 @@ void MainWindow::createActions()
         actionIcon(QStringLiteral("run"), QStringLiteral("media-playback-start"), QStyle::SP_MediaPlay),
         QStringLiteral("运行仿真"), this);
     m_actRun->setShortcut(QKeySequence(Qt::Key_F5));
+    m_actRun->setObjectName(QStringLiteral("actRun"));
 
-    m_actSettings = new QAction(
-        actionIcon(QStringLiteral("settings"), QStringLiteral("preferences-system"),
-                   QStyle::SP_FileDialogDetailedView),
-        QStringLiteral("分析设置…"), this);
-
-    m_actScope = new QAction(QStringLiteral("动态示波器"), this);
-    m_actScope->setToolTip(QStringLiteral("对当前电路连续仿真并滚动显示"));
+    m_actMonitor = new QAction(
+        actionIcon(QStringLiteral("monitor"), QStringLiteral("utilities-system-monitor"),
+                   QStyle::SP_ComputerIcon),
+        QStringLiteral("波形监控"), this);
+    m_actMonitor->setObjectName(QStringLiteral("actMonitor"));
+    m_actMonitor->setCheckable(true);
+    m_actMonitor->setEnabled(false); // 只有仿真运行时才允许打开
+    m_actMonitor->setToolTip(
+        QStringLiteral("波形监控面板：静态波形 / 动态示波器两个标签页（仿真运行时可用）"));
 
     m_actSelectTool = new QAction(
         actionIcon(QStringLiteral("select"), QStringLiteral("edit-select"), QStyle::SP_ArrowUp),
@@ -496,9 +506,23 @@ void MainWindow::createActions()
     connect(m_actZoomFit, &QAction::triggered, this, [this] { m_view->zoomFit(); });
     connect(m_actGrid, &QAction::toggled, this, [this](bool on) { m_scene->setShowGrid(on); });
 
-    connect(m_actRun, &QAction::triggered, this, &MainWindow::runSimulation);
-    connect(m_actSettings, &QAction::triggered, this, &MainWindow::openSettings);
-    connect(m_actScope, &QAction::triggered, this, &MainWindow::openScope);
+    connect(m_actRun, &QAction::triggered, this, [this] {
+        // 动态示波器在跑时，这个按钮就是「停止」
+        if (m_waveLive && m_waveLive->isLive()) {
+            m_waveLive->stopLiveScope();
+            return;
+        }
+        runSimulation();
+    });
+    connect(m_actMonitor, &QAction::toggled, this, [this](bool on) {
+        if (!m_waveWindow)
+            return;
+        if (on)
+            showMonitor(m_waveTabs ? m_waveTabs->currentIndex() : 0);
+        else
+            m_waveWindow->hide();
+    });
+
 
     connect(m_actSelectTool, &QAction::triggered, this,
             [this] { m_view->setTool(SchematicView::Tool::Select); });
@@ -551,8 +575,7 @@ void MainWindow::createMenus()
 
     QMenu* simMenu = menuBar()->addMenu(QStringLiteral("仿真(&S)"));
     simMenu->addAction(m_actRun);
-    simMenu->addAction(m_actSettings);
-    simMenu->addAction(m_actScope);
+    simMenu->addAction(m_actMonitor);
     simMenu->addSeparator();
 
     QMenu* examples = simMenu->addMenu(QStringLiteral("示例电路"));
@@ -586,7 +609,7 @@ void MainWindow::createToolBar()
     bar->addAction(m_actWireTool);
     bar->addSeparator();
     bar->addAction(m_actRun);
-    bar->addAction(m_actSettings);
+    bar->addAction(m_actMonitor);
     bar->addSeparator();
     bar->addAction(m_actZoomFit);
 }
@@ -691,6 +714,7 @@ void MainWindow::createDocks()
 
     auto* logDock = new QDockWidget(QStringLiteral("消息"), this);
     logDock->setObjectName(QStringLiteral("logDock"));
+    m_logDock = logDock;
     m_log = new QPlainTextEdit(logDock);
     m_log->setReadOnly(true);
     m_log->setMaximumBlockCount(500);
@@ -751,8 +775,10 @@ MainWindow::~MainWindow()
         m_scene->disconnect(this);
     if (m_view)
         m_view->disconnect(this);
-    if (m_wave)
-        m_wave->disconnect(this);
+    if (m_wavePlot)
+        m_wavePlot->disconnect(this);
+    if (m_waveLive)
+        m_waveLive->disconnect(this);
 }
 
 void MainWindow::pushHistory()
@@ -915,14 +941,16 @@ void MainWindow::newCircuit()
     m_filePath.clear();
     m_props->setComponent(nullptr);
     m_dirty = false;
+    m_hasResult = false;
+    if (m_actMonitor) {
+        m_actMonitor->setEnabled(false);
+        m_actMonitor->setChecked(false);
+    }
+    if (m_waveLive)
+        m_waveLive->stopLiveScope();
     updateTitle();
     resetHistory();
-
-    // 启动后自动检查一次更新：先让窗口画出来再查，只有真发现新版本才弹窗。
-    // 测试里用 CSM_NO_UPDATE_CHECK=1 关掉，避免用例依赖网络。
-    if (!qEnvironmentVariableIsSet("CSM_NO_UPDATE_CHECK")) {
-        QTimer::singleShot(3000, this, [this] { checkForUpdates(false); });
-    }
+    updateRunAction();
     appendLog(QStringLiteral("已新建空白电路。"));
 }
 
@@ -1061,11 +1089,7 @@ void MainWindow::runSimulation()
     for (const QString& warning : net.warnings)
         appendLog(QStringLiteral("⚠ ") + warning);
 
-    if (m_options.kind == AnalysisKind::Transient && m_options.display == DisplayMode::Scope) {
-        openScope();
-        return;
-    }
-
+    // 运行仿真只做计算，不自动弹任何窗口：波形由「静态波形」/「动态示波器」显式打开
     QApplication::setOverrideCursor(Qt::WaitCursor);
     SimulationResult result = Simulator::run(circuit, m_options);
     QApplication::restoreOverrideCursor();
@@ -1089,6 +1113,13 @@ void MainWindow::runSimulation()
     if (!hasProbes && result.kind != AnalysisKind::OperatingPoint)
         appendLog(QStringLiteral("⚠ 电路中没有测试点，波形为空。请放置电压测试点（TP）或电流测试点（IP）。"));
 
+    // 结果留着，由用户打开「波形监控」再看；面板开着就顺手刷新
+    m_lastResult = result;
+    m_hasResult = true;
+    if (m_wavePlot && m_waveWindow && m_waveWindow->isVisible() && m_waveTabs
+        && m_waveTabs->currentIndex() == 0)
+        m_wavePlot->setResult(m_lastResult);
+
     if (result.kind == AnalysisKind::OperatingPoint) {
         QDialog dialog(this);
         dialog.setWindowTitle(QStringLiteral("直流工作点"));
@@ -1107,35 +1138,151 @@ void MainWindow::runSimulation()
         return;
     }
 
-    if (!m_wave) {
-        m_wave = new WaveformWindow(this);
-        connect(m_wave, &WaveformWindow::scopeRequested, this, &MainWindow::openScope);
-        // 实时仿真推进时同步刷新 LED 亮度
-        connect(m_wave, &WaveformWindow::liveUpdated, this, [this] {
-            for (ComponentItem* item : m_scene->componentItems()) {
-                if (item->component().type != ComponentType::Led)
-                    continue;
-                const double amps =
-                    m_wave->liveValue(QStringLiteral("I(%1)").arg(item->component().refdes));
-                const double i = std::abs(amps);
-                item->setLedBrightness(i < 1e-4 ? 0.0
-                                                : std::min(1.0, std::log10(i / 1e-4) / 2.0));
-            }
-        });
-    }
-    m_wave->setResult(result);
-    m_wave->show();
-    m_wave->raise();
-    m_wave->activateWindow();
+    // 开始连续仿真，但不自动弹窗口：要看就点「波形监控」
+    if (hasProbes && m_waveLive && !m_waveLive->isLive())
+        startLiveScope();
+    if (hasProbes)
+        appendLog(QStringLiteral("仿真运行中：点「波形监控」查看波形，点「停止仿真」结束。"));
+    else
+        appendLog(QStringLiteral("电路中没有测试点，没有可显示的波形。"));
 }
 
-void MainWindow::openScope()
+bool MainWindow::eventFilter(QObject* watched, QEvent* event)
+{
+    // 关掉波形监控窗口只是收起界面，仿真继续跑，随时可以再打开
+    if (watched == m_waveWindow && event->type() == QEvent::Close) {
+        if (m_actMonitor)
+            m_actMonitor->setChecked(false);
+    }
+    return QMainWindow::eventFilter(watched, event);
+}
+
+void MainWindow::updateRunAction()
+{
+    if (!m_actRun)
+        return;
+    const bool running = m_waveLive && m_waveLive->isLive();
+
+    // 波形监控只在仿真运行时可用；停止后连同面板一起收起
+    if (m_actMonitor) {
+        m_actMonitor->setEnabled(running);
+        if (!running && m_actMonitor->isChecked())
+            m_actMonitor->setChecked(false);
+    }
+    if (!running && m_waveWindow && m_waveWindow->isVisible())
+        m_waveWindow->hide();
+
+    if (running) {
+        m_actRun->setText(QStringLiteral("停止仿真"));
+        m_actRun->setIcon(actionIcon(QStringLiteral("stop"),
+                                     QStringLiteral("media-playback-stop"),
+                                     QStyle::SP_MediaStop));
+        m_actRun->setToolTip(QStringLiteral("停止正在运行的动态示波器"));
+    } else {
+        m_actRun->setText(QStringLiteral("运行仿真"));
+        m_actRun->setIcon(actionIcon(QStringLiteral("run"),
+                                     QStringLiteral("media-playback-start"),
+                                     QStyle::SP_MediaPlay));
+        m_actRun->setToolTip(QStringLiteral("运行仿真（F5）"));
+    }
+}
+
+void MainWindow::createMonitorWindow()
+{
+    // 独立窗口：不占用主界面，多屏时可以拖到另一块屏上
+    m_waveWindow = new QWidget(this, Qt::Window);
+    m_waveWindow->setObjectName(QStringLiteral("waveMonitorWindow"));
+    m_waveWindow->setWindowTitle(QStringLiteral("波形监控 — 电路仿真大师"));
+    m_waveWindow->resize(1040, 620);
+    auto* windowLayout = new QVBoxLayout(m_waveWindow);
+    windowLayout->setContentsMargins(0, 0, 0, 0);
+
+    m_waveTabs = new QTabWidget(m_waveWindow);
+    m_wavePlot = new WaveformWindow(m_waveTabs);
+    m_waveLive = new WaveformWindow(m_waveTabs);
+    m_waveTabs->addTab(m_wavePlot, QStringLiteral("静态波形"));
+    m_waveTabs->addTab(m_waveLive, QStringLiteral("动态示波器"));
+    m_waveTabs->setCurrentIndex(0);
+    windowLayout->addWidget(m_waveTabs);
+
+    m_waveWindow->installEventFilter(this);
+    m_waveWindow->hide();
+
+    connect(m_waveTabs, &QTabWidget::currentChanged, this, &MainWindow::onWaveTabChanged);
+
+    m_wavePlot->setOptions(m_options);
+    connect(m_wavePlot, &WaveformWindow::analysisRequested, this,
+            [this](const SimulationOptions& options) {
+                m_options = options;
+                updateAnalysisLabel();
+                runSimulation();
+            });
+
+    // 静态波形里的「示波器」按钮直接切到动态标签页
+    connect(m_wavePlot, &WaveformWindow::scopeRequested, this,
+            [this] { m_waveTabs->setCurrentIndex(1); });
+
+    connect(m_waveLive, &WaveformWindow::liveStateChanged, this, [this](bool) {
+        updateRunAction();
+    });
+
+    // 实时仿真推进时同步刷新 LED 亮度
+    connect(m_waveLive, &WaveformWindow::liveUpdated, this, [this] {
+        for (ComponentItem* item : m_scene->componentItems()) {
+            if (item->component().type != ComponentType::Led)
+                continue;
+            const double amps =
+                m_waveLive->liveValue(QStringLiteral("I(%1)").arg(item->component().refdes));
+            const double i = std::abs(amps);
+            item->setLedBrightness(i < 1e-4 ? 0.0
+                                            : std::min(1.0, std::log10(i / 1e-4) / 2.0));
+        }
+    });
+}
+
+void MainWindow::showMonitor(int tab)
+{
+    if (!m_waveWindow)
+        return;
+    m_waveWindow->show();
+    m_waveWindow->raise();
+    m_waveWindow->activateWindow();
+    if (m_actMonitor && !m_actMonitor->isChecked()) {
+        const QSignalBlocker blocker(m_actMonitor);
+        m_actMonitor->setChecked(true);
+    }
+    if (tab == 0 && m_hasResult && m_wavePlot)
+        m_wavePlot->setResult(m_lastResult);
+    if (m_waveTabs)
+        m_waveTabs->setCurrentIndex(tab);
+}
+
+void MainWindow::onWaveTabChanged(int index)
+{
+    if (!m_waveWindow || !m_waveWindow->isVisible())
+        return;
+
+    if (index == 1) {
+        // 切到示波器时如果还没在跑，就启动；已经在跑就不打断
+        if (m_waveLive && !m_waveLive->isLive()) {
+            if (!startLiveScope() && m_waveTabs)
+                m_waveTabs->setCurrentIndex(0);
+        }
+        return;
+    }
+
+    // 切回静态波形只是换显示，不停止正在跑的实时仿真
+    if (m_wavePlot && m_hasResult)
+        m_wavePlot->setResult(m_lastResult);
+}
+
+bool MainWindow::startLiveScope()
 {
     const Circuit circuit = m_scene->toCircuit();
     const Netlist net = circuit.buildNetlist();
     if (!net.valid) {
         QMessageBox::warning(this, QStringLiteral("无法运行示波器"), net.error);
-        return;
+        return false;
     }
 
     const QVector<QPair<QString, QString>> probes = probeSpecs(circuit, net);
@@ -1143,41 +1290,17 @@ void MainWindow::openScope()
         QMessageBox::information(
             this, QStringLiteral("无法运行示波器"),
             QStringLiteral("电路中没有测试点。请放置电压测试点（TP）或电流测试点（IP）。"));
-        return;
+        return false;
     }
 
-    if (!m_wave) {
-        m_wave = new WaveformWindow(this);
-        connect(m_wave, &WaveformWindow::scopeRequested, this, &MainWindow::openScope);
-        // 实时仿真推进时同步刷新 LED 亮度
-        connect(m_wave, &WaveformWindow::liveUpdated, this, [this] {
-            for (ComponentItem* item : m_scene->componentItems()) {
-                if (item->component().type != ComponentType::Led)
-                    continue;
-                const double amps =
-                    m_wave->liveValue(QStringLiteral("I(%1)").arg(item->component().refdes));
-                const double i = std::abs(amps);
-                item->setLedBrightness(i < 1e-4 ? 0.0
-                                                : std::min(1.0, std::log10(i / 1e-4) / 2.0));
-            }
-        });
-    }
-    m_wave->startLive(circuit, probes);
-    m_wave->show();
-    m_wave->raise();
-    m_wave->activateWindow();
-    appendLog(QStringLiteral("实时示波器已启动：连续仿真，关闭窗口或点「停止」结束。"));
+    m_waveLive->startLive(circuit, probes);
+    appendLog(QStringLiteral("动态示波器已启动：连续仿真，切回静态波形或关闭面板即停止。"));
+    return true;
 }
 
-void MainWindow::openSettings()
+void MainWindow::openScope()
 {
-    SimulationSettingsDialog dialog(m_options, this);
-    if (dialog.exec() != QDialog::Accepted)
-        return;
-
-    m_options = dialog.options();
-    updateAnalysisLabel();
-    appendLog(QStringLiteral("分析设置已更新：%1").arg(m_analysisLabel->text()));
+    showMonitor(1);
 }
 
 void MainWindow::scanExamples()
