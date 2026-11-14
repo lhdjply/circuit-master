@@ -116,6 +116,24 @@ Netlist Netlist::build(const Circuit& circuit)
         }
     }
 
+    // 3b. 导线顶点落在另一条导线段内部（T 型接线）也要连通
+    for (const Wire& wire : circuit.wires) {
+        for (const QPointF& vertexF : wire.points) {
+            const QPoint vertex = toKey(vertexF, grid);
+            const int vertexRoot = dsu.add(vertex);
+            for (const Wire& other : circuit.wires) {
+                for (int i = 1; i < other.points.size(); ++i) {
+                    const QPoint a = toKey(other.points.at(i - 1), grid);
+                    const QPoint b = toKey(other.points.at(i), grid);
+                    if (vertex == a || vertex == b)
+                        continue;
+                    if (pointOnSegment(vertex, a, b))
+                        dsu.unite(vertexRoot, dsu.add(a));
+                }
+            }
+        }
+    }
+
     // 4. 找地节点
     bool hasGround = false;
     QVector<int> groundRoots;

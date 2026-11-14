@@ -224,6 +224,44 @@ private slots:
         QVERIFY(spice.contains(QStringLiteral("100000")));
     }
 
+    void wireEndpointOnSegmentConnects()
+    {
+        Circuit c;
+
+        Component v = makeComp(ComponentType::VoltageSource, QPointF(-60, 0), 0.0, 180);
+        v.function = SourceFunction::Constant;
+        v.dcValue = 10.0;
+        addComponent(c, v);
+
+        addComponent(c, makeComp(ComponentType::Resistor, QPointF(0, 0), 1000.0));
+        addComponent(c, makeComp(ComponentType::Resistor, QPointF(60, 90), 2000.0, 90));
+        addComponent(c, makeComp(ComponentType::Ground, QPointF(-90, 0), 0.0));
+        addComponent(c, makeComp(ComponentType::Ground, QPointF(60, 120), 0.0));
+
+        // 导线 A：R1 右端 → 右侧；导线 B 的端点 (60,0) 落在 A 的内部（T 型接线）
+        c.wires.append(Wire{{QPointF(30, 0), QPointF(90, 0)}});
+        c.wires.append(Wire{{QPointF(60, 0), QPointF(60, 60)}});
+
+        const Netlist net = c.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        QCOMPARE(net.nodeCount, 2);
+        QVERIFY2(net.warnings.isEmpty(), qPrintable(net.warnings.join(QStringLiteral("; "))));
+
+        // R2 上端应与 R1 右端同节点
+        QCOMPARE(net.nodeOf(c.components.at(2).id, 0), net.nodeOf(c.components.at(1).id, 1));
+
+        SimulationOptions opt;
+        opt.kind = AnalysisKind::Transient;
+        opt.tStop = 1e-3;
+        opt.tStep = 1e-4;
+        const SimulationResult r = Simulator::run(c, opt);
+        QVERIFY2(r.ok, qPrintable(r.error));
+        const Signal* out = r.signal(QStringLiteral("V(2)"));
+        QVERIFY(out);
+        QVERIFY2(near(out->y.first(), 6.6667, 1e-3),
+                 qPrintable(QString::number(out->y.first())));
+    }
+
     void mirrorChangesPinGeometry()
     {
         Component op;
