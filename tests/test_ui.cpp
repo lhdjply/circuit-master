@@ -1,3 +1,4 @@
+#include "csm_version.h"
 #include "ui/MainWindow.h"
 #include "ui/SimulationSettingsDialog.h"
 #include "ui/SchematicScene.h"
@@ -30,6 +31,26 @@ class UiTest : public QObject {
     Q_OBJECT
 
 private slots:
+    void versionComesFromVersionFile()
+    {
+        // 版本号唯一来源是仓库根目录的 VERSION，这里校验编译进来的宏与之一致
+        const QString expected = QStringLiteral(CSM_VERSION_STRING);
+        QVERIFY(!expected.isEmpty());
+        QVERIFY2(expected.startsWith(QStringLiteral("v")),
+                 qPrintable(QStringLiteral("VERSION 应带 v 前缀：") + expected));
+
+        const QString number = QStringLiteral(CSM_VERSION_NUMBER);
+        QVERIFY2(!number.contains(QLatin1Char('v')),
+                 qPrintable(QStringLiteral("CSM_VERSION_NUMBER 不应含 v：") + number));
+        QVERIFY(expected.mid(1) == number);
+
+        QFile file(QStringLiteral(CSM_SOURCE_DIR "/VERSION"));
+        QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text),
+                 "无法读取仓库根目录的 VERSION");
+        const QString onDisk = QString::fromUtf8(file.readAll()).trimmed();
+        QCOMPARE(onDisk, expected);
+    }
+
     void toolbarIconsAvailable()
     {
         const QStringList names = {QStringLiteral("new"),    QStringLiteral("open"),

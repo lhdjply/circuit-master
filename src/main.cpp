@@ -1,7 +1,9 @@
+#include "csm_version.h"
 #include "ui/MainWindow.h"
 
 #include <QApplication>
-#include <QGuiApplication>
+
+#include <cstdio>
 #include <QFont>
 #include <QIcon>
 #include <QPalette>
@@ -9,13 +11,18 @@
 
 int main(int argc, char* argv[])
 {
-    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
-        Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
-
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("电路仿真大师"));
-    QApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+    QApplication::setApplicationVersion(QStringLiteral(CSM_VERSION_NUMBER));
     QApplication::setOrganizationName(QStringLiteral("CircuitMaster"));
+
+    // --version / -v 只打印版本，不启动界面（需要 QApplication 才能用 arguments()）
+    const QStringList arguments = QCoreApplication::arguments();
+    if (arguments.contains(QStringLiteral("--version"))
+        || arguments.contains(QStringLiteral("-v"))) {
+        std::printf("电路仿真大师 %s\n", CSM_VERSION_STRING);
+        return 0;
+    }
 
     if (QStyle* fusion = QStyleFactory::create(QStringLiteral("Fusion")))
         QApplication::setStyle(fusion);

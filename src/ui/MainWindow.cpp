@@ -1,5 +1,7 @@
 #include "ui/MainWindow.h"
 
+#include "csm_version.h"
+
 
 #include "core/Circuit.h"
 #include "core/Netlist.h"
@@ -339,7 +341,8 @@ MainWindow::MainWindow(QWidget* parent)
         m_actSelectTool->setChecked(true);
     });
 
-    appendLog(QStringLiteral("电路仿真大师 0.1.0  —  Qt6 / MNA 求解器"));
+    appendLog(QStringLiteral("电路仿真大师 %1  —  Qt6 / MNA 求解器")
+                  .arg(QStringLiteral(CSM_VERSION_STRING)));
     appendLog(QStringLiteral("提示：左键选择拖动，双击编辑参数，R 键旋转；按 F5 运行仿真。"));
     appendLog(QStringLiteral("已新建空白电路：可从左侧元件库放置元件，"
                              "或通过「仿真 → 示例电路」载入示例。"));
@@ -1176,12 +1179,13 @@ void MainWindow::showAbout()
     QMessageBox::about(
         this, QStringLiteral("关于电路仿真大师"),
         QStringLiteral(
-            "<h3>电路仿真大师 0.1.0</h3>"
+            "<h3>电路仿真大师 %1</h3>"
             "<p>基于 Qt6 / C++17 / CMake 的跨平台电路原理图与仿真软件。</p>"
             "<p>求解器：改进节点法（MNA）+ 牛顿-拉夫逊迭代；<br>"
             "支持直流工作点、后向欧拉瞬态分析与交流小信号扫频。</p>"
-            "<p>元件：电阻、电容、电感、二极管、开关、电压源、电流源、接地。</p>"
-            "<p style='color:#64748b'>本程序为自由软件，可作为 Multisim 在 Linux 上的替代方案。</p>"));
+            "<p>元件：电阻、电容、电感、二极管、运放、开关、电压/电流源、测试点、接地。</p>"
+            "<p style='color:#64748b'>本程序为自由软件，可作为 Multisim 在 Linux 上的替代方案。</p>")
+            .arg(QStringLiteral(CSM_VERSION_STRING)));
 }
 
 bool MainWindow::maybeSave()

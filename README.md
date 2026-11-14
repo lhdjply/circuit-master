@@ -198,6 +198,21 @@ ctest --test-dir build --output-on-failure
 - [ ] 交流相位、阻抗、傅里叶与参数扫描
 - [ ] 子电路与层次化设计、BOM 与 PDF 出图
 
+## 版本号
+
+版本号只有一个来源：仓库根目录的 `VERSION` 文件（写法与 git tag 一致，如 `v0.1.0`）。
+
+- CMake 在配置阶段读取它，剥掉 `v` 前缀后交给 `project(VERSION ...)`，
+  并生成 `csm_version.h`（`CSM_VERSION_STRING` / `CSM_VERSION_NUMBER`）供源码使用
+- 界面标题栏、消息区、关于对话框与 `--version` 输出都取自该宏，源码里不再硬编码版本号
+- `VERSION` 已登记为 CMake 重配置依赖，改完直接构建即可生效
+- 发版时同步更新 `CHANGELOG.md`
+
+```bash
+./build/CircuitMaster --version
+# 电路仿真大师 v0.1.0
+```
+
 ## 开发约定
 
 提交信息遵循 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/)：
