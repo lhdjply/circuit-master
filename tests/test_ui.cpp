@@ -1,5 +1,6 @@
 #include "csm_version.h"
 #include "ui/MainWindow.h"
+#include "ui/UpdateDialog.h"
 #include "ui/SimulationSettingsDialog.h"
 #include "ui/SchematicScene.h"
 #include "ui/SchematicView.h"
@@ -31,6 +32,37 @@ class UiTest : public QObject {
     Q_OBJECT
 
 private slots:
+    void updateDialogRenders()
+    {
+        ReleaseInfo release;
+        release.version = QStringLiteral("0.2.0");
+        release.tagName = QStringLiteral("v0.2.0");
+        release.title = QStringLiteral("circuit-master v0.2.0");
+        release.notes = QStringLiteral("### 新增\n\n- 新增三极管模型\n- 修复波形导出\n");
+        release.pageUrl = QUrl(QStringLiteral(
+            "https://github.com/lhdjply/circuit-master/releases/tag/v0.2.0"));
+        release.publishedAt = QStringLiteral("2026-12-01T10:00:00Z");
+
+        UpdateDialog dialog(release);
+        dialog.show();
+        QTest::qWait(200);
+
+        QVERIFY(dialog.isVisible());
+        QVERIFY(dialog.grab().save(QCoreApplication::applicationDirPath()
+                                   + QStringLiteral("/shots/update_dialog.png")));
+
+        // 帮助菜单里应当有「检查更新…」
+        MainWindow window;
+        window.show();
+        QTest::qWait(200);
+        bool found = false;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text() == QStringLiteral("检查更新…"))
+                found = true;
+        }
+        QVERIFY(found);
+    }
+
     void versionComesFromVersionFile()
     {
         // 版本号唯一来源是仓库根目录的 VERSION，这里校验编译进来的宏与之一致

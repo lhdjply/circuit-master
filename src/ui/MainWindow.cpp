@@ -12,6 +12,7 @@
 #include "ui/SchematicView.h"
 #include "ui/SimulationSettingsDialog.h"
 #include "ui/Symbols.h"
+#include "ui/UpdateDialog.h"
 #include "ui/WaveformWindow.h"
 
 #include <QAbstractItemView>
@@ -29,6 +30,7 @@
 #include <QGraphicsItem>
 #include <QGraphicsScene>
 #include <QGuiApplication>
+#include <QDesktopServices>
 #include <QScreen>
 #include <QSet>
 #include <QJsonDocument>
@@ -350,6 +352,12 @@ MainWindow::MainWindow(QWidget* parent)
     m_dirty = false;
     updateTitle();
     resetHistory();
+
+    // 启动后自动检查一次更新：先让窗口画出来再查，只有真发现新版本才弹窗。
+    // 测试里用 CSM_NO_UPDATE_CHECK=1 关掉，避免用例依赖网络。
+    if (!qEnvironmentVariableIsSet("CSM_NO_UPDATE_CHECK")) {
+        QTimer::singleShot(3000, this, [this] { checkForUpdates(false); });
+    }
 }
 
 void MainWindow::createActions()
@@ -458,6 +466,8 @@ void MainWindow::createActions()
     toolGroup->addAction(m_actSelectTool);
     toolGroup->addAction(m_actWireTool);
 
+    m_actCheckUpdates = new QAction(QStringLiteral("检查更新…"), this);
+
     m_actGuide = new QAction(QStringLiteral("快速上手"), this);
     m_actGuide->setShortcut(QKeySequence::HelpContents);
 
@@ -493,6 +503,7 @@ void MainWindow::createActions()
     connect(m_actWireTool, &QAction::triggered, this,
             [this] { m_view->setTool(SchematicView::Tool::Wire); });
 
+    connect(m_actCheckUpdates, &QAction::triggered, this, [this] { checkForUpdates(true); });
     connect(m_actGuide, &QAction::triggered, this, &MainWindow::showQuickGuide);
     connect(m_actAbout, &QAction::triggered, this, &MainWindow::showAbout);
 
@@ -549,6 +560,8 @@ void MainWindow::createMenus()
     }
 
     QMenu* helpMenu = menuBar()->addMenu(QStringLiteral("帮助(&H)"));
+    helpMenu->addAction(m_actCheckUpdates);
+    helpMenu->addSeparator();
     helpMenu->addAction(m_actGuide);
     helpMenu->addAction(m_actAbout);
 }
@@ -853,6 +866,12 @@ void MainWindow::newCircuit()
     m_dirty = false;
     updateTitle();
     resetHistory();
+
+    // 启动后自动检查一次更新：先让窗口画出来再查，只有真发现新版本才弹窗。
+    // 测试里用 CSM_NO_UPDATE_CHECK=1 关掉，避免用例依赖网络。
+    if (!qEnvironmentVariableIsSet("CSM_NO_UPDATE_CHECK")) {
+        QTimer::singleShot(3000, this, [this] { checkForUpdates(false); });
+    }
     appendLog(QStringLiteral("已新建空白电路。"));
 }
 
@@ -1151,6 +1170,54 @@ void MainWindow::loadExample(int index)
     updateAnalysisLabel();
     loadCircuitData(circuit, name, QString());
     appendLog(QStringLiteral("已载入示例「%1」。按 F5 运行仿真。").arg(name));
+}
+
+void MainWindow::checkForUpdates(bool manual)
+{
+    // 同一进程只安排一次启动检查：关掉再开新窗口不必再弹一遍
+    if (!manual) {
+        if (m_updateCheckScheduled)
+            return;
+        m_updateCheckScheduled = true;
+
+        // 最小化状态没有窗口可弹，等窗口真的出来再说
+        if (!isVisible())
+            return;
+    }
+
+    auto* checker = new UpdateChecker(this);
+    connect(checker, &UpdateChecker::updateAvailable, this,
+            [this, checker, manual](const ReleaseInfo& release) {
+                checker->deleteLater();
+                if (!manual && !isVisible())
+                    return;
+                appendLog(QStringLiteral("发现新版本 %1").arg(release.tagName));
+                UpdateDialog dialog(release, this);
+                dialog.exec();
+            });
+    connect(checker, &UpdateChecker::failed, this,
+            [this, checker, manual](const QString& reason) {
+                checker->deleteLater();
+                appendLog(QStringLiteral("检查更新失败：%1").arg(reason));
+                // 自动检查失败是后台的一次尝试，不打扰；手动检查必须给出可读原因
+                if (manual) {
+                    QMessageBox::warning(this, QStringLiteral("检查更新"),
+                                         QStringLiteral("无法检查更新：\n%1").arg(reason));
+                }
+            });
+    connect(checker, &UpdateChecker::upToDate, this,
+            [this, checker, manual](const QString& current) {
+                checker->deleteLater();
+                if (manual) {
+                    QMessageBox::information(
+                        this, QStringLiteral("检查更新"),
+                        QStringLiteral("已是最新版本（v%1）。").arg(current));
+                }
+            });
+
+    if (manual)
+        appendLog(QStringLiteral("正在检查更新…"));
+    checker->check();
 }
 
 void MainWindow::showQuickGuide()

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/UpdateChecker.h"
 #include "sim/Simulator.h"
 
 #include <QJsonObject>
@@ -47,6 +48,7 @@ private:
     void openSettings();
     void scanExamples();
     void loadExample(int index);
+    void checkForUpdates(bool manual);
     void showQuickGuide();
     void showAbout();
 
@@ -89,6 +91,7 @@ private:
     QVector<QByteArray> m_historySignatures;
     int m_historyIndex = -1;
     bool m_restoring = false;
+    bool m_updateCheckScheduled = false;
 
     QAction* m_actNew = nullptr;
     QAction* m_actOpen = nullptr;
@@ -111,6 +114,7 @@ private:
     QAction* m_actRun = nullptr;
     QAction* m_actSettings = nullptr;
     QAction* m_actScope = nullptr;
+    QAction* m_actCheckUpdates = nullptr;
     QAction* m_actGuide = nullptr;
     QAction* m_actAbout = nullptr;
 

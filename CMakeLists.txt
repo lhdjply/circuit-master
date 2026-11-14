@@ -38,7 +38,7 @@ set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 include(GNUInstallDirs)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Charts Svg)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Charts Svg Network)
 find_package(Qt6 6.5 QUIET COMPONENTS Test)
 
 # Debian 打包的版本号只能来自 debian/changelog（dpkg 的硬约束，不能动态生成）。
@@ -75,10 +75,11 @@ add_library(csm_core STATIC
     src/core/Component.cpp
     src/core/Netlist.cpp
     src/core/Circuit.cpp
+    src/core/UpdateChecker.cpp
     src/sim/Simulator.cpp
 )
 target_include_directories(csm_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
-target_link_libraries(csm_core PUBLIC Qt6::Core)
+target_link_libraries(csm_core PUBLIC Qt6::Core Qt6::Network)
 target_compile_options(csm_core PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
 # ---------------------------------------------------------------- 图形界面
@@ -91,6 +92,7 @@ set(CSM_UI_SOURCES
     src/ui/PropertyPanel.cpp
     src/ui/WaveformWindow.cpp
     src/ui/SimulationSettingsDialog.cpp
+    src/ui/UpdateDialog.cpp
     src/ui/MainWindow.cpp
 )
 set(CSM_UI_HEADERS
@@ -102,6 +104,7 @@ set(CSM_UI_HEADERS
     src/ui/PropertyPanel.h
     src/ui/WaveformWindow.h
     src/ui/SimulationSettingsDialog.h
+    src/ui/UpdateDialog.h
     src/ui/MainWindow.h
 )
 
@@ -147,7 +150,9 @@ if (CSM_BUILD_TESTS AND TARGET Qt6::Test)
         CSM_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(test_ui PRIVATE csm_ui Qt6::Test)
     add_test(NAME ui COMMAND test_ui)
-    set_tests_properties(ui PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    # 关掉启动时的更新检查：用例不该依赖网络
+    set_tests_properties(ui PROPERTIES ENVIRONMENT
+        "QT_QPA_PLATFORM=offscreen;CSM_NO_UPDATE_CHECK=1")
 endif()
 
 # ---------------------------------------------------------------- 安装

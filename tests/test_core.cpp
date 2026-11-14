@@ -1,8 +1,16 @@
 #include "core/Circuit.h"
 #include "core/Units.h"
+#include "core/UpdateChecker.h"
+
+#include "csm_version.h"
 #include "sim/Simulator.h"
 
 #include <QDebug>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSignalSpy>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QTest>
 
 #include <cmath>
@@ -91,6 +99,110 @@ class CoreTest : public QObject {
     Q_OBJECT
 
 private slots:
+    void updateCheckerReadsManifest()
+    {
+        // 本地起一个最小 HTTP 服务，模拟 Release 上的 latest.json
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+
+        QByteArray payload;
+        connect(&server, &QTcpServer::newConnection, this, [&server, &payload] {
+            QTcpSocket* socket = server.nextPendingConnection();
+            connect(socket, &QTcpSocket::readyRead, socket, [socket, &payload] {
+                socket->readAll();
+                const QByteArray body = payload;
+                socket->write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                              "Content-Length: "
+                              + QByteArray::number(body.size())
+                              + "\r\nConnection: close\r\n\r\n" + body);
+                socket->disconnectFromHost();
+            });
+        });
+
+        const QUrl url(QStringLiteral("http://127.0.0.1:%1/latest.json").arg(server.serverPort()));
+
+        auto manifest = [](const QString& version, const QString& tag, const QString& page) {
+            QJsonObject object;
+            object.insert(QStringLiteral("version"), version);
+            object.insert(QStringLiteral("tag"), tag);
+            object.insert(QStringLiteral("name"), QStringLiteral("circuit-master %1").arg(tag));
+            object.insert(QStringLiteral("notes"), QStringLiteral("### 新增\n\n- 条目"));
+            object.insert(QStringLiteral("published_at"), QStringLiteral("2026-12-01T10:00:00Z"));
+            if (!page.isEmpty())
+                object.insert(QStringLiteral("page"), page);
+            return QJsonDocument(object).toJson(QJsonDocument::Compact);
+        };
+
+        // 1) 清单版本更新 → updateAvailable，且不可信的发布页地址被丢弃
+        payload = manifest(QStringLiteral("99.0.0"), QStringLiteral("v99.0.0"),
+                           QStringLiteral("https://evil.example.com/x"));
+        {
+            UpdateChecker checker;
+            checker.setMirrorPrefixes({});
+            checker.setManifestUrl(url);
+            QSignalSpy spy(&checker, &UpdateChecker::updateAvailable);
+            QSignalSpy failedSpy(&checker, &UpdateChecker::failed);
+            QVERIFY(checker.check());
+            QVERIFY(spy.wait(5000));
+            QCOMPARE(spy.count(), 1);
+            QCOMPARE(failedSpy.count(), 0);
+
+            const auto release = spy.first().at(0).value<ReleaseInfo>();
+            QCOMPARE(release.version, QStringLiteral("99.0.0"));
+            QCOMPARE(release.tagName, QStringLiteral("v99.0.0"));
+            QCOMPARE(release.pageUrl.host(), QStringLiteral("github.com"));
+            QVERIFY(release.pageUrl.path().contains(QStringLiteral("/lhdjply/circuit-master/")));
+        }
+
+        // 2) 清单版本更旧 → upToDate
+        payload = manifest(QStringLiteral("0.0.1"), QStringLiteral("v0.0.1"), QString());
+        {
+            UpdateChecker checker;
+            checker.setMirrorPrefixes({});
+            checker.setManifestUrl(url);
+            QSignalSpy spy(&checker, &UpdateChecker::upToDate);
+            QVERIFY(checker.check());
+            QVERIFY(spy.wait(5000));
+            QCOMPARE(spy.count(), 1);
+            QCOMPARE(spy.first().at(0).toString(), QStringLiteral(CSM_VERSION_NUMBER));
+        }
+
+        // 3) 正文不是 JSON（转发服务常见的 HTML 错误页）→ failed，不能当成“没有更新”
+        payload = QByteArray("<html><body>502 Bad Gateway</body></html>");
+        {
+            UpdateChecker checker;
+            checker.setMirrorPrefixes({});
+            checker.setManifestUrl(url);
+            QSignalSpy spy(&checker, &UpdateChecker::failed);
+            QSignalSpy upSpy(&checker, &UpdateChecker::upToDate);
+            QVERIFY(checker.check());
+            QVERIFY(spy.wait(5000));
+            QCOMPARE(spy.count(), 1);
+            QCOMPARE(upSpy.count(), 0);
+            QVERIFY(!spy.first().at(0).toString().isEmpty());
+        }
+    }
+
+    void versionComparison()
+    {
+        QVERIFY(UpdateChecker::compareVersions(QStringLiteral("0.2.0"), QStringLiteral("0.1.0")) > 0);
+        QVERIFY(UpdateChecker::compareVersions(QStringLiteral("0.1.0"), QStringLiteral("0.2.0")) < 0);
+        QCOMPARE(UpdateChecker::compareVersions(QStringLiteral("0.1.0"), QStringLiteral("0.1.0")), 0);
+
+        // v 前缀、预发布后缀、缺失的段都不影响比较
+        QCOMPARE(UpdateChecker::compareVersions(QStringLiteral("v0.1.0"), QStringLiteral("0.1.0")), 0);
+        QCOMPARE(UpdateChecker::compareVersions(QStringLiteral("0.2.0-rc1"), QStringLiteral("0.2")), 0);
+        QCOMPARE(UpdateChecker::compareVersions(QStringLiteral("1.2"), QStringLiteral("1.2.0")), 0);
+
+        // 按数字段比较，而不是按字符串：0.10.0 比 0.9.9 新
+        QVERIFY(UpdateChecker::compareVersions(QStringLiteral("0.10.0"), QStringLiteral("0.9.9")) > 0);
+        QVERIFY(UpdateChecker::compareVersions(QStringLiteral("1.0.0"), QStringLiteral("0.99.99")) > 0);
+
+        // 清单里的 version 一般不带 v，比较时当前版本来自 CSM_VERSION_NUMBER
+        QVERIFY(UpdateChecker::compareVersions(QStringLiteral("99.0.0"),
+                                               QStringLiteral(CSM_VERSION_NUMBER)) > 0);
+    }
+
     void quantitiesWithUnits()
     {
         bool ok = false;
@@ -640,6 +752,6 @@ private slots:
     }
 };
 
-QTEST_APPLESS_MAIN(CoreTest)
+QTEST_GUILESS_MAIN(CoreTest)
 
 #include "test_core.moc"

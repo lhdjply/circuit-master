@@ -38,6 +38,14 @@
 - 电压与电流分别使用左右 Y 轴
 - 「分析设置 → 显示方式」可选静态波形图或动态示波器；波形窗口也有「示波器」按钮
 
+**检查更新**
+
+- 菜单「帮助 → 检查更新…」手动检查，或启动 3 秒后自动检查一次（只在新版本出现时弹窗）
+- 数据来源是随 Release 上传的 `latest.json`，依次尝试 gh-proxy.org / ghfast.top / ghproxy.net 三个镜像，
+  首条请求 700 ms 未返回就并行补发一条，避免单条连接卡住
+- 只查询与展示，不下载、不自动替换自身；清单里的发布页地址只认本仓库，防止被篡改的清单带偏
+- 设置环境变量 `CSM_NO_UPDATE_CHECK=1` 可关闭启动检查（测试即用此方式）
+
 **测试点与波形**
 
 - 电压测试点 TP：单端探针，测量所在节点电压
@@ -68,6 +76,8 @@
 | ![运放](docs/screenshots/opamp.png) | ![运放波形](docs/screenshots/transient_opamp.png) |
 
 ![动态示波器](docs/screenshots/scope.png)
+
+![检查更新](docs/screenshots/update_dialog.png)
 
 ## 快速开始
 
