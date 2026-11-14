@@ -69,6 +69,28 @@ QString kindSuffix(AnalysisKind kind)
     return QString();
 }
 
+QJsonObject analysisToJson(const SimulationOptions& options)
+{
+    QJsonObject object;
+    switch (options.kind) {
+    case AnalysisKind::OperatingPoint:
+        object.insert(QStringLiteral("kind"), QStringLiteral("operating-point"));
+        break;
+    case AnalysisKind::Transient:
+        object.insert(QStringLiteral("kind"), QStringLiteral("transient"));
+        break;
+    case AnalysisKind::AC:
+        object.insert(QStringLiteral("kind"), QStringLiteral("ac"));
+        break;
+    }
+    object.insert(QStringLiteral("tStop"), options.tStop);
+    object.insert(QStringLiteral("tStep"), options.tStep);
+    object.insert(QStringLiteral("fStart"), options.fStart);
+    object.insert(QStringLiteral("fStop"), options.fStop);
+    object.insert(QStringLiteral("acPoints"), options.acPoints);
+    return object;
+}
+
 SimulationOptions optionsFromJson(const QJsonObject& analysis)
 {
     SimulationOptions options;
@@ -615,7 +637,9 @@ bool MainWindow::saveCircuit()
         QMessageBox::warning(this, QStringLiteral("保存失败"), file.errorString());
         return false;
     }
-    const QJsonDocument doc(circuit.toJson());
+    QJsonObject root = circuit.toJson();
+    root.insert(QStringLiteral("analysis"), analysisToJson(m_options));
+    const QJsonDocument doc(root);
     file.write(doc.toJson(QJsonDocument::Indented));
     file.close();
 
@@ -668,7 +692,8 @@ void MainWindow::openCircuit()
     }
 
     QString error;
-    const Circuit circuit = Circuit::fromJson(doc.object(), &error);
+    const QJsonObject root = doc.object();
+    const Circuit circuit = Circuit::fromJson(root, &error);
     if (!error.isEmpty()) {
         QMessageBox::warning(this, QStringLiteral("打开失败"), error);
         return;
@@ -677,6 +702,12 @@ void MainWindow::openCircuit()
         QMessageBox::warning(this, QStringLiteral("打开失败"),
                              QStringLiteral("文件中没有元件。"));
         return;
+    }
+
+    const QJsonObject analysis = root.value(QStringLiteral("analysis")).toObject();
+    if (!analysis.isEmpty()) {
+        m_options = optionsFromJson(analysis);
+        updateAnalysisLabel();
     }
 
     loadCircuitData(circuit, QFileInfo(path).fileName(), path);
