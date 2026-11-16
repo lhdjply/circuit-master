@@ -414,6 +414,16 @@ void MainWindow::createActions()
     m_actRedo->setShortcut(QKeySequence::Redo);
     m_actRedo->setEnabled(false);
 
+    m_actCut = new QAction(QStringLiteral("剪切"), this);
+    m_actCut->setShortcut(QKeySequence::Cut);
+    m_actCut->setEnabled(false);
+    m_actCopy = new QAction(QStringLiteral("复制"), this);
+    m_actCopy->setShortcut(QKeySequence::Copy);
+    m_actCopy->setEnabled(false);
+    m_actPaste = new QAction(QStringLiteral("粘贴"), this);
+    m_actPaste->setShortcut(QKeySequence::Paste);
+    m_actPaste->setEnabled(false);
+
     m_actDelete = new QAction(
         actionIcon(QStringLiteral("delete"), QStringLiteral("edit-delete"), QStyle::SP_TrashIcon),
         QStringLiteral("删除"), this);
@@ -530,6 +540,20 @@ void MainWindow::createActions()
     });
 
 
+    connect(m_actCut, &QAction::triggered, this, [this] {
+        m_scene->cutSelection();
+        m_actPaste->setEnabled(m_scene->hasClipboard());
+        onSelectionChanged();
+    });
+    connect(m_actCopy, &QAction::triggered, this, [this] {
+        m_scene->copySelection();
+        m_actPaste->setEnabled(m_scene->hasClipboard());
+    });
+    connect(m_actPaste, &QAction::triggered, this, [this] {
+        m_scene->pasteClipboard();
+        onSelectionChanged();
+    });
+
     connect(m_actSelectTool, &QAction::triggered, this,
             [this] { m_view->setTool(SchematicView::Tool::Select); });
     connect(m_actWireTool, &QAction::triggered, this,
@@ -543,8 +567,8 @@ void MainWindow::createActions()
     m_actRotate->setEnabled(false);
 
     // 这些快捷键只在画布获得焦点时生效，避免与属性面板输入冲突
-    for (QAction* action : {m_actUndo, m_actRedo, m_actDelete, m_actRotate, m_actSelectAll,
-                            m_actSelectTool, m_actWireTool}) {
+    for (QAction* action : {m_actUndo, m_actRedo, m_actCut, m_actCopy, m_actPaste, m_actDelete,
+                            m_actRotate, m_actSelectAll, m_actSelectTool, m_actWireTool}) {
         action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
         m_view->addAction(action);
     }
@@ -566,6 +590,10 @@ void MainWindow::createMenus()
     QMenu* editMenu = menuBar()->addMenu(QStringLiteral("编辑(&E)"));
     editMenu->addAction(m_actUndo);
     editMenu->addAction(m_actRedo);
+    editMenu->addSeparator();
+    editMenu->addAction(m_actCut);
+    editMenu->addAction(m_actCopy);
+    editMenu->addAction(m_actPaste);
     editMenu->addSeparator();
     editMenu->addAction(m_actDelete);
     editMenu->addAction(m_actRotate);
@@ -886,6 +914,9 @@ void MainWindow::onSelectionChanged()
     }
     m_props->setComponent(item);
     m_actDelete->setEnabled(!selected.isEmpty());
+    m_actCut->setEnabled(!selected.isEmpty());
+    m_actCopy->setEnabled(!selected.isEmpty());
+    m_actPaste->setEnabled(m_scene->hasClipboard());
     m_actRotate->setEnabled(item != nullptr && supportsRotation(item->component().type));
 }
 

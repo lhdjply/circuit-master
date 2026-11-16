@@ -1856,6 +1856,53 @@ private slots:
         QCOMPARE(scene->wireItems().size(), 2);
     }
 
+    void cutCopyPasteFromEditMenu()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        QAction* cut = nullptr;
+        QAction* copyAction = nullptr;
+        QAction* paste = nullptr;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text() == QStringLiteral("剪切"))
+                cut = action;
+            else if (action->text() == QStringLiteral("复制"))
+                copyAction = action;
+            else if (action->text() == QStringLiteral("粘贴"))
+                paste = action;
+        }
+        QVERIFY(cut && copyAction && paste);
+        QCOMPARE(cut->shortcut(), QKeySequence(QKeySequence::Cut));
+        QVERIFY(!cut->isEnabled());
+        QVERIFY(!paste->isEnabled());
+
+        ComponentItem* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(200, 200));
+        QVERIFY(resistor);
+        scene->clearSelection();
+        resistor->setSelected(true);
+        settle();
+        QVERIFY(cut->isEnabled());
+        QVERIFY(copyAction->isEnabled());
+
+        // 剪切：元件消失，但剪贴板里有东西
+        cut->trigger();
+        settle();
+        QCOMPARE(scene->componentItems().size(), 0);
+        QVERIFY(scene->hasClipboard());
+        QVERIFY(paste->isEnabled());
+
+        // 粘贴回来
+        paste->trigger();
+        settle();
+        QCOMPARE(scene->componentItems().size(), 1);
+    }
+
     void wireCanBeSelectedAndDeleted()
     {
         MainWindow window;

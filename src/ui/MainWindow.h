@@ -137,6 +137,9 @@ private:
 
     QAction* m_actUndo = nullptr;
     QAction* m_actRedo = nullptr;
+    QAction* m_actCut = nullptr;
+    QAction* m_actCopy = nullptr;
+    QAction* m_actPaste = nullptr;
     QAction* m_actDelete = nullptr;
     QAction* m_actRotate = nullptr;
     QAction* m_actSelectAll = nullptr;

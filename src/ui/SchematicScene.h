@@ -35,6 +35,8 @@ public:
     /// 只作用于刚画出来的这根线 —— 已经存在工程里的独立导线不会被改变。
     void mergeWireWithNeighbors(WireItem* wire);
     void copySelection();
+    /// 剪切：先复制再删除选中项
+    void cutSelection();
     void pasteClipboard();
     bool hasClipboard() const;
     void refresh();

@@ -226,6 +226,7 @@ void SchematicView::contextMenuEvent(QContextMenuEvent* event)
         QAction* flipH = menu.addAction(QStringLiteral("水平翻转"));
         QAction* flipV = menu.addAction(QStringLiteral("垂直翻转"));
         menu.addSeparator();
+        QAction* cut = menu.addAction(QStringLiteral("剪切"));
         QAction* copy = menu.addAction(QStringLiteral("复制"));
         QAction* paste = menu.addAction(QStringLiteral("粘贴"));
         paste->setEnabled(m_scene->hasClipboard());
@@ -242,6 +243,8 @@ void SchematicView::contextMenuEvent(QContextMenuEvent* event)
             component->setMirrored(!component->mirroredX(), component->mirroredY());
         } else if (chosen == flipV) {
             component->setMirrored(component->mirroredX(), !component->mirroredY());
+        } else if (chosen == cut) {
+            m_scene->cutSelection();
         } else if (chosen == copy) {
             m_scene->copySelection();
         } else if (chosen == paste) {
@@ -263,6 +266,11 @@ void SchematicView::contextMenuEvent(QContextMenuEvent* event)
 
 void SchematicView::keyPressEvent(QKeyEvent* event)
 {
+    if (event->matches(QKeySequence::Cut)) {
+        m_scene->cutSelection();
+        event->accept();
+        return;
+    }
     if (event->matches(QKeySequence::Copy)) {
         m_scene->copySelection();
         event->accept();

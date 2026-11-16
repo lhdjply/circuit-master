@@ -269,6 +269,15 @@ bool SchematicScene::hasClipboard() const
     return !m_clipboardComponents.isEmpty() || !m_clipboardWires.isEmpty();
 }
 
+void SchematicScene::cutSelection()
+{
+    if (selectedItems().isEmpty())
+        return;
+    copySelection();
+    deleteSelection();
+    commitEdit();
+}
+
 void SchematicScene::pasteClipboard()
 {
     if (!hasClipboard())
