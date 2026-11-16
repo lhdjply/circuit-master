@@ -547,7 +547,9 @@ private slots:
                      qPrintable(QStringLiteral("重复的小节标题：%1").arg(heading)));
             seen.insert(heading);
         }
-        QCOMPARE(headings.count(QStringLiteral("## [未发布]")), 1);
+        // 刚发版时没有「未发布」小节是正常的，但不能出现两个
+        QVERIFY2(headings.count(QStringLiteral("## [未发布]")) <= 1,
+                 "「未发布」小节最多一个");
     }
 
     void tl431ExampleLoads()

@@ -1,3 +1,14 @@
+circuit-master (0.2.1) unstable; urgency=medium
+
+  * 新增 TL431 可调基准（REF / 阳极 / 阴极）与「TL431 可调稳压」示例。
+  * 新增 .csm 文件关联：双击电路文件直接打开，命令行也支持传入路径。
+  * 旋转方向改为逆时针 90°；接地符号可以旋转，文字按朝向摆放。
+  * 工作点分析不再弹窗：报告写进日志并内嵌到静态波形页。
+  * 修复工作点分析跑完按钮不进入「停止仿真」状态的问题。
+  * Windows 安装包改用中文名建快捷方式。
+
+ -- Circuit Master Maintainers <lhdjply@users.noreply.github.com>  Sun, 16 Nov 2026 15:00:00 +0800
+
 circuit-master (0.2.0) unstable; urgency=medium
 
   * 新增三极管（NPN / PNP）、MOS 管（N / P 沟道）与 IGBT。
