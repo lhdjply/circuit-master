@@ -1,3 +1,17 @@
+circuit-master (0.2.0) unstable; urgency=medium
+
+  * 新增三极管（NPN / PNP）、MOS 管（N / P 沟道）与 IGBT。
+  * 新增发光二极管：仿真后按正向电流点亮，电流越大越亮。
+  * 新增光耦（四引脚），默认参数取自 LTV-817S-TA1-C。
+  * 电容支持有极性；反接击穿会播放红温 + 蘑菇云特效。
+  * 波形监控合并为独立窗口：静态波形与动态示波器两个标签页。
+  * 检查更新支持直接下载对应平台的安装包。
+  * 导线编辑：连线跟随元件、直角走线、端点拖动、自动合并、点选高亮单段。
+  * 新增剪切（Ctrl+X），粘贴落在鼠标位置；元件库支持分类筛选。
+  * 修复光耦限幅模型与饱和特性、静态波形纵轴塌陷等问题。
+
+ -- Circuit Master Maintainers <lhdjply@users.noreply.github.com>  Sun, 16 Nov 2026 12:00:00 +0800
+
 circuit-master (0.1.0) unstable; urgency=medium
 
   * 首个可用版本：原理图编辑、MNA 仿真与波形查看。
