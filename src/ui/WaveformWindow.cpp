@@ -64,6 +64,16 @@ QIcon swatch(const QColor& color)
 
 void applyFixedTicks(QValueAxis* axis, double lo, double hi, int divisions)
 {
+    // 恒定信号（例如纯直流电路）：上下限相等或只差浮点误差时，把范围围绕该值撑开。
+    // 否则会算出 5e-16 这种步长，轴变成一条线、曲线贴着底边，看起来像「图不对」
+    const double magnitudeRef = std::max({std::abs(lo), std::abs(hi), 1.0});
+    if (!(hi > lo) || (hi - lo) < magnitudeRef * 1e-6) {
+        const double value = lo;
+        const double half = std::max(std::abs(value) * 0.25, 0.5);
+        lo = value - half;
+        hi = value + half;
+    }
+
     double span = hi - lo;
     if (!(span > 0.0))
         span = 1.0;

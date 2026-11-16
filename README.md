@@ -106,6 +106,10 @@
 
 ![三端器件](docs/screenshots/transistors.png)
 
+恒定信号（纯直流电路）也会给出可读的纵轴刻度：
+
+![直流波形](docs/screenshots/static_plot_dc.png)
+
 波形监控窗口（静态波形 / 动态示波器，分析参数在静态页里）：
 
 ![波形监控](docs/screenshots/monitor.png)

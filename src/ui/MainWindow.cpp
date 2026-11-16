@@ -1352,7 +1352,7 @@ void MainWindow::showMonitor(int tab)
 
 void MainWindow::onWaveTabChanged(int index)
 {
-    if (!m_waveWindow || !m_waveWindow->isVisible())
+    if (!m_waveWindow)
         return;
 
     if (index == 1) {

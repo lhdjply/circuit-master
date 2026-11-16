@@ -14,13 +14,21 @@
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
+#include <QAbstractAxis>
+#include <QChart>
+#include <QChartView>
 #include <QComboBox>
+#include <QValueAxis>
 #include <QTabWidget>
 #include <QDir>
 #include <QFileInfo>
 #include <QPixmap>
 #include <QCheckBox>
+#include <QAbstractAxis>
+#include <QChart>
+#include <QChartView>
 #include <QComboBox>
+#include <QValueAxis>
 #include <QTabWidget>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -116,6 +124,78 @@ private slots:
         QCOMPARE(QString::fromUtf8(saved.readAll()), payload);
         saved.close();
         QFile::remove(target);
+    }
+
+    void constantSignalKeepsUsableAxis()
+    {
+        // 纯直流电路：波形是水平直线，Y 轴不能塌成一条线
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 300));
+        source->setRotationAngle(90);
+        Component src = source->component();
+        src.dcValue = 5.0;
+        source->setComponent(src);
+
+        auto* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(250, 200));
+        Component r = resistor->component();
+        r.value = 1000.0;
+        resistor->setComponent(r);
+
+        auto* probe = scene->placeComponent(ComponentType::Probe, QPointF(400, 250));
+        QVERIFY(probe);
+        scene->placeComponent(ComponentType::Ground, QPointF(100, 400));
+        scene->addWire({QPointF(100, 270), QPointF(100, 200), QPointF(220, 200)});
+        scene->addWire({QPointF(280, 200), QPointF(400, 200), QPointF(400, 250)});
+        scene->addWire({QPointF(100, 330), QPointF(100, 400)});
+        settle();
+
+        window.runSimulation();
+        settle();
+        QAction* monitor = window.findChild<QAction*>(QStringLiteral("actMonitor"));
+        QVERIFY(monitor);
+        monitor->setChecked(true);
+        settle();
+
+        QTabWidget* tabs = waveTabs(window);
+        QVERIFY(tabs);
+        tabs->setCurrentIndex(0);
+        settle();
+
+        auto* plot = qobject_cast<WaveformWindow*>(tabs->widget(0));
+        QVERIFY(plot);
+        auto* view = plot->findChild<QChartView*>();
+        QVERIFY(view);
+        QChart* chart = view->chart();
+        QVERIFY(chart);
+
+        // 找出纵向数值轴：上下限必须拉开，否则曲线会贴着底边
+        bool foundVertical = false;
+        // Qt6 里 QChart::axes() 无参版本返回全部轴，带参数版本按方位筛选
+        const QList<QAbstractAxis*> all = chart->axes();
+        for (QAbstractAxis* axis : all) {
+            if (axis->type() != QAbstractAxis::AxisTypeValue)
+                continue;
+            if (axis->alignment() != Qt::AlignLeft && axis->alignment() != Qt::AlignRight)
+                continue; // 跳过横轴
+            auto* value = static_cast<QValueAxis*>(axis);
+            foundVertical = true;
+            QVERIFY2(value->max() > value->min(),
+                     qPrintable(QStringLiteral("Y 轴塌成一条线: %1..%2")
+                                    .arg(value->min())
+                                    .arg(value->max())));
+            QVERIFY2(value->max() - value->min() > 0.5,
+                     qPrintable(QStringLiteral("Y 轴范围过窄: %1..%2")
+                                    .arg(value->min())
+                                    .arg(value->max())));
+        }
+        QVERIFY2(foundVertical, "应当有纵向数值轴");
     }
 
     void updateDialogRenders()
