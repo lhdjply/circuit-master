@@ -105,6 +105,8 @@ WizardStyle=modern
 CloseApplications=yes
 RestartApplications=no
 MinVersion=10.0
+; 让 Windows 立刻刷新文件关联（否则资源管理器可能还按旧缓存打开）
+ChangesAssociations=yes
 
 [Languages]
 ; 中文放首位 = 默认语言。ChineseSimplified.isl 需要 Inno Setup 6.5.0+。
@@ -126,6 +128,19 @@ Source: "{#MyIconFile}"; DestDir: "{app}"; Flags: ignoreversion
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\circuit-master.ico"
 Name: "{group}\卸载 {#MyAppName}"; Filename: "{uninstallexe}"; IconFilename: "{app}\circuit-master.ico"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\circuit-master.ico"; Tasks: desktopicon
+
+[Registry]
+; 文件关联：双击 .csm 用本程序打开。
+; 用 HKA（有管理员权限时装到 HKLM，否则 HKCU），免安装权限下也能生效。
+; 注意：Inno 的 [Registry] 每条必须写在一行内，不支持续行。
+Root: HKA; Subkey: "Software\Classes\.csm"; ValueType: string; ValueName: ""; ValueData: "CircuitMaster.csm"; Flags: uninsdeletevalue
+Root: HKA; Subkey: "Software\Classes\CircuitMaster.csm"; ValueType: string; ValueName: ""; ValueData: "电路仿真大师 电路文件"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\CircuitMaster.csm\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\circuit-master.ico"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\CircuitMaster.csm\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Flags: uninsdeletekey
+; 「打开方式」列表里也能看到本程序
+Root: HKA; Subkey: "Software\Classes\Applications\{#MyAppExeName}"; ValueType: string; ValueName: "FriendlyAppName"; ValueData: "{#MyAppName}"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\Applications\{#MyAppExeName}\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\circuit-master.ico"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\Applications\{#MyAppExeName}\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Flags: uninsdeletekey
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent

@@ -25,6 +25,8 @@
 #include <QValueAxis>
 #include <QTabWidget>
 #include <QDir>
+#include <QJsonDocument>
+#include <QTemporaryDir>
 #include <QFileInfo>
 #include <QPixmap>
 #include <QCheckBox>
@@ -268,6 +270,41 @@ private slots:
         run->trigger();
         settle();
         QVERIFY(!live->isLive());
+    }
+
+    void opensFileFromCommandLinePath()
+    {
+        // 文件关联靠这个：双击 .csm → CircuitMaster 文件.csm
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString path = dir.filePath(QStringLiteral("assoc.csm"));
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        Circuit circuit;
+        Component r;
+        r.id = 1;
+        r.type = ComponentType::Resistor;
+        r.pos = QPointF(200, 200);
+        r.refdes = QStringLiteral("R1");
+        r.value = 1000.0;
+        circuit.components.append(r);
+        {
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+            file.write(QJsonDocument(circuit.toJson()).toJson());
+        }
+
+        QVERIFY2(window.openPath(path), "存在的 .csm 应当能打开");
+        settle();
+        QCOMPARE(scene->componentItems().size(), 1);
+        QCOMPARE(scene->componentItems().first()->component().refdes, QStringLiteral("R1"));
     }
 
     void constantSignalKeepsUsableAxis()

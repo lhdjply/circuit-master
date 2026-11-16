@@ -1048,10 +1048,15 @@ void MainWindow::openCircuit()
     if (path.isEmpty())
         return;
 
+    openPath(path);
+}
+
+bool MainWindow::openPath(const QString& path)
+{
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         QMessageBox::warning(this, QStringLiteral("打开失败"), file.errorString());
-        return;
+        return false;
     }
     const QByteArray data = file.readAll();
     file.close();
@@ -1061,7 +1066,7 @@ void MainWindow::openCircuit()
     if (doc.isNull()) {
         QMessageBox::warning(this, QStringLiteral("打开失败"),
                              QStringLiteral("JSON 解析错误：%1").arg(parseError.errorString()));
-        return;
+        return false;
     }
 
     QString error;
@@ -1069,12 +1074,12 @@ void MainWindow::openCircuit()
     const Circuit circuit = Circuit::fromJson(root, &error);
     if (!error.isEmpty()) {
         QMessageBox::warning(this, QStringLiteral("打开失败"), error);
-        return;
+        return false;
     }
     if (circuit.components.isEmpty()) {
         QMessageBox::warning(this, QStringLiteral("打开失败"),
                              QStringLiteral("文件中没有元件。"));
-        return;
+        return false;
     }
 
     const QJsonObject analysis = root.value(QStringLiteral("analysis")).toObject();
@@ -1088,6 +1093,7 @@ void MainWindow::openCircuit()
     appendLog(QStringLiteral("已打开：%1（%2 个元件）")
                   .arg(path)
                   .arg(circuit.components.size()));
+    return true;
 }
 
 void MainWindow::exportNetlist()

@@ -201,6 +201,10 @@ configure_file(resources/linux/circuit-master.desktop.in
 install(TARGETS CircuitMaster RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/circuit-master.desktop"
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+# MIME 数据库：让桌面环境认识 .csm（debian/postinst 里刷新）
+install(FILES resources/linux/circuit-master-mime.xml
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages
+        RENAME circuit-master.xml)
 install(FILES resources/assets/icons/icon.svg
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
         RENAME circuit-master.svg)

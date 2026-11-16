@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 让桌面环境认识 .csm：双击用「电路仿真大师」打开。
+     安装到 /usr/share/mime/packages/ 后由 postinst 跑 update-mime-database 生效。 -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-circuit-master">
+    <comment>电路仿真大师电路</comment>
+    <comment xml:lang="en">Circuit Master circuit</comment>
+    <glob pattern="*.csm"/>
+    <icon name="circuit-master"/>
+    <magic priority="50">
+      <match type="string" value="&quot;format&quot;" offset="0:64">
+        <match type="string" value="circuit-master" offset="0:256"/>
+      </match>
+    </magic>
+  </mime-type>
+</mime-info>

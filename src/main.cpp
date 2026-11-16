@@ -2,6 +2,7 @@
 #include "ui/MainWindow.h"
 
 #include <QApplication>
+#include <QString>
 
 #include <cstdio>
 #include <cstring>
@@ -23,6 +24,24 @@ bool hasArgument(int argc, char* argv[], const char* name)
             return true;
     }
     return false;
+}
+
+/// 第一个不是选项的参数：双击 .csm 时由文件关联传进来。
+/// Windows 的路径可能带引号，这里顺手去掉。
+QString firstFileArgument(int argc, char* argv[])
+{
+    for (int i = 1; i < argc; ++i) {
+        const char* raw = argv[i];
+        if (!raw || raw[0] == '-')
+            continue;
+        QString value = QString::fromLocal8Bit(raw).trimmed();
+        if (value.size() >= 2 && value.startsWith(QLatin1Char('"'))
+            && value.endsWith(QLatin1Char('"')))
+            value = value.mid(1, value.size() - 2);
+        if (!value.isEmpty())
+            return value;
+    }
+    return QString();
 }
 
 } // namespace
@@ -68,5 +87,11 @@ int main(int argc, char* argv[])
 
     csm::MainWindow window;
     window.show();
+
+    // 双击 .csm（文件关联）或 `CircuitMaster 电路.csm` 时直接打开
+    const QString fileToOpen = firstFileArgument(argc, argv);
+    if (!fileToOpen.isEmpty() && !window.openPath(fileToOpen))
+        return 1;
+
     return app.exec();
 }

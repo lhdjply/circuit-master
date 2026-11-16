@@ -27,6 +27,8 @@ class WaveformWindow;
 class MainWindow : public QMainWindow {
     Q_OBJECT
 public:
+    /// 直接打开指定路径（命令行参数、文件关联用），失败时返回 false 并已提示
+    bool openPath(const QString& path);
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override;
 
