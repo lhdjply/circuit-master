@@ -15,6 +15,9 @@
 ; 说明：源目录（MySourceDir）就是便携包 zip 打包的那棵暂存树——两者内容完全一致，
 ; 安装包只是把「解压到某个目录」换成「装到 Program Files 并建快捷方式」。
 ;
+; 显示名一律用中文「电路仿真大师」（桌面/开始菜单快捷方式、控制面板里的程序名），
+; 安装目录与可执行文件名保持 ASCII，避免中文路径带来的兼容问题。
+;
 ; 本目录里的 ChineseSimplified.isl 是社区维护的简体中文语言包
 ; （jrsoftware 的 istrans 收集，维护者 Zhenghan Yang <847320916@qq.com>，
 ;  https://github.com/kira-96/Inno-Setup-Chinese-Simplified-Translation），
@@ -26,7 +29,7 @@
 ; 这里仍随包装进 {app}，供安装程序、快捷方式与卸载项使用。
 
 #ifndef MyAppVersion
-  #define MyAppVersion "0.1.0"
+  #define MyAppVersion "0.2.0"
 #endif
 
 ; MyArch 只用于产物文件名；MyArchAllowed 是 Inno 的目标架构约束。
@@ -59,8 +62,11 @@
   #define MyIconFile AddBackslash(SourcePath) + "circuit-master.ico"
 #endif
 
-; 显示名与可执行文件名分开：程序叫 Circuit Master，进程是 CircuitMaster.exe。
-#define MyAppName "Circuit Master"
+; 显示名用中文（桌面/开始菜单快捷方式、控制面板里的程序名），
+; 安装目录与可执行文件名保持 ASCII，避免路径里出现中文引发兼容问题。
+#define MyAppName "电路仿真大师"
+; 安装目录沿用 0.1.0 的名字（英文），升级不会装出两份；中文只用于显示。
+#define MyAppDirName "Circuit Master"
 #define MyAppExeName "CircuitMaster.exe"
 #define MyAppPublisher "Circuit Master Maintainers"
 #define MyAppUrl "https://github.com/lhdjply/circuit-master"
@@ -76,7 +82,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppUrl}
 AppSupportURL={#MyAppUrl}
 AppUpdatesURL={#MyAppUrl}
-DefaultDirName={autopf}\{#MyAppName}
+DefaultDirName={autopf}\{#MyAppDirName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 AllowNoIcons=yes
