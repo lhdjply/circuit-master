@@ -526,6 +526,30 @@ private slots:
                  qPrintable(QString::number(vc->y.last())));
     }
 
+    void changelogSectionsAreUnique()
+    {
+        // 「未发布」只能有一个：多次插条目时最容易写成两个，发布时会被漏掉
+        const QDir repo(QStringLiteral(CSM_EXAMPLE_DIR "/../.."));
+        QFile file(repo.filePath(QStringLiteral("CHANGELOG.md")));
+        QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text), "找不到 CHANGELOG.md");
+        const QString text = QString::fromUtf8(file.readAll());
+
+        QStringList headings;
+        for (const QString& line : text.split(QLatin1Char('\n'))) {
+            if (line.startsWith(QStringLiteral("## ")))
+                headings.append(line.trimmed());
+        }
+        QVERIFY(!headings.isEmpty());
+
+        QSet<QString> seen;
+        for (const QString& heading : headings) {
+            QVERIFY2(!seen.contains(heading),
+                     qPrintable(QStringLiteral("重复的小节标题：%1").arg(heading)));
+            seen.insert(heading);
+        }
+        QCOMPARE(headings.count(QStringLiteral("## [未发布]")), 1);
+    }
+
     void tl431ExampleLoads()
     {
         // 内置示例必须能打开、能跑出稳定结果
