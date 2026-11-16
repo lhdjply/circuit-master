@@ -255,8 +255,12 @@ bool applyProbeSignals(const Circuit& circuit, const Netlist& net, SimulationRes
         result.probeWaves.clear();
         return false;
     }
-    if (result.waves.isEmpty())
-        return false;
+    // 有测试点但没有时间序列（直流工作点就是这种情况）：波形为空，但测试点是有的。
+    // 这里必须返回 true，否则调用方会以为「电路没有测试点」，连连续仿真都不启动。
+    if (result.waves.isEmpty()) {
+        result.probeWaves.clear();
+        return true;
+    }
 
     QVector<Signal> ordered;
     for (const ProbeRef& probe : probes) {
@@ -1163,21 +1167,21 @@ void MainWindow::runSimulation()
         && m_waveTabs->currentIndex() == 0)
         m_wavePlot->setResult(m_lastResult);
 
+    // 有测试点就进入「运行中」状态（连续仿真），与「运行仿真 / 停止仿真」按钮语义一致。
+    // 放在工作点分支之前：否则算完直流工作点就 return，按钮会停在「运行仿真」上，
+    // 看起来像「点了就停」。
+    if (hasProbes && m_waveLive && !m_waveLive->isLive())
+        startLiveScope();
+
     if (result.kind == AnalysisKind::OperatingPoint) {
-        QDialog dialog(this);
-        dialog.setWindowTitle(QStringLiteral("直流工作点"));
-        auto* layout = new QVBoxLayout(&dialog);
-        auto* text = new QPlainTextEdit(&dialog);
-        text->setReadOnly(true);
-        text->setPlainText(result.report);
-        text->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
-        layout->addWidget(text);
-        auto* box = new QDialogButtonBox(QDialogButtonBox::Close, &dialog);
-        connect(box, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
-        connect(box, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-        layout->addWidget(box);
-        dialog.resize(620, 640);
-        dialog.exec();
+        // 不再自动切标签页：用户在静态页点「重新仿真」时就该留在静态页看报告
+        // 不自动弹报告：结果写进日志，需要时从「仿真 → 直流工作点报告…」打开
+        for (const QString& line : result.report.split(QLatin1Char('\n'))) {
+            if (!line.trimmed().isEmpty())
+                appendLog(line);
+        }
+        appendLog(QStringLiteral("直流工作点已算出：报告显示在「波形监控 → 静态波形」；"
+                                 "要看连续波形请切到「动态示波器」。"));
         return;
     }
 

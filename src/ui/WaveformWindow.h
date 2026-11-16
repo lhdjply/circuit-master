@@ -18,6 +18,8 @@ class QLineEdit;
 class QPushButton;
 class QTimer;
 class QValueAxis;
+class QStackedWidget;
+class QPlainTextEdit;
 class QLineSeries;
 QT_END_NAMESPACE
 
@@ -89,6 +91,8 @@ private:
     SimulationResult m_result;
     QChart* m_chart = nullptr;
     QChartView* m_view = nullptr;
+    QStackedWidget* m_stack = nullptr;      // 图表 / 工作点报告二选一
+    QPlainTextEdit* m_report = nullptr;     // 直流工作点报告（没有时间序列时显示）
     QListWidget* m_list = nullptr;
     QLabel* m_info = nullptr;
     QPushButton* m_scopeButton = nullptr;

@@ -8,6 +8,9 @@
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QChartView>
+#include <QFontDatabase>
+#include <QPlainTextEdit>
+#include <QStackedWidget>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -351,7 +354,17 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     m_view->setRenderHint(QPainter::Antialiasing, true);
     m_view->setRubberBand(QChartView::RectangleRubberBand);
     m_view->setBackgroundBrush(Qt::white);
-    chartLayout->addWidget(m_view, 1);
+
+    // 工作点分析没有时间序列：同一个位置改显示报告，切到「波形监控」就能看
+    m_report = new QPlainTextEdit(chartSide);
+    m_report->setReadOnly(true);
+    m_report->setFont(QFontDatabase::systemFont(QFontDatabase::FixedFont));
+    m_report->setLineWrapMode(QPlainTextEdit::NoWrap);
+
+    m_stack = new QStackedWidget(chartSide);
+    m_stack->addWidget(m_view);
+    m_stack->addWidget(m_report);
+    chartLayout->addWidget(m_stack, 1);
 
     splitter->setStretchFactor(0, 0);
     splitter->setStretchFactor(1, 1);
@@ -525,6 +538,15 @@ void WaveformWindow::setResult(const SimulationResult& result)
 {
     stopLive();
     m_result = result;
+
+    // 工作点分析：静态页直接显示报告文本（没有时间序列可画）
+    const bool dcReport = result.kind == AnalysisKind::OperatingPoint
+        && !result.report.isEmpty();
+    if (m_report && m_stack) {
+        m_report->setPlainText(dcReport ? result.report : QString());
+        m_stack->setCurrentIndex(dcReport ? 1 : 0);
+    }
+
     populateList();
     rebuild();
     setWindowTitle(QStringLiteral("波形查看器 — %1 — 电路仿真大师").arg(kindName(result.kind)));
@@ -595,9 +617,16 @@ void WaveformWindow::rebuild()
 
     const int pointCount = m_result.waves.isEmpty() ? 0 : m_result.waves.first().y.size();
     if (selected.isEmpty() || m_result.waves.isEmpty()) {
-        m_chart->setTitle(QStringLiteral(
-            "没有可显示的波形\n请在原理图中放置电压测试点（TP）或电流测试点（IP）后重新运行"));
-        m_info->setText(QStringLiteral("没有测试点，波形为空。"));
+        // 工作点分析没有时间序列，和「没有测试点」不是一回事，别让用户误会
+        if (m_result.kind == AnalysisKind::OperatingPoint && !m_result.report.isEmpty()) {
+            m_chart->setTitle(QStringLiteral(
+                "直流工作点没有时间序列\n报告显示在本页；要看连续波形请切到「动态示波器」"));
+            m_info->setText(QStringLiteral("工作点分析：结果为稳态值。"));
+        } else {
+            m_chart->setTitle(QStringLiteral(
+                "没有可显示的波形\n请在原理图中放置电压测试点（TP）或电流测试点（IP）后重新运行"));
+            m_info->setText(QStringLiteral("没有测试点，波形为空。"));
+        }
         return;
     }
 

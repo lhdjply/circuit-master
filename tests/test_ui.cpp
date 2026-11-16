@@ -18,6 +18,10 @@
 #include <QChart>
 #include <QChartView>
 #include <QComboBox>
+#include <QDialog>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QTimer>
 #include <QValueAxis>
 #include <QTabWidget>
 #include <QDir>
@@ -28,6 +32,10 @@
 #include <QChart>
 #include <QChartView>
 #include <QComboBox>
+#include <QDialog>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QTimer>
 #include <QValueAxis>
 #include <QTabWidget>
 #include <QDragEnterEvent>
@@ -124,6 +132,142 @@ private slots:
         QCOMPARE(QString::fromUtf8(saved.readAll()), payload);
         saved.close();
         QFile::remove(target);
+    }
+
+    void tl431ExampleRunsWithOperatingPoint()
+    {
+        // 用户实际流程：打开 TL431 示例 → 选「工作点」→ 运行 → 关掉报告
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        QAction* example = nullptr;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text().contains(QStringLiteral("TL431")))
+                example = action;
+        }
+        QVERIFY2(example, "示例菜单里应当有 TL431");
+        example->trigger();
+        settle();
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        QVERIFY2(scene->componentItems().size() >= 10, "示例应当已载入");
+
+        auto* plot = plotPanel(window);
+        QVERIFY(plot);
+        // 示例自带工作点设置，载入后静态波形页应当已经显示「工作点」
+        QCOMPARE(plot->options().kind, AnalysisKind::OperatingPoint);
+
+        QAction* run = window.findChild<QAction*>(QStringLiteral("actRun"));
+        QAction* monitor = window.findChild<QAction*>(QStringLiteral("actMonitor"));
+        QVERIFY(run && monitor);
+
+        run->trigger();
+        settle();
+
+        // 运行时不应当自动弹报告对话框
+        for (QWidget* widget : QApplication::topLevelWidgets())
+            if (auto* dialog = qobject_cast<QDialog*>(widget))
+                QVERIFY2(!dialog->isVisible(), "工作点不应当自动弹窗");
+
+        // 报告在「波形监控 → 静态波形」里
+        monitor->setChecked(true);
+        settle();
+        QTabWidget* tabs = waveTabs(window);
+        QVERIFY(tabs);
+        tabs->setCurrentIndex(0);
+        settle();
+        auto* staticPlot = qobject_cast<WaveformWindow*>(tabs->widget(0));
+        QVERIFY(staticPlot);
+        QString reportText;
+        for (QPlainTextEdit* edit : staticPlot->findChildren<QPlainTextEdit*>()) {
+            if (edit->isVisible() && edit->toPlainText().contains(QStringLiteral("节点")))
+                reportText = edit->toPlainText();
+        }
+        QVERIFY2(!reportText.isEmpty(), "静态波形页应当显示工作点报告");
+        QVERIFY2(reportText.contains(QStringLiteral("4.9")), qPrintable(reportText.left(200)));
+
+        // 静态页点「重新仿真」也不弹窗，报告就地刷新
+        QPushButton* resim = nullptr;
+        for (QPushButton* button : staticPlot->findChildren<QPushButton*>())
+            if (button->text().contains(QStringLiteral("重新仿真")))
+                resim = button;
+        QVERIFY(resim);
+        resim->click();
+        settle();
+        for (QWidget* widget : QApplication::topLevelWidgets())
+            if (auto* dialog = qobject_cast<QDialog*>(widget))
+                QVERIFY2(!dialog->isVisible(), "重新仿真不应当弹窗");
+        bool stillShown = false;
+        for (QPlainTextEdit* edit : staticPlot->findChildren<QPlainTextEdit*>())
+            if (edit->isVisible() && edit->toPlainText().contains(QStringLiteral("4.9")))
+                stillShown = true;
+        QVERIFY2(stillShown, "重新仿真后报告应当仍在静态页里");
+
+        auto* live = livePanel(window);
+        QVERIFY(live);
+        QVERIFY2(monitor->isEnabled(), "工作点跑完后波形监控应当可用");
+        QCOMPARE(run->text(), QStringLiteral("停止仿真"));
+        QVERIFY2(live->isLive(), "工作点跑完后应当处于运行状态");
+
+        run->trigger();
+        settle();
+        QVERIFY(!live->isLive());
+    }
+
+    void runningOperatingPointStillEntersRunState()
+    {
+        // 工作点分析算完会弹报告，但「运行仿真」按钮也应当进入「停止仿真」状态，
+        // 否则看起来像「点了就停」
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 300));
+        source->setRotationAngle(90);
+        Component src = source->component();
+        src.dcValue = 5.0;
+        source->setComponent(src);
+        auto* probe = scene->placeComponent(ComponentType::Probe, QPointF(300, 250));
+        QVERIFY(probe);
+        scene->placeComponent(ComponentType::Ground, QPointF(100, 400));
+        scene->addWire({QPointF(100, 270), QPointF(100, 200), QPointF(300, 200),
+                        QPointF(300, 250)});
+        scene->addWire({QPointF(100, 330), QPointF(100, 400)});
+        settle();
+
+        // 切到工作点分析
+        auto* plot = plotPanel(window);
+        QVERIFY(plot);
+        SimulationOptions options = plot->options();
+        options.kind = AnalysisKind::OperatingPoint;
+        plot->setOptions(options);
+
+        QAction* run = window.findChild<QAction*>(QStringLiteral("actRun"));
+        QVERIFY(run);
+        run->trigger();
+        settle();
+
+        // 关闭可能弹出的报告对话框
+        for (QWidget* widget : window.findChildren<QDialog*>())
+            if (widget->isVisible())
+                widget->close();
+        settle();
+
+        auto* live = livePanel(window);
+        QVERIFY(live);
+        QVERIFY2(live->isLive(), "工作点分析也应当进入运行状态");
+        QCOMPARE(run->text(), QStringLiteral("停止仿真"));
+
+        run->trigger();
+        settle();
+        QVERIFY(!live->isLive());
     }
 
     void constantSignalKeepsUsableAxis()
