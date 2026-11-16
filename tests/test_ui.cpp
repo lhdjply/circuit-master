@@ -272,6 +272,51 @@ private slots:
         QVERIFY(!live->isLive());
     }
 
+    void groundCanBeRotated()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 300));
+        source->setRotationAngle(90);
+        auto* ground = scene->placeComponent(ComponentType::Ground, QPointF(100, 400));
+        QVERIFY(ground);
+        scene->addWire({QPointF(100, 330), QPointF(100, 400)});
+        settle();
+
+        scene->clearSelection();
+        ground->setSelected(true);
+        settle();
+
+        QAction* rotate = window.findChild<QAction*>(QStringLiteral("actRotate"));
+        QVERIFY(rotate);
+        QVERIFY2(rotate->isEnabled(), "接地符号应当可以旋转");
+
+        rotate->trigger();
+        settle();
+        QCOMPARE(ground->component().rotation, 90);
+
+        rotate->trigger();
+        settle();
+        QCOMPARE(ground->component().rotation, 180);
+
+        // 文字跟着转，包围盒要能放下任意方向的符号与文字
+        const QRectF box = ground->boundingRect();
+        for (const QPointF& corner : {QPointF(-42, -34), QPointF(42, -34), QPointF(-42, 42),
+                                      QPointF(42, 42)})
+            QVERIFY2(box.contains(corner), "包围盒应当覆盖旋转后的符号与文字");
+
+        // 转完仍然连着：网表有效、地节点还在
+        const Netlist net = scene->toCircuit().buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        QCOMPARE(net.nodeOf(ground->component().id, 0), 0);
+    }
+
     void opensFileFromCommandLinePath()
     {
         // 文件关联靠这个：双击 .csm → CircuitMaster 文件.csm

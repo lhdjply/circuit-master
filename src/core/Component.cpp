@@ -144,7 +144,10 @@ bool isSource(ComponentType type)
 
 bool supportsRotation(ComponentType type)
 {
-    return type != ComponentType::Ground;
+    // 所有元件都能转：接地符号转 90° 后箭头朝侧/朝上，引脚在原点，
+    // 电气连接不受影响，只是画法不同
+    Q_UNUSED(type);
+    return true;
 }
 
 QPointF Component::toScene(const QPointF& local) const

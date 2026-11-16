@@ -434,6 +434,7 @@ void MainWindow::createActions()
     m_actDelete->setShortcut(QKeySequence::Delete);
 
     m_actRotate = new QAction(QStringLiteral("旋转 90°"), this);
+    m_actRotate->setObjectName(QStringLiteral("actRotate"));
     // 空格旋转：和 KiCad 的习惯一致，选中元件后连按空格就能连续转
     m_actRotate->setShortcut(QKeySequence(Qt::Key_Space));
     m_actRotate->setShortcutContext(Qt::WindowShortcut);

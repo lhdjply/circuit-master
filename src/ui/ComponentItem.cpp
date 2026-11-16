@@ -29,7 +29,7 @@ QRectF ComponentItem::boundingRect() const
     if (m_comp.type == ComponentType::Probe)
         return QRectF(-75.0, -60.0, 150.0, 120.0);
     if (m_comp.type == ComponentType::Ground)
-        return QRectF(-40.0, -50.0, 80.0, 84.0);
+        return QRectF(-60.0, -60.0, 120.0, 120.0); // 四个方向都要放得下符号与文字
 
     const int rot = ((m_comp.rotation % 360) + 360) % 360;
     const QRectF base = (rot == 90 || rot == 270) ? QRectF(-168.0, -42.0, 336.0, 84.0)
@@ -138,6 +138,7 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
     painter->rotate(double(m_comp.rotation));
     paintSymbol(painter, m_comp, selected, true, m_comp.rotation, m_comp.mirrorX,
                 m_comp.mirrorY, m_ledBrightness, heat);
+
     painter->restore();
 
     // 红温时给符号本身罩一层红光：用径向渐变，边缘化开，像被烧红而不是盖了个红框
@@ -154,13 +155,33 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
     }
 
     if (m_comp.type == ComponentType::Ground) {
+        // 文字摆在符号外侧，朝向跟着符号走：
+        // 朝下/朝上 → 文字水平（正着写）；朝左/朝右 → 文字竖排（自下而上），
+        // 这样既不会压在符号上，也不会倒着写
+        const int rot = ((m_comp.rotation % 360) + 360) % 360;
+        QPointF at(0.0, 34.0);
+        double textRotation = 0.0;
+        if (rot == 90) {
+            at = QPointF(-34.0, 0.0);
+            textRotation = -90.0;
+        } else if (rot == 180) {
+            at = QPointF(0.0, -34.0);
+        } else if (rot == 270) {
+            at = QPointF(34.0, 0.0);
+            textRotation = -90.0;
+        }
+
         QFont f = painter->font();
         f.setPointSizeF(8.5);
         f.setBold(false);
         painter->setFont(f);
         painter->setPen(theme::text);
-        painter->drawText(QRectF(-30.0, 26.0, 60.0, 16.0), Qt::AlignHCenter | Qt::AlignTop,
+        painter->save();
+        painter->translate(at);
+        painter->rotate(textRotation);
+        painter->drawText(QRectF(-30.0, -8.0, 60.0, 16.0), Qt::AlignCenter,
                           QStringLiteral("GND"));
+        painter->restore();
         return;
     }
 
