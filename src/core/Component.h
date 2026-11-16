@@ -17,6 +17,7 @@ enum class ComponentType {
     Nmos,
     Pmos,
     Igbt,
+    Optocoupler,
     OpAmp,
     Switch,
     VoltageSource,
@@ -68,7 +69,12 @@ struct Component {
     double beta = 100.0;  // NPN 直流电流放大系数 hFE
     double vth = 2.0;     // MOSFET / IGBT 开启电压 (V)
     double k = 2e-3;      // MOSFET / IGBT 跨导参数 (A/V²)
-    double vf = 0.7;      // IGBT 输出侧导通压降 (V)
+    double vf = 0.7;      // IGBT 输出侧导通压降 (V) / 光耦输入侧 LED 的正向压降
+    /// 光耦电流传输比：Ic = CTR · If。
+    /// 默认按 LTV-817S-TA1-C（CTR 档位 C，200~400%，典型 300%）
+    double ctr = 3.0;
+    /// 光耦输出侧饱和压降：Vce 低于此值时输出按电阻性收窄（LTV-817 max 0.2 V）
+    double vceSat = 0.2;
 
     // 独立源参数
     SourceFunction function = SourceFunction::Constant;

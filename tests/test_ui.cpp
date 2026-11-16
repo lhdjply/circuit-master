@@ -1007,7 +1007,7 @@ private slots:
 
         QCOMPARE(counts.value(QStringLiteral("基础")), 3);
         QCOMPARE(counts.value(QStringLiteral("电源")), 2);
-        QCOMPARE(counts.value(QStringLiteral("半导体")), 8);
+        QCOMPARE(counts.value(QStringLiteral("半导体")), 9); // 含光耦
 
         int sum = 0;
         for (int n : counts)
@@ -1018,6 +1018,40 @@ private slots:
         category->setCurrentIndex(0);
         settle();
         QCOMPARE(library->count(), allCount);
+    }
+
+    void optocouplerSymbolAndPanel()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        ComponentItem* opto = scene->placeComponent(ComponentType::Optocoupler, QPointF(250, 300));
+        QVERIFY(opto);
+        QCOMPARE(opto->pinScenePositions().size(), 4);
+        QCOMPARE(opto->component().refdes.left(2), QStringLiteral("OC"));
+        // 默认参数：红外 LED 的 Vf 与 CTR
+        QCOMPARE(opto->component().vf, 1.2);
+        // 默认按 LTV-817S-TA1-C：CTR 档位 C 取典型 300%
+        QCOMPARE(opto->component().ctr, 3.0);
+
+        scene->clearSelection();
+        opto->setSelected(true);
+        settle();
+
+        // 属性面板要有 Vf 与 CTR 两栏
+        QLineEdit* ctrEdit = nullptr;
+        for (QLineEdit* edit : window.findChildren<QLineEdit*>()) {
+            if (edit->text() == QStringLiteral("3") && edit->isVisible())
+                ctrEdit = edit;
+        }
+        QVERIFY2(ctrEdit, "应当显示 CTR 输入框");
+
+        QVERIFY(window.grab().save(QCoreApplication::applicationDirPath()
+                                   + QStringLiteral("/shots/optocoupler.png")));
     }
 
     void transistorSymbolsRender()

@@ -98,6 +98,10 @@
 
 ![便携版更新](docs/screenshots/update_dialog_portable.png)
 
+光耦（四引脚：输入 LED 阳极/阴极、输出集电极/发射极）：
+
+![光耦](docs/screenshots/optocoupler.png)
+
 五种三端器件（NPN / PNP / N 沟道 MOS / P 沟道 MOS / IGBT）：
 
 ![三端器件](docs/screenshots/transistors.png)
@@ -199,6 +203,7 @@ ctest --test-dir build --output-on-failure
 | 发光二极管 LED | 与二极管同方程，由正向压降反推模型；参数：Vf（默认 2 V）。仿真后按正向电流点亮，电流越大越亮 |
 | 三极管 Q | NPN / PNP，Ebers-Moll 模型；参数：电流放大系数 β（默认 100） |
 | MOS 管 M | N / P 沟道增强型，level-1 平方律模型；参数：开启电压 Vth、跨导参数 K |
+| 光耦 OC | 输入侧红外 LED + 输出侧光敏三极管。默认参数按 **LTV-817S-TA1-C**：Vf = 1.2 V、CTR = 3.0（C 档 200–400%）、Vce(sat) = 0.2 V。输出特性带饱和：`Ic = CTR·If·x/(1+x)`，`x = Vce/Vce(sat)`，因此发射极不会被顶到集电极之上 |
 | IGBT Z | 栅极按 MOS 模型、输出侧带导通压降 Vf；参数：Vth、K、Vf |
 | 运算放大器 U | 三端理想运放（VCVS + 50 Ω 输出电阻），开环增益默认 100 k |
 | 电压测试点 TP | 单引脚探针，读取节点电压，不参与矩阵求解 |

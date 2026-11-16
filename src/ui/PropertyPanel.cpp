@@ -113,6 +113,10 @@ void PropertyPanel::buildUi()
     m_form->addRow(QStringLiteral("K (A/V²)"), m_k);
     m_vf = makeEdit(QStringLiteral("例如 0.7"));
     m_form->addRow(QStringLiteral("导通压降 Vf"), m_vf);
+    m_ctr = makeEdit(QStringLiteral("例如 3"));
+    m_form->addRow(QStringLiteral("电流传输比 CTR"), m_ctr);
+    m_vceSat = makeEdit(QStringLiteral("例如 0.2"));
+    m_form->addRow(QStringLiteral("饱和压降 Vce(sat)"), m_vceSat);
 
     m_function = new QComboBox(page);
     m_function->addItem(QStringLiteral("直流 (DC)"), int(SourceFunction::Constant));
@@ -179,6 +183,8 @@ void PropertyPanel::buildUi()
     connect(m_value, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_k, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_vf, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
+    connect(m_ctr, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
+    connect(m_vceSat, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_function, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &PropertyPanel::applyFunction);
     connect(m_closed, &QCheckBox::toggled, this, &PropertyPanel::applyClosed);
@@ -215,6 +221,7 @@ void PropertyPanel::refreshFromItem()
     m_refdes->setText(c.refdes);
     switch (c.type) {
     case ComponentType::Led:
+    case ComponentType::Optocoupler:
         m_value->setText(quantityText(c.vf, UnitKind::Volt));
         break;
     case ComponentType::Npn:
@@ -232,6 +239,8 @@ void PropertyPanel::refreshFromItem()
     }
     m_k->setText(QString::number(c.k, 'g', 4));
     m_vf->setText(quantityText(c.vf, UnitKind::Volt));
+    m_ctr->setText(QString::number(c.ctr, 'g', 4));
+    m_vceSat->setText(quantityText(c.vceSat, UnitKind::Volt));
     m_function->setCurrentIndex(m_function->findData(int(c.function)));
 
     const UnitKind unit = sourceUnitFor(c.type);
@@ -265,14 +274,18 @@ void PropertyPanel::updateVisibility()
     const bool source = isSource(c.type);
     const bool analog = c.type == ComponentType::Resistor || c.type == ComponentType::Capacitor
         || c.type == ComponentType::Inductor || c.type == ComponentType::OpAmp
-        || c.type == ComponentType::Led || isThreeTerminalDevice(c.type);
+        || c.type == ComponentType::Led || c.type == ComponentType::Optocoupler
+        || isThreeTerminalDevice(c.type);
 
     const bool isMos = c.type == ComponentType::Nmos || c.type == ComponentType::Pmos
         || c.type == ComponentType::Igbt;
     m_form->setRowVisible(m_polarized, c.type == ComponentType::Capacitor);
     m_form->setRowVisible(m_k, isMos);
     m_form->setRowVisible(m_vf, c.type == ComponentType::Igbt
-                                      || c.type == ComponentType::Led);
+                                      || c.type == ComponentType::Led
+                                      || c.type == ComponentType::Optocoupler);
+    m_form->setRowVisible(m_ctr, c.type == ComponentType::Optocoupler);
+    m_form->setRowVisible(m_vceSat, c.type == ComponentType::Optocoupler);
 
     if (m_valueLabel) {
         switch (c.type) {
@@ -307,6 +320,10 @@ void PropertyPanel::updateVisibility()
             // LED 只暴露正向压降一个参数，见下面的 applyValue
             m_valueLabel->setText(QStringLiteral("正向压降 Vf"));
             m_value->setPlaceholderText(QStringLiteral("例如 2"));
+            break;
+        case ComponentType::Optocoupler:
+            m_valueLabel->setText(QStringLiteral("正向压降 Vf"));
+            m_value->setPlaceholderText(QStringLiteral("例如 1.2"));
             break;
         default:
             m_valueLabel->setText(QStringLiteral("数值"));
@@ -373,7 +390,7 @@ void PropertyPanel::applyValue()
         return;
     const ComponentType type = m_item->component().type;
 
-    if (type == ComponentType::Led) {
+    if (type == ComponentType::Led || type == ComponentType::Optocoupler) {
         QString reason;
         bool ok = false;
         const double vf = parseQuantity(m_value->text(), UnitKind::Volt, &ok, &reason);
@@ -384,6 +401,23 @@ void PropertyPanel::applyValue()
         markValid(m_value);
         Component c = m_item->component();
         c.vf = vf;
+        if (type == ComponentType::Optocoupler) {
+            const double ctr = parseQuantity(m_ctr->text(), UnitKind::None, &ok, &reason);
+            if (!ok) {
+                markInvalid(m_ctr, reason);
+                return;
+            }
+            markValid(m_ctr);
+            c.ctr = ctr;
+
+            const double vceSat = parseQuantity(m_vceSat->text(), UnitKind::Volt, &ok, &reason);
+            if (!ok) {
+                markInvalid(m_vceSat, reason);
+                return;
+            }
+            markValid(m_vceSat);
+            c.vceSat = vceSat;
+        }
         m_item->setComponent(c);
         updateSubtitle();
         emit changed();

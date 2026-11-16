@@ -90,6 +90,7 @@ struct ElementState {
     QHash<int, double> bjtVbc;  // 三极管：上一次迭代的 vbc
     QHash<int, double> mosVgs;  // MOSFET / IGBT：上一次迭代的 vgs(或 vge)
     QHash<int, double> mosVds;  // MOSFET / IGBT：上一次迭代的 vds(或 vce)
+    QHash<int, double> optoVce; // 光耦输出侧：上一次迭代的 Vce
 };
 
 struct Problem {
@@ -358,6 +359,46 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
             addI(b, n1, n2, id - g * vd);
             break;
         }
+        case ComponentType::Optocoupler: {
+            // 引脚：0/1 = 输入 LED 的阳极/阴极，2/3 = 输出三极管的集电极/发射极
+            const int na = n1;
+            const int nk = n2;
+            const int nc = p.nodeOf(comp.id, 2);
+            const int ne = p.nodeOf(comp.id, 3);
+            const DiodeModel model = ledModel(comp.vf, dm.vt);
+            const double vd = st.diodeV.value(comp.id, 0.0);
+            const double g = model.conductance(vd);
+            const double if0 = model.current(vd);
+            const double ctr = std::max(comp.ctr, 0.0);
+            const double vceSat = std::max(comp.vceSat, 1e-3);
+
+            // 输入 LED
+            addG(a, na, nk, g);
+            addI(b, na, nk, if0 - g * vd);
+
+            // 输出侧 Ic = CTR·If·f(Vce)：Vce 低于饱和压降时 f 线性收窄到 0，
+            // 这样光敏管不会把发射极顶得比集电极还高（否则高 CTR 会算出 10 V）
+            const double vce = st.optoVce.value(comp.id, 0.0);
+            // 输出特性：Ic = CTR·If · x/(1+x)，x = Vce/VceSat。
+            // 单调、处处可导：Vce=0 时输出为 0，Vce 远大于 VceSat 时接近 CTR·If，
+            // 于是光敏管在饱和区表现为有限电阻，发射极不会跑到集电极之上。
+            // （恒流源会算出 10 V；分段折线在边界来回跳，牛顿迭代不收敛）
+            const double vcePos = std::max(vce, 0.0); // 模型在 Vce<0 时按 0 处理
+            const double x = vcePos / vceSat;
+            const double f = x / (1.0 + x);
+            // 导数在 Vce=0 处取右侧值（不是 0）：否则从 0 出发的那一步没有电导，
+            // 迭代会在「全电流」和「零电流」之间来回跳
+            const double df = 1.0 / ((1.0 + x) * (1.0 + x) * vceSat);
+            const double ieqIf = if0 - g * vd;
+
+            addVccs(a, nc, ne, na, nk, ctr * f * g);
+            addG(a, nc, ne, ctr * if0 * df + 1e-9);
+            // 常数项也用钳到 0 的 Vce：否则 Vce 一旦为负，这一项会变成几安培的注入，
+            // 迭代直接发散（CTR 较大时尤其明显）
+            addI(b, nc, ne, ctr * f * ieqIf - ctr * if0 * df * vcePos);
+            break;
+        }
+
         case ComponentType::Npn:
         case ComponentType::Pnp: {
             // 引脚：0 = 集电极 C，1 = 基极 B，2 = 发射极 E
@@ -496,14 +537,18 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
         bool hasDiode = false;
         double diodeDelta = 0.0;
         for (const Component* cp : p.elements) {
-            if (cp->type != ComponentType::Diode && cp->type != ComponentType::Led)
+            if (cp->type != ComponentType::Diode && cp->type != ComponentType::Led
+                && cp->type != ComponentType::Optocoupler)
                 continue;
             hasDiode = true;
             const int n1 = p.nodeOf(cp->id, 0);
             const int n2 = p.nodeOf(cp->id, 1);
             const double vNew = p.voltage(x, n1) - p.voltage(x, n2);
             const double vOld = st.diodeV.value(cp->id, 0.0);
-            const DiodeModel model = cp->type == ComponentType::Led
+            // LED / 光耦输入侧都用 LED 模型限幅：拿普通二极管的 0.9 V 上限去卡，
+            // 会和 stamp 里用的模型不一致，迭代收敛到错误工作点（表现为电流天文数字）
+            const DiodeModel model = (cp->type == ComponentType::Led
+                                      || cp->type == ComponentType::Optocoupler)
                 ? ledModel(cp->vf, dm.vt)
                 : dm;
             const double vLim = pnjlim(vNew, vOld, model.nvt(), model.vcrit(), model.vmax);
@@ -529,6 +574,22 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
             diodeDelta = std::max({diodeDelta, std::abs(vbe - vbeOld), std::abs(vbc - vbcOld)});
             st.bjtVbe.insert(cp->id, vbe);
             st.bjtVbc.insert(cp->id, vbc);
+        }
+
+        // 光耦：记录输出侧 Vce，供饱和判断用
+        // 每步最多变化 0.1 V —— 饱和区边界是不连续点，放开步长会来回振荡
+        for (const Component* cp : p.elements) {
+            if (cp->type != ComponentType::Optocoupler)
+                continue;
+            hasDiode = true;
+            const int nc = p.nodeOf(cp->id, 2);
+            const int ne = p.nodeOf(cp->id, 3);
+            // 每步最多变化 0.5 V：恒流源跨到饱和区时增益很大，放开会来回振荡；
+            // 同时把变化量计入收敛判据，避免状态还没走到就被判为收敛
+            const double vceOld = st.optoVce.value(cp->id, 0.0);
+            const double vceNew = p.voltage(x, nc) - p.voltage(x, ne);
+            diodeDelta = std::max(diodeDelta, std::abs(vceNew - vceOld));
+            st.optoVce.insert(cp->id, vceNew);
         }
 
         // MOSFET / IGBT：栅源、漏源电压每步最多变化 0.5 V，给平方律模型做阻尼
@@ -608,8 +669,10 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
             current = comp.sourceValueAt(t);
             break;
         case ComponentType::Diode:
-        case ComponentType::Led: {
-            const DiodeModel model = comp.type == ComponentType::Led
+        case ComponentType::Led:
+        case ComponentType::Optocoupler: {
+            const DiodeModel model = (comp.type == ComponentType::Led
+                                      || comp.type == ComponentType::Optocoupler)
                 ? ledModel(comp.vf, dm.vt)
                 : dm;
             current = model.current(v);
@@ -757,6 +820,26 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
                 ? ledModel(comp.vf, dm.vt)
                 : dm;
             addG(a, n1, n2, Cx(model.conductance(st.diodeV.value(comp.id, 0.6)), 0.0));
+            break;
+        }
+
+        case ComponentType::Optocoupler: {
+            const DiodeModel model = ledModel(comp.vf, dm.vt);
+            const double vd = st.diodeV.value(comp.id, 0.6);
+            const double g = model.conductance(vd);
+            const double if0 = model.current(vd);
+            const int nc = p.nodeOf(comp.id, 2);
+            const int ne = p.nodeOf(comp.id, 3);
+            const double ctr = std::max(comp.ctr, 0.0);
+            const double vceSat = std::max(comp.vceSat, 1e-3);
+            // 工作点落在饱和区时，小信号里多一条输出电导
+            const double vce = st.optoVce.value(comp.id, 0.0);
+            const double df = vce > 0.0 ? std::exp(-vce / vceSat) / vceSat : 0.0;
+
+            addG(a, n1, n2, Cx(g, 0.0));
+            const double fSmall = 1.0 - std::exp(-std::max(vce, 0.0) / vceSat);
+            addVccs(a, nc, ne, n1, n2, Cx(ctr * fSmall * g, 0.0));
+            addG(a, nc, ne, Cx(ctr * if0 * df + 1e-9, 0.0));
             break;
         }
             break;

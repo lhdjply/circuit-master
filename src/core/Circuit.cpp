@@ -23,6 +23,7 @@ QString typeToTag(ComponentType type)
     case ComponentType::Diode:         return QStringLiteral("D");
     case ComponentType::OpAmp:         return QStringLiteral("U");
     case ComponentType::Led:           return QStringLiteral("LED");
+    case ComponentType::Optocoupler:   return QStringLiteral("OPTO");
     case ComponentType::Npn:           return QStringLiteral("Q");
     case ComponentType::Pnp:           return QStringLiteral("QP");
     case ComponentType::Nmos:          return QStringLiteral("M");
@@ -45,6 +46,7 @@ ComponentType tagToType(const QString& tag)
     if (tag == QLatin1String("D")) return ComponentType::Diode;
     if (tag == QLatin1String("U")) return ComponentType::OpAmp;
     if (tag == QLatin1String("LED")) return ComponentType::Led;
+    if (tag == QLatin1String("OPTO")) return ComponentType::Optocoupler;
     if (tag == QLatin1String("Q")) return ComponentType::Npn;
     if (tag == QLatin1String("QP")) return ComponentType::Pnp;
     if (tag == QLatin1String("MP")) return ComponentType::Pmos;
@@ -189,6 +191,22 @@ QString Circuit::toSpiceNetlist() const
             hasLed = true;
             ledVf = comp.vf;
             lines << QStringLiteral("%1 %2 %3 DLED").arg(comp.refdes).arg(nodes.at(0)).arg(nodes.at(1));
+            continue;
+        }
+        if (comp.type == ComponentType::Optocoupler) {
+            // SPICE 没有通用光耦模型：输入侧用二极管，输出侧用 B 源按 CTR 跟随 LED 电流
+            const QString sense = QStringLiteral("Vsen_%1").arg(comp.refdes);
+            lines << QStringLiteral("* %1: 光耦近似（CTR=%2）")
+                         .arg(comp.refdes, spiceNumber(comp.ctr));
+            lines << QStringLiteral("%1 %2 %3 0").arg(sense).arg(nodes.at(0)).arg(nodes.at(0));
+            lines << QStringLiteral("Dled_%1 %2 %3 DLED").arg(comp.refdes).arg(nodes.at(0)).arg(nodes.at(1));
+            lines << QStringLiteral("Bout_%1 %2 %3 I=%4*I(%5)")
+                         .arg(comp.refdes)
+                         .arg(nodes.at(2))
+                         .arg(nodes.at(3))
+                         .arg(spiceNumber(comp.ctr), sense);
+            hasLed = true;
+            ledVf = comp.vf;
             continue;
         }
         if (comp.type == ComponentType::Npn) {
@@ -342,6 +360,8 @@ QJsonObject Circuit::toJson() const
         o.insert(QStringLiteral("vth"), c.vth);
         o.insert(QStringLiteral("k"), c.k);
         o.insert(QStringLiteral("vf"), c.vf);
+        o.insert(QStringLiteral("ctr"), c.ctr);
+        o.insert(QStringLiteral("vceSat"), c.vceSat);
         compArray.append(o);
     }
 
@@ -406,6 +426,8 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
         c.vth = o.value(QStringLiteral("vth")).toDouble(2.0);
         c.k = o.value(QStringLiteral("k")).toDouble(2e-3);
         c.vf = o.value(QStringLiteral("vf")).toDouble(0.7);
+        c.ctr = o.value(QStringLiteral("ctr")).toDouble(3.0);
+        c.vceSat = o.value(QStringLiteral("vceSat")).toDouble(0.2);
         if (c.id <= 0)
             continue;
         circuit.components.append(c);

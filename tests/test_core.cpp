@@ -526,6 +526,150 @@ private slots:
                  qPrintable(QString::number(vc->y.last())));
     }
 
+    void optocouplerCouplesLight()
+    {
+        // 输入侧：5 V 经 1 kΩ 驱动 LED（Vf≈1.2 V → If≈3.6 mA）
+        // 输出侧：10 V 经 1 kΩ 接集电极，CTR=0.5 → Ic≈1.8 mA，Vce≈8.2 V
+        auto build = [](double ctr) {
+            Circuit c;
+
+            Component vin;
+            vin.id = 1;
+            vin.type = ComponentType::VoltageSource;
+            vin.pos = QPointF(60, 300);
+            vin.rotation = 90;
+            vin.refdes = QStringLiteral("VIN");
+            vin.function = SourceFunction::Constant;
+            vin.dcValue = 5.0;
+            c.components.append(vin);
+
+            Component rin;
+            rin.id = 2;
+            rin.type = ComponentType::Resistor;
+            rin.pos = QPointF(160, 200);
+            rin.refdes = QStringLiteral("RIN");
+            rin.value = 1000.0;
+            c.components.append(rin);
+
+            Component opto;
+            opto.id = 3;
+            opto.type = ComponentType::Optocoupler;
+            opto.pos = QPointF(300, 300);
+            opto.refdes = QStringLiteral("U1");
+            opto.vf = 1.2;
+            opto.ctr = ctr;
+            c.components.append(opto);
+
+            Component vcc;
+            vcc.id = 4;
+            vcc.type = ComponentType::VoltageSource;
+            vcc.pos = QPointF(460, 300);
+            vcc.rotation = 90;
+            vcc.refdes = QStringLiteral("VCC");
+            vcc.function = SourceFunction::Constant;
+            vcc.dcValue = 10.0;
+            c.components.append(vcc);
+
+            Component rc;
+            rc.id = 5;
+            rc.type = ComponentType::Resistor;
+            rc.pos = QPointF(400, 200);
+            rc.refdes = QStringLiteral("RC");
+            rc.value = 1000.0;
+            c.components.append(rc);
+
+            Component g;
+            g.id = 6;
+            g.type = ComponentType::Ground;
+            g.pos = QPointF(60, 400);
+            g.refdes = QStringLiteral("GND");
+            c.components.append(g);
+            for (const QPointF& pos : {QPointF(150, 400), QPointF(270, 400),
+                                       QPointF(330, 400), QPointF(460, 400)}) {
+                Component gg = g;
+                gg.id = 7 + static_cast<int>(c.components.size());
+                gg.pos = pos;
+                c.components.append(gg);
+            }
+
+            // 输入回路：VIN → RIN → 光耦阳极(引脚0)，阴极(引脚1) → 地
+            c.wires.append(Wire{{QPointF(60, 270), QPointF(60, 200), QPointF(130, 200)}});
+            c.wires.append(Wire{{QPointF(190, 200), QPointF(270, 200), QPointF(270, 290)}});
+            c.wires.append(Wire{{QPointF(60, 330), QPointF(60, 400)}});
+            c.wires.append(Wire{{QPointF(270, 310), QPointF(270, 400)}});
+
+            // 输出回路：VCC → RC → 集电极(引脚2，坐标 330,290)，发射极(引脚3) → 地
+            c.wires.append(Wire{{QPointF(460, 270), QPointF(460, 200), QPointF(430, 200)}});
+            c.wires.append(Wire{{QPointF(370, 200), QPointF(330, 200), QPointF(330, 290)}});
+            c.wires.append(Wire{{QPointF(460, 330), QPointF(460, 400)}});
+            c.wires.append(Wire{{QPointF(330, 310), QPointF(330, 400)}});
+            return c;
+        };
+
+        auto collectorVoltage = [](const Circuit& c, int compId) {
+            const Netlist net = c.buildNetlist();
+            if (!net.valid)
+                return -1.0;
+            SimulationOptions tr;
+            tr.kind = AnalysisKind::Transient;
+            tr.tStop = 1e-4;
+            tr.tStep = 1e-5;
+            const SimulationResult r = Simulator::run(c, tr);
+            if (!r.ok)
+                return -1.0;
+            // 引脚 2 是输出侧集电极
+            const Signal* v = r.signal(QStringLiteral("V(%1)").arg(net.nodeOf(compId, 2)));
+            return v ? v->y.last() : -1.0;
+        };
+
+        // CTR=1：输入约 3.6 mA → 输出约 3.6 mA，Vce ≈ 10 − 3.6 = 6.4 V
+        const double vce = collectorVoltage(build(1.0), 3);
+        QVERIFY2(vce > 4.0 && vce < 8.5, qPrintable(QString::number(vce)));
+
+        // CTR=0（不导通）：集电极被拉到 VCC
+        const double off = collectorVoltage(build(0.0), 3);
+        QVERIFY2(off > 9.5, qPrintable(QString::number(off)));
+
+        // CTR 越大，输出电流越大、集电极电压越低（LTV-817 的 C 档是 300%）
+        const double strong = collectorVoltage(build(3.0), 3);
+        QVERIFY2(strong < vce, qPrintable(QString::number(strong)));
+
+        // 高 CTR 时输出不能把发射极顶到集电极之上（饱和压降要起作用）
+        {
+            const Circuit sat = build(10.0); // CTR 远超需求，必然饱和
+            const Netlist net = sat.buildNetlist();
+            QVERIFY2(net.valid, qPrintable(net.error));
+            SimulationOptions tr;
+            tr.kind = AnalysisKind::Transient;
+            tr.tStop = 1e-4;
+            tr.tStep = 1e-5;
+            const SimulationResult r = Simulator::run(sat, tr);
+            QVERIFY2(r.ok, qPrintable(r.error));
+            // 节点 0 是地，没有对应信号
+            const auto nodeV = [&r, &net](int pin) {
+                const int node = net.nodeOf(3, pin);
+                if (node == 0)
+                    return 0.0;
+                const Signal* s = r.signal(QStringLiteral("V(%1)").arg(node));
+                return s ? s->y.last() : 0.0;
+            };
+            const double vce = nodeV(2) - nodeV(3);
+            QVERIFY2(vce >= -0.01, qPrintable(QStringLiteral("Vce=%1").arg(vce)));
+            QVERIFY2(vce <= 0.3, qPrintable(QStringLiteral("Vce=%1").arg(vce))); // 落在饱和区
+        }
+
+        // 元件电流必须是物理量级：限幅用错模型时这里会冒出天文数字
+        const Circuit c = build(1.0);
+        const Netlist net = c.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        SimulationOptions op;
+        op.kind = AnalysisKind::OperatingPoint;
+        const SimulationResult dc = Simulator::run(c, op);
+        QVERIFY2(dc.ok, qPrintable(dc.error));
+        const double ifLed = dc.elementCurrents.value(QStringLiteral("I(U1)"), 0.0);
+        QVERIFY2(ifLed > 1e-3 && ifLed < 20e-3, qPrintable(QString::number(ifLed)));
+    }
+
     void mosfetSwitches()
     {
         // VDD 10 V、漏极电阻 1 kΩ、栅极 5 V；Vth 2 V、K 2 mA/V²

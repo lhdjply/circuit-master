@@ -158,6 +158,11 @@ ComponentItem* SchematicScene::placeComponent(ComponentType type, const QPointF&
         comp.k = 0.05;
         comp.vf = 0.7;
         break;
+    case ComponentType::Optocoupler:
+        // 默认按 LTV-817S-TA1-C：Vf 典型 1.2 V，CTR 档位 C 为 200~400%（取 300%）
+        comp.vf = 1.2;
+        comp.ctr = 3.0;
+        break;
     case ComponentType::Switch:
         comp.closed = true;
         break;

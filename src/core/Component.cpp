@@ -19,6 +19,10 @@ QVector<QPointF> pinOffsets(ComponentType type)
         return {QPointF(0.0, 0.0)};
     if (type == ComponentType::OpAmp)
         return {QPointF(-30.0, -20.0), QPointF(-30.0, 20.0), QPointF(30.0, 0.0)};
+    // 光耦：0 = 输入 LED 阳极，1 = 阴极，2 = 输出三极管集电极，3 = 发射极
+    if (type == ComponentType::Optocoupler)
+        return {QPointF(-30.0, -10.0), QPointF(-30.0, 10.0), QPointF(30.0, -10.0),
+                QPointF(30.0, 10.0)};
     // 三极管 / MOSFET / IGBT：0 = 集电极(漏极)，1 = 基极(栅极)，2 = 发射极(源极)
     if (isThreeTerminalDevice(type))
         return {QPointF(30.0, -30.0), QPointF(-30.0, 0.0), QPointF(30.0, 30.0)};
@@ -36,6 +40,7 @@ int pinCount(ComponentType type)
     case ComponentType::Nmos:
     case ComponentType::Pmos:
     case ComponentType::Igbt:   return 3;
+    case ComponentType::Optocoupler: return 4;
     default:                    return 2;
     }
 }
@@ -54,6 +59,7 @@ QString typeName(ComponentType type)
     case ComponentType::Nmos:          return QStringLiteral("N 沟道 MOS");
     case ComponentType::Pmos:          return QStringLiteral("P 沟道 MOS");
     case ComponentType::Igbt:          return QStringLiteral("IGBT");
+    case ComponentType::Optocoupler:   return QStringLiteral("光耦");
     case ComponentType::Switch:        return QStringLiteral("开关");
     case ComponentType::VoltageSource: return QStringLiteral("电压源");
     case ComponentType::CurrentSource: return QStringLiteral("电流源");
@@ -78,6 +84,7 @@ QString typeSymbol(ComponentType type)
     case ComponentType::Nmos:          return QStringLiteral("M");
     case ComponentType::Pmos:          return QStringLiteral("M");
     case ComponentType::Igbt:          return QStringLiteral("Z");
+    case ComponentType::Optocoupler:   return QStringLiteral("OC");
     case ComponentType::Switch:        return QStringLiteral("S");
     case ComponentType::VoltageSource: return QStringLiteral("V");
     case ComponentType::CurrentSource: return QStringLiteral("I");
@@ -216,7 +223,8 @@ QString Component::unitName() const
     case ComponentType::Pnp:           return QStringLiteral("A/A");
     case ComponentType::Nmos:
     case ComponentType::Pmos:
-    case ComponentType::Igbt:          return QStringLiteral("V");
+    case ComponentType::Igbt:
+    case ComponentType::Optocoupler:   return QStringLiteral("V");
     case ComponentType::Switch:        return QStringLiteral("Ω");
     case ComponentType::Probe:
     case ComponentType::Ground:        return QString();
@@ -269,6 +277,9 @@ QString Component::displayValue() const
     case ComponentType::Igbt:
         return QStringLiteral("Vth = ") + formatEng(vth, QStringLiteral("V"), 3);
 
+    case ComponentType::Optocoupler:
+        return QStringLiteral("CTR = ") + QString::number(ctr, 'g', 3);
+
     case ComponentType::Switch:
         return closed ? QStringLiteral("闭合") : QStringLiteral("断开");
 
@@ -310,6 +321,7 @@ QString Component::spiceValueSpec() const
     case ComponentType::Nmos:
     case ComponentType::Pmos:
     case ComponentType::Igbt:
+    case ComponentType::Optocoupler:
         return QStringLiteral("MODEL"); // 由 Circuit::toSpiceNetlist 负责生成整行
 
     case ComponentType::VoltageSource:

@@ -75,6 +75,10 @@ QPainterPath symbolShape(ComponentType type)
         path.closeSubpath();
         return path;
     }
+    if (type == ComponentType::Optocoupler) {
+        path.addRoundedRect(QRectF(-30.0, -22.0, 60.0, 44.0), 4.0, 4.0);
+        return path;
+    }
     if (isThreeTerminalDevice(type)) {
         path.addRoundedRect(QRectF(-16.0, -16.0, 46.0, 32.0), 4.0, 4.0);
         return path;
@@ -296,6 +300,63 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
             p->setBrush(Qt::NoBrush);
             p->drawLine(QPointF(x - 5.0, 11.0), QPointF(x + 5.0, 11.0));
         }
+        break;
+    }
+
+    case ComponentType::Optocoupler: {
+        // 参考常见画法：外框 + 左侧输入 LED + 两支斜向箭头 + 右侧光敏三极管
+        p->setPen(symbolPen(color, 1.4));
+        p->setBrush(Qt::NoBrush);
+        p->drawRect(QRectF(-24.0, -19.0, 48.0, 38.0));
+
+        // 输入侧 LED：阳极在上（引脚 0），阴极在下（引脚 1），三角形朝下
+        p->setPen(pen);
+        p->drawLine(QPointF(-30.0, -10.0), QPointF(-16.0, -10.0));
+        p->drawLine(QPointF(-16.0, -10.0), QPointF(-16.0, -5.0));
+        p->drawLine(QPointF(-16.0, 5.0), QPointF(-16.0, 10.0));
+        p->drawLine(QPointF(-16.0, 10.0), QPointF(-30.0, 10.0));
+        QPolygonF led;
+        led << QPointF(-21.0, -5.0) << QPointF(-11.0, -5.0) << QPointF(-16.0, 5.0);
+        p->setBrush(color);
+        p->drawPolygon(led);
+        p->setBrush(Qt::NoBrush);
+        p->setPen(symbolPen(color, 2.2));
+        p->drawLine(QPointF(-21.0, 5.0), QPointF(-11.0, 5.0));
+
+        // 两支斜向右下的箭头：光从 LED 射向三极管
+        p->setPen(symbolPen(color, 1.5));
+        for (int i = 0; i < 2; ++i) {
+            const QPointF from(-6.0 + i * 1.5, -7.0 + i * 7.0);
+            const QPointF to(5.0 + i * 1.5, 1.0 + i * 7.0);
+            p->drawLine(from, to);
+            const QPointF dir = to - from;
+            const double len = std::hypot(dir.x(), dir.y());
+            if (len > 0.1) {
+                const QPointF unit = dir / len;
+                const QPointF normal(-unit.y(), unit.x());
+                QPolygonF head;
+                head << to << (to - unit * 4.2 + normal * 2.4)
+                     << (to - unit * 4.2 - normal * 2.4);
+                p->setBrush(color);
+                p->drawPolygon(head);
+                p->setBrush(Qt::NoBrush);
+            }
+        }
+
+        // 输出侧光敏三极管：集电极在上（引脚 2），发射极在下（引脚 3）
+        p->setPen(symbolPen(color, 2.4));
+        p->drawLine(QPointF(12.0, -8.0), QPointF(12.0, 8.0)); // 基极板（光照射到这里）
+        p->setPen(pen);
+        p->drawLine(QPointF(30.0, -10.0), QPointF(22.0, -10.0));
+        p->drawLine(QPointF(22.0, -10.0), QPointF(12.0, -5.0));
+        p->drawLine(QPointF(30.0, 10.0), QPointF(22.0, 10.0));
+        p->drawLine(QPointF(22.0, 10.0), QPointF(12.0, 5.0));
+        // 发射极箭头：指向外（朝引脚 3）
+        QPolygonF arrow;
+        arrow << QPointF(22.0, 10.0) << QPointF(14.0, 9.0) << QPointF(18.0, 4.0);
+        p->setBrush(color);
+        p->drawPolygon(arrow);
+        p->setBrush(Qt::NoBrush);
         break;
     }
 
