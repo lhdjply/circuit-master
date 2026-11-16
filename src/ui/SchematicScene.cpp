@@ -283,7 +283,31 @@ void SchematicScene::pasteClipboard()
     if (!hasClipboard())
         return;
 
-    const QPointF offset(20.0, 20.0);
+    // 落点：优先用鼠标位置（把复制内容的左上角对到这里），
+    // 没有鼠标位置信息时退回原来的「右下偏移一点」
+    QPointF offset(20.0, 20.0);
+    if (m_hasCursorPos) {
+        QRectF bounds;
+        bool first = true;
+        for (const Component& comp : m_clipboardComponents) {
+            const QRectF box(comp.pos.x() - 30.0, comp.pos.y() - 30.0, 60.0, 60.0);
+            bounds = first ? box : bounds.united(box);
+            first = false;
+        }
+        for (const Wire& wire : m_clipboardWires) {
+            for (const QPointF& p : wire.points) {
+                const QRectF box(p.x(), p.y(), 0.0, 0.0);
+                bounds = first ? box : bounds.united(box);
+                first = false;
+            }
+        }
+        if (!first) {
+            // 让粘贴内容的中心落在鼠标处，单个元件就是元件本身对准光标
+            const QPointF target = snap(m_cursorScenePos);
+            offset = target - bounds.center();
+        }
+    }
+
     clearSelection();
 
     for (Component comp : m_clipboardComponents) {

@@ -72,6 +72,7 @@ void SchematicView::updateCursorAndHint()
 
 void SchematicView::mousePressEvent(QMouseEvent* event)
 {
+    m_scene->setCursorScenePos(mapToScene(event->pos()));
     if (event->button() == Qt::MiddleButton) {
         m_panning = true;
         m_panStart = event->pos();
@@ -112,6 +113,7 @@ void SchematicView::mouseMoveEvent(QMouseEvent* event)
     }
 
     const QPointF scenePos = mapToScene(event->pos());
+    m_scene->setCursorScenePos(scenePos);
     emit scenePositionChanged(scenePos);
 
     if (m_tool == Tool::Wire && !m_wirePoints.isEmpty())

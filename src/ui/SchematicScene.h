@@ -38,6 +38,13 @@ public:
     /// 剪切：先复制再删除选中项
     void cutSelection();
     void pasteClipboard();
+    /// 记录鼠标在画布上的场景坐标，粘贴时把内容放到这里
+    void setCursorScenePos(const QPointF& pos)
+    {
+        m_cursorScenePos = pos;
+        m_hasCursorPos = true;
+    }
+    QPointF cursorScenePos() const { return m_cursorScenePos; }
     bool hasClipboard() const;
     void refresh();
 
@@ -69,6 +76,8 @@ private:
     QVector<QPointF> m_junctions;
     QVector<Component> m_clipboardComponents;
     QVector<Wire> m_clipboardWires;
+    QPointF m_cursorScenePos;   // 最近的鼠标位置，粘贴时作为落点
+    bool m_hasCursorPos = false;
     bool m_geometryDirty = false;  // 导线几何被改过，commitEdit 时值得整理一次
     bool m_showGrid = true;
 };

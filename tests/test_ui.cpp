@@ -1897,10 +1897,14 @@ private slots:
         QVERIFY(scene->hasClipboard());
         QVERIFY(paste->isEnabled());
 
-        // 粘贴回来
+        // 粘贴回来：落点应当在鼠标位置附近
+        scene->setCursorScenePos(QPointF(500, 400));
         paste->trigger();
         settle();
         QCOMPARE(scene->componentItems().size(), 1);
+        const QPointF where = scene->componentItems().first()->pos();
+        QVERIFY2(QLineF(where, QPointF(500, 400)).length() < 15.0,
+                 qPrintable(QStringLiteral("粘贴到 (%1,%2)").arg(where.x()).arg(where.y())));
     }
 
     void wireCanBeSelectedAndDeleted()
