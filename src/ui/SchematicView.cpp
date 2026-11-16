@@ -240,7 +240,7 @@ void SchematicView::contextMenuEvent(QContextMenuEvent* event)
         if (!chosen)
             return;
         if (chosen == rotate) {
-            component->setRotationAngle(component->rotationAngle() + 90);
+            component->setRotationAngle(component->rotationAngle() - 90); // 逆时针
         } else if (chosen == flipH) {
             component->setMirrored(!component->mirroredX(), component->mirroredY());
         } else if (chosen == flipV) {
@@ -399,7 +399,7 @@ void SchematicView::rotateSelection()
         if (item->type() != ComponentItem::Type)
             continue;
         auto* comp = static_cast<ComponentItem*>(item);
-        comp->setRotationAngle(comp->rotationAngle() + 90);
+        comp->setRotationAngle(comp->rotationAngle() - 90); // 逆时针
     }
     m_scene->refresh();
 }

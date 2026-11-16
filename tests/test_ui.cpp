@@ -299,7 +299,7 @@ private slots:
 
         rotate->trigger();
         settle();
-        QCOMPARE(ground->component().rotation, 90);
+        QCOMPARE(ground->component().rotation, 270); // 逆时针 90°
 
         rotate->trigger();
         settle();
@@ -1106,11 +1106,12 @@ private slots:
         const int before = item->component().rotation;
         QTest::keyClick(&window, Qt::Key_Space);
         settle();
-        QCOMPARE(item->component().rotation, (before + 90) % 360);
+        // 旋转是逆时针：角度减 90
+        QCOMPARE(item->component().rotation, ((before - 90) % 360 + 360) % 360);
 
         QTest::keyClick(&window, Qt::Key_Space);
         settle();
-        QCOMPARE(item->component().rotation, (before + 180) % 360);
+        QCOMPARE(item->component().rotation, ((before - 180) % 360 + 360) % 360);
 
         // 在数值输入框里按空格必须输入空格，不能触发旋转
         QLineEdit* valueEdit = nullptr;
@@ -1175,10 +1176,10 @@ private slots:
                 rotateAction = action;
         }
         QVERIFY(rotateAction);
-        // 示例中的 R1 初始为水平放置，旋转一次后应为 90°
+        // 示例中的 R1 初始为水平放置，逆时针旋转一次后应为 270°
         QCOMPARE(resistor->component().rotation, 0);
         rotateAction->trigger();
-        QCOMPARE(resistor->component().rotation, 90);
+        QCOMPARE(resistor->component().rotation, 270);
     }
 
     void captureOpAmp()
