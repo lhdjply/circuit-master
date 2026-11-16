@@ -6,6 +6,7 @@ class QCheckBox;
 class QComboBox;
 class QFormLayout;
 class QLabel;
+class QCheckBox;
 class QLineEdit;
 class QStackedWidget;
 
@@ -51,6 +52,7 @@ private:
     QFormLayout* m_form = nullptr;
     QLineEdit* m_refdes = nullptr;
     QLineEdit* m_value = nullptr;
+    QCheckBox* m_polarized = nullptr;
     QLineEdit* m_k = nullptr;
     QLineEdit* m_vf = nullptr;
     QLabel* m_valueLabel = nullptr;

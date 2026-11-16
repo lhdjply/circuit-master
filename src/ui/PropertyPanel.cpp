@@ -105,6 +105,10 @@ void PropertyPanel::buildUi()
     m_form->addRow(QStringLiteral("数值"), m_value);
     m_valueLabel = qobject_cast<QLabel*>(m_form->labelForField(m_value));
 
+    m_polarized = new QCheckBox(QStringLiteral("有极性（电解电容）"), page);
+    m_polarized->setToolTip(QStringLiteral("符号带「+」，正极在引脚 1 一侧"));
+    m_form->addRow(QStringLiteral("极性"), m_polarized);
+
     m_k = makeEdit(QStringLiteral("例如 2m"));
     m_form->addRow(QStringLiteral("K (A/V²)"), m_k);
     m_vf = makeEdit(QStringLiteral("例如 0.7"));
@@ -161,6 +165,17 @@ void PropertyPanel::buildUi()
     root->addWidget(m_stack);
 
     connect(m_refdes, &QLineEdit::editingFinished, this, &PropertyPanel::applyRefdes);
+    connect(m_polarized, &QCheckBox::toggled, this, [this](bool on) {
+        if (m_updating || !m_item)
+            return;
+        Component c = m_item->component();
+        if (c.polarized == on)
+            return;
+        c.polarized = on;
+        m_item->setComponent(c); // 走同一条路径，撤销/重做与脏标记都能生效
+        emit changed();
+    });
+
     connect(m_value, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_k, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_vf, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
@@ -235,6 +250,7 @@ void PropertyPanel::refreshFromItem()
     m_period->setText(quantityText(c.pulsePeriod, UnitKind::Second));
 
     m_closed->setChecked(c.closed);
+    m_polarized->setChecked(c.polarized);
 
     m_updating = false;
     updateSubtitle();
@@ -253,6 +269,7 @@ void PropertyPanel::updateVisibility()
 
     const bool isMos = c.type == ComponentType::Nmos || c.type == ComponentType::Pmos
         || c.type == ComponentType::Igbt;
+    m_form->setRowVisible(m_polarized, c.type == ComponentType::Capacitor);
     m_form->setRowVisible(m_k, isMos);
     m_form->setRowVisible(m_vf, c.type == ComponentType::Igbt
                                       || c.type == ComponentType::Led);

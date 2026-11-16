@@ -337,6 +337,7 @@ QJsonObject Circuit::toJson() const
         o.insert(QStringLiteral("pulseWidth"), c.pulseWidth);
         o.insert(QStringLiteral("pulsePeriod"), c.pulsePeriod);
         o.insert(QStringLiteral("closed"), c.closed);
+        o.insert(QStringLiteral("polarized"), c.polarized);
         o.insert(QStringLiteral("beta"), c.beta);
         o.insert(QStringLiteral("vth"), c.vth);
         o.insert(QStringLiteral("k"), c.k);
@@ -400,6 +401,7 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
         c.pulseWidth = o.value(QStringLiteral("pulseWidth")).toDouble(5e-4);
         c.pulsePeriod = o.value(QStringLiteral("pulsePeriod")).toDouble(1e-3);
         c.closed = o.value(QStringLiteral("closed")).toBool(true);
+        c.polarized = o.value(QStringLiteral("polarized")).toBool(false);
         c.beta = o.value(QStringLiteral("beta")).toDouble(100.0);
         c.vth = o.value(QStringLiteral("vth")).toDouble(2.0);
         c.k = o.value(QStringLiteral("k")).toDouble(2e-3);

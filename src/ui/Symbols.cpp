@@ -109,10 +109,25 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
 
     case ComponentType::Capacitor: {
         p->drawLine(QPointF(-30.0, 0.0), QPointF(-5.0, 0.0));
-        p->drawLine(QPointF(5.0, 0.0), QPointF(30.0, 0.0));
+        p->drawLine(QPointF(6.0, 0.0), QPointF(30.0, 0.0));
         p->setPen(symbolPen(color, 2.8));
-        p->drawLine(QPointF(-5.0, -13.0), QPointF(-5.0, 13.0));
-        p->drawLine(QPointF(5.0, -13.0), QPointF(5.0, 13.0));
+
+        if (comp.polarized) {
+            // 电解电容：正极是直板（引脚 0），负极是弯板（引脚 1）
+            p->drawLine(QPointF(-5.0, -13.0), QPointF(-5.0, 13.0));
+            QPainterPath arc;
+            arc.moveTo(6.0, -13.0);
+            arc.quadTo(-1.0, 0.0, 6.0, 13.0);
+            p->setBrush(Qt::NoBrush);
+            p->drawPath(arc);
+            p->setPen(symbolPen(color, 1.8));
+            // 正极标记
+            p->drawLine(QPointF(-19.0, -18.0), QPointF(-11.0, -18.0));
+            p->drawLine(QPointF(-15.0, -22.0), QPointF(-15.0, -14.0));
+        } else {
+            p->drawLine(QPointF(-5.0, -13.0), QPointF(-5.0, 13.0));
+            p->drawLine(QPointF(5.0, -13.0), QPointF(5.0, 13.0));
+        }
         break;
     }
 

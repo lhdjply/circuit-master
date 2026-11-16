@@ -61,6 +61,9 @@ struct Component {
     QString refdes;   // 例如 R1
     double value = 0.0;
 
+    // 电容：有极性（电解/钽电容）时符号带「+」，负极接在引脚 1 一侧
+    bool polarized = false;
+
     // 三端半导体器件的模型参数（不使用 value）
     double beta = 100.0;  // NPN 直流电流放大系数 hFE
     double vth = 2.0;     // MOSFET / IGBT 开启电压 (V)

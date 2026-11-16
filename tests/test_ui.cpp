@@ -12,11 +12,13 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QTabWidget>
 #include <QDir>
 #include <QFileInfo>
 #include <QPixmap>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QTabWidget>
 #include <QDragEnterEvent>
@@ -315,6 +317,42 @@ private slots:
         QVERIFY2(!live->isLive(), "点击停止后应当结束");
         QCOMPARE(run->text(), QStringLiteral("运行仿真"));
         QVERIFY2(!monitor->isEnabled(), "停止后波形监控应不可点击");
+    }
+
+    void capacitorPolarityToggle()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        ComponentItem* cap = scene->placeComponent(ComponentType::Capacitor, QPointF(200, 200));
+        QVERIFY(cap);
+        QCOMPARE(cap->component().polarized, false);
+        cap->setSelected(true);
+        settle();
+
+        QCheckBox* polarized = nullptr;
+        for (QCheckBox* box : window.findChildren<QCheckBox*>()) {
+            if (box->text().contains(QStringLiteral("有极性")))
+                polarized = box;
+        }
+        QVERIFY(polarized);
+        QVERIFY2(polarized->isVisible(), "电容应当显示极性选项");
+        QVERIFY(!polarized->isChecked());
+
+        polarized->setChecked(true);
+        settle();
+        QVERIFY2(cap->component().polarized, "勾选后元件应当标记为有极性");
+
+        // 电阻不显示这一项
+        ComponentItem* res = scene->placeComponent(ComponentType::Resistor, QPointF(400, 200));
+        scene->clearSelection(); // 先取消电容的选中，面板才会切到电阻
+        res->setSelected(true);
+        settle();
+        QVERIFY2(!polarized->isVisible(), "电阻不应显示极性选项");
     }
 
     void switchToggleUpdatesLedWhileRunning()
