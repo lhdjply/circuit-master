@@ -5,6 +5,8 @@
 #include "ui/WireItem.h"
 
 #include <QGraphicsItem>
+#include <QPointer>
+#include <QTimer>
 #include <QGraphicsSceneMouseEvent>
 #include <QHash>
 #include <QSet>
@@ -178,14 +180,10 @@ WireItem* SchematicScene::addWire(const QVector<QPointF>& points)
     if (points.size() < 2)
         return nullptr;
     auto* item = new WireItem(Circuit::normalizeWire(points));
-    connect(item, &WireItem::wireChanged, this, [this] {
-        refresh();
-        emit circuitChanged();
-    });
+    hookWire(item);
     addItem(item);
     refresh();
     emit circuitChanged();
-    commitEdit();
     return item;
 }
 
@@ -304,6 +302,218 @@ void SchematicScene::commitEdit()
 {
     emit editCommitted();
 }
+
+void SchematicScene::hookWire(WireItem* item)
+{
+    connect(item, &WireItem::wireChanged, this, [this, item] {
+        refresh();
+        emit circuitChanged();
+        // 拖动/改完几何后再整理一次：让共线相接的导线并起来。
+        // 推迟到下个事件循环，因为合并会删掉当前正在发信号的图元。
+        QPointer<WireItem> guard(item);
+        QTimer::singleShot(0, this, [this, guard] {
+            if (guard && guard->scene() == this)
+                mergeWireWithNeighbors(guard.data());
+        });
+    });
+}
+
+WireItem* SchematicScene::addWireRaw(const QVector<QPointF>& points)
+{
+    auto* item = new WireItem(points);
+    hookWire(item);
+    addItem(item);
+    return item;
+}
+
+bool SchematicScene::splitWireAt(WireItem* wire, const QPointF& point)
+{
+    QVector<QPointF> pts = wire->scenePoints();
+    if (pts.size() < 2)
+        return false;
+
+    int index = -1;
+    for (int i = 0; i < pts.size(); ++i) {
+        if (QLineF(pts.at(i), point).length() <= 0.5) {
+            index = i;
+            break;
+        }
+    }
+    // 落在某段中间：插一个顶点再切
+    for (int i = 1; i < pts.size() && index < 0; ++i) {
+        const QPointF a = pts.at(i - 1);
+        const QPointF b = pts.at(i);
+        const QPointF ab = b - a;
+        const double length2 = ab.x() * ab.x() + ab.y() * ab.y();
+        if (length2 < 1e-9)
+            continue;
+        const QPointF ap = point - a;
+        const double t = (ap.x() * ab.x() + ap.y() * ab.y()) / length2;
+        if (t <= 1e-6 || t >= 1.0 - 1e-6)
+            continue;
+        if (QLineF(a + ab * t, point).length() > 0.5)
+            continue;
+        pts.insert(i, point);
+        index = i;
+    }
+    if (index <= 0 || index >= pts.size() - 1)
+        return false; // 端点或不在线上
+
+    QVector<QPointF> first(pts.begin(), pts.begin() + index + 1);
+    QVector<QPointF> second(pts.begin() + index, pts.end());
+    wire->setScenePoints(first);
+    addWireRaw(second);
+    return true;
+}
+
+void SchematicScene::mergeWireWithNeighbors(WireItem* wire)
+{
+    if (!wire)
+        return;
+
+    const auto keyOf = [](const QPointF& p) {
+        return QStringLiteral("%1,%2").arg(qRound(p.x())).arg(qRound(p.y()));
+    };
+
+    // 引脚处是真正的连接点：不从它上面动刀
+    QSet<QString> pinKeys;
+    for (ComponentItem* comp : componentItems()) {
+        for (const QPointF& pin : comp->pinScenePositions())
+            pinKeys.insert(keyOf(pin));
+    }
+
+    // 点是否落在导线上（端点、顶点或某段中间）
+    const auto liesOn = [&keyOf](const QVector<QPointF>& pts, const QPointF& point) {
+        for (int i = 0; i < pts.size(); ++i) {
+            if (QLineF(pts.at(i), point).length() <= 0.5)
+                return true;
+        }
+        for (int i = 1; i < pts.size(); ++i) {
+            const QPointF a = pts.at(i - 1);
+            const QPointF b = pts.at(i);
+            const QPointF ab = b - a;
+            const double length2 = ab.x() * ab.x() + ab.y() * ab.y();
+            if (length2 < 1e-9)
+                continue;
+            const QPointF ap = point - a;
+            const double t = (ap.x() * ab.x() + ap.y() * ab.y()) / length2;
+            if (t <= 1e-6 || t >= 1.0 - 1e-6)
+                continue;
+            if (QLineF(a + ab * t, point).length() <= 0.5)
+                return true;
+        }
+        return false;
+    };
+    // 点是否在这根导线的「内部」（不是它能当端点的位置）
+    const auto passesThrough = [&keyOf](const QVector<QPointF>& pts, const QPointF& point) {
+        if (pts.size() < 2)
+            return false;
+        if (QLineF(pts.first(), point).length() <= 0.5
+            || QLineF(pts.last(), point).length() <= 0.5)
+            return false;
+        return true;
+    };
+
+    // 本次涉及的所有连接点：新线的每个顶点
+    const QVector<QPointF> joints = wire->scenePoints();
+
+    for (const QPointF& joint : joints) {
+        if (pinKeys.contains(keyOf(joint)))
+            continue;
+
+        // 该点得有别的导线参与，否则不用管
+        bool shared = false;
+        for (WireItem* other : wireItems()) {
+            if (other == wire || !other->scene())
+                continue;
+            if (liesOn(other->scenePoints(), joint)) {
+                shared = true;
+                break;
+            }
+        }
+        if (!shared)
+            continue;
+
+        // 1) 把「穿过」这个点的导线都切开，让每根线在这里都有端点
+        const QVector<WireItem*> snapshot = wireItems();
+        for (WireItem* candidate : snapshot) {
+            if (!candidate->scene())
+                continue;
+            const QVector<QPointF> pts = candidate->scenePoints();
+            if (!liesOn(pts, joint) || !passesThrough(pts, joint))
+                continue;
+            splitWireAt(candidate, joint);
+        }
+
+        // 2) 在这个点上反复合并「共线」的一对，直到没有可并的
+        bool merged = true;
+        int guard = 0;
+        while (merged && guard++ < 32) {
+            merged = false;
+            QList<QPair<WireItem*, bool>> ends;
+            for (WireItem* other : wireItems()) {
+                const QVector<QPointF> pts = other->scenePoints();
+                if (pts.size() < 2)
+                    continue;
+                const bool front = QLineF(pts.first(), joint).length() <= 0.5;
+                const bool back = QLineF(pts.last(), joint).length() <= 0.5;
+                if (front)
+                    ends.append({other, true});
+                else if (back)
+                    ends.append({other, false});
+            }
+
+            for (int i = 0; i < ends.size() && !merged; ++i) {
+                for (int j = i + 1; j < ends.size() && !merged; ++j) {
+                    WireItem* wa = ends.at(i).first;
+                    WireItem* wb = ends.at(j).first;
+                    if (wa == wb)
+                        continue;
+
+                    QVector<QPointF> sa = wa->scenePoints();
+                    QVector<QPointF> sb = wb->scenePoints();
+                    if (ends.at(i).second)
+                        std::reverse(sa.begin(), sa.end());
+                    if (!ends.at(j).second)
+                        std::reverse(sb.begin(), sb.end());
+                    if (sa.size() < 2 || sb.size() < 2)
+                        continue;
+
+                    const QPointF d1 = sa.at(sa.size() - 1) - sa.at(sa.size() - 2);
+                    const QPointF d2 = sb.at(1) - sb.at(0);
+                    const double cross = d1.x() * d2.y() - d1.y() * d2.x();
+                    const bool collinear = std::abs(cross) < 1e-6
+                        && (d1.x() * d2.x() + d1.y() * d2.y()) > 0.0;
+                    // 共线（直通）总并；只剩两段相接（拐角）也并成折线；
+                    // 还有支路时只并共线的那一对，支路保持独立
+                    if (!collinear && ends.size() > 2)
+                        continue;
+
+                    const QPointF keepStart = wb->scenePoints().first();
+                    QVector<QPointF> combined = sa;
+                    for (int k = 1; k < sb.size(); ++k)
+                        combined.append(sb.at(k));
+
+                    removeItem(wa);
+                    wa->deleteLater();
+                    QVector<QPointF> mergedPts = Circuit::normalizeWire(combined);
+                    if (!mergedPts.isEmpty()
+                        && QLineF(mergedPts.first(), keepStart).length() > 0.5
+                        && QLineF(mergedPts.last(), keepStart).length() <= 0.5) {
+                        std::reverse(mergedPts.begin(), mergedPts.end());
+                    }
+                    wb->setScenePoints(mergedPts);
+                    merged = true;
+                }
+            }
+        }
+    }
+
+    refresh();
+    emit circuitChanged();
+}
+
+
 
 void SchematicScene::setShowGrid(bool show)
 {

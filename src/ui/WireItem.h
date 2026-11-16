@@ -29,6 +29,8 @@ public:
 
     /// 端点拖拽：抓取半径内的首个/末个顶点会被单独拖动，其余位置整体平移
     int draggedEndpoint() const { return m_dragIndex; }
+    /// 点中时高亮的那一段（-1 表示整条高亮，例如框选）
+    int activeSegment() const;
 
 signals:
     void wireChanged();
@@ -43,6 +45,8 @@ protected:
 
 private:
     void rebuild();
+    /// 事件位置最靠近哪一段（返回该段起点下标，-1 表示不在线上）
+    int segmentAt(const QPointF& itemPos) const;
     /// 事件位置落在哪个端点附近（0 = 首点，size-1 = 末点，-1 = 都不是）
     int endpointAt(const QPointF& itemPos) const;
 
@@ -52,10 +56,13 @@ private:
     bool m_hover = false;
     int m_dragIndex = -1;    // 正在拖的端点下标，-1 表示整体移动
     int m_hoverIndex = -1;   // 鼠标悬停的端点，用于画抓手
+    QPointF m_pressLocal;      // 最近一次按下的位置（图元坐标），按需换算成线段下标
+    bool m_hasPress = false;
     QPointF m_dragStartPos;  // 按下时的场景坐标，用来区分点击与拖拽
     bool m_bodyDrag = false;      // 正在整体拖动（只动没有连到引脚的顶点）
     QPointF m_bodyStart;          // 整体拖动起点（场景坐标）
-    QVector<QPointF> m_bodyOrigin; // 整体拖动开始时的顶点快照
+    QVector<QPointF> m_bodyOrigin;  // 整体拖动开始时的顶点快照
+    QVector<QPointF> m_dragOrigin;  // 端点拖动开始时的顶点快照
     QVector<int> m_freeIndices;    // 整体拖动时允许移动的顶点下标
     bool m_spanRoute = false;      // 两端都钉在引脚上：按直角走线在中间撑开一段
 };

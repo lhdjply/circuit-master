@@ -26,6 +26,34 @@ WireItem::WireItem(const QVector<QPointF>& points, QGraphicsItem* parent)
     rebuild();
 }
 
+int WireItem::activeSegment() const
+{
+    return m_hasPress ? segmentAt(m_pressLocal) : -1;
+}
+
+int WireItem::segmentAt(const QPointF& itemPos) const
+{
+    int best = -1;
+    double bestDist = 8.0; // 抓取半径
+    for (int i = 1; i < m_points.size(); ++i) {
+        const QPointF a = m_points.at(i - 1);
+        const QPointF b = m_points.at(i);
+        const QPointF ab = b - a;
+        const double length2 = ab.x() * ab.x() + ab.y() * ab.y();
+        if (length2 < 1e-9)
+            continue;
+        const QPointF ap = itemPos - a;
+        double t = (ap.x() * ab.x() + ap.y() * ab.y()) / length2;
+        t = std::max(0.0, std::min(1.0, t));
+        const QLineF dist(a + ab * t, itemPos);
+        if (dist.length() < bestDist) {
+            bestDist = dist.length();
+            best = i - 1;
+        }
+    }
+    return best;
+}
+
 int WireItem::endpointAt(const QPointF& itemPos) const
 {
     // 只有首尾两个端点可单独拖动；中间拐点跟着整条线走
@@ -71,6 +99,13 @@ QVariant WireItem::itemChange(GraphicsItemChange change, const QVariant& value)
     if (change == ItemPositionChange && scene()) {
         const QPointF p = value.toPointF();
         return QPointF(std::round(p.x() / 10.0) * 10.0, std::round(p.y() / 10.0) * 10.0);
+    }
+    if (change == ItemSelectedHasChanged) {
+        if (!value.toBool()) {
+            m_hasPress = false;
+            m_pressLocal = QPointF();
+        }
+        update();
     }
     if (change == ItemPositionHasChanged)
         emit wireChanged();
@@ -167,13 +202,26 @@ void WireItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, 
     Q_UNUSED(widget);
 
     painter->setRenderHint(QPainter::Antialiasing, true);
-    const QColor color = isSelected() ? theme::selected : theme::wire;
-    QPen pen(color, isSelected() ? 3.0 : (m_hover ? 3.0 : 2.2));
+    const bool selected = isSelected();
+    // 点选某一段时只把这一段画成高亮色：整条线太长，全红会让人以为选错了
+    const int activeSegment = segmentAt(m_pressLocal);
+    const bool segmentOnly = selected && m_hasPress && activeSegment >= 0
+        && activeSegment + 1 < m_points.size();
+    QColor color = segmentOnly ? theme::wire : (selected ? theme::selected : theme::wire);
+    QPen pen(color, selected && !segmentOnly ? 3.0 : (m_hover ? 3.0 : 2.2));
     pen.setCapStyle(Qt::RoundCap);
     pen.setJoinStyle(Qt::RoundJoin);
     painter->setPen(pen);
     painter->setBrush(Qt::NoBrush);
     painter->drawPath(m_path);
+
+    if (segmentOnly) {
+        QPen hot(theme::selected, 3.2);
+        hot.setCapStyle(Qt::RoundCap);
+        painter->setPen(hot);
+        painter->drawLine(m_points.at(activeSegment), m_points.at(activeSegment + 1));
+        painter->setPen(pen);
+    }
 
     // 悬停/拖动端点时画个抓手，提示这里可以单独拖
     const int handle = m_dragIndex >= 0 ? m_dragIndex : m_hoverIndex;
@@ -204,11 +252,23 @@ void WireItem::hoverLeaveEvent(QGraphicsSceneHoverEvent* event)
 void WireItem::mousePressEvent(QGraphicsSceneMouseEvent* event)
 {
     if (event->button() == Qt::LeftButton) {
+        // 自己处理按下事件，就不会走基类的「先选中」流程，这里补上，
+        // 否则导线点了不选中，也就删不掉
+        m_pressLocal = event->pos();
+        m_hasPress = true;
+        if (!isSelected()) {
+            if (!(event->modifiers() & Qt::ControlModifier)) {
+                for (QGraphicsItem* other : scene()->selectedItems())
+                    other->setSelected(false);
+            }
+            setSelected(true);
+        }
         const int index = endpointAt(event->pos());
         if (index >= 0) {
             // 抓住端点：这一下不整体移动，改为拖这个顶点（可以主动拖开与引脚的连接）
             m_dragIndex = index;
             m_dragStartPos = event->scenePos();
+            m_dragOrigin = m_points;
             event->accept();
             return;
         }
@@ -298,6 +358,17 @@ void WireItem::mouseReleaseEvent(QGraphicsSceneMouseEvent* event)
         m_bodyDrag = false;
         m_spanRoute = false;
         m_freeIndices.clear();
+
+        // 只是点了一下、没拖动：不要把「几何变了」传出去，
+        // 否则会触发导线整理重建，刚选中的线就丢了点击位置
+        bool moved = m_points.size() != m_bodyOrigin.size();
+        for (int i = 0; i < m_points.size() && !moved; ++i)
+            moved = QLineF(m_points.at(i), m_bodyOrigin.at(i)).length() > 0.5;
+        if (!moved) {
+            event->accept();
+            return;
+        }
+
         QVector<QPointF> local;
         for (const QPointF& p : Circuit::normalizeWire(withRightAngles(scenePoints())))
             local.append(mapFromScene(p));
@@ -309,6 +380,13 @@ void WireItem::mouseReleaseEvent(QGraphicsSceneMouseEvent* event)
 
     if (m_dragIndex >= 0) {
         m_dragIndex = -1;
+        bool movedEnd = m_points.size() != m_dragOrigin.size();
+        for (int i = 0; i < m_points.size() && !movedEnd; ++i)
+            movedEnd = QLineF(m_points.at(i), m_dragOrigin.at(i)).length() > 0.5;
+        if (!movedEnd) {
+            event->accept();
+            return;
+        }
         // 端点被拖到与相邻点重合时会产生重复点，这里规整一次（注意用图元坐标）
         QVector<QPointF> local;
         local.reserve(m_points.size());

@@ -1605,6 +1605,291 @@ private slots:
         }
     }
 
+    void clickingWireHighlightsOnlyThatSegment()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        auto* view = window.findChild<SchematicView*>();
+        QVERIFY(scene && view);
+
+        // 一条带拐点的折线：横段 + 竖段
+        WireItem* wire = scene->addWire({QPointF(200, 200), QPointF(400, 200), QPointF(400, 320)});
+        QVERIFY(wire);
+        settle();
+        scene->clearSelection();
+        settle();
+
+        // 点横段：只高亮第 0 段
+        QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier,
+                          view->mapFromScene(QPointF(300, 200)));
+        settle();
+        QVERIFY(wire->isSelected());
+        QCOMPARE(wire->activeSegment(), 0);
+
+        // 点竖段：高亮切到第 1 段
+        QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier,
+                          view->mapFromScene(QPointF(400, 270)));
+        settle();
+        QCOMPARE(wire->activeSegment(), 1);
+
+        // 取消选中后恢复整条高亮的状态
+        scene->clearSelection();
+        settle();
+        QCOMPARE(wire->activeSegment(), -1);
+
+        // 只点一下（没有拖动）不应该把导线改脏、触发整理重建
+        QCOMPARE(scene->wireItems().size(), 1);
+        QCOMPARE(scene->wireItems().first(), wire);
+    }
+
+    void clickingWireKeepsItSelected()
+    {
+        // 电路里有分叉点时，整理导线会重建图元；点击之后的 commitEdit
+        // 不应该把刚选中的导线弄丢（否则界面上会「红一下就消失」）
+        SchematicScene scene;
+        WireItem* vertical = scene.addWire({QPointF(0, 0), QPointF(0, 200)});
+        scene.addWire({QPointF(0, 100), QPointF(100, 100)}); // T 型支路
+        QVERIFY(vertical);
+
+        scene.clearSelection();
+        vertical->setSelected(true);
+        QVERIFY(vertical->isSelected());
+
+        scene.commitEdit(); // 相当于松开鼠标
+        // 可能因为整理而重建图元：选中状态要跟到新的那根线上，不能凭空消失
+        bool stillSelected = false;
+        for (WireItem* wire : scene.wireItems())
+            stillSelected = stillSelected || wire->isSelected();
+        QVERIFY2(stillSelected, "commitEdit 之后选中状态应当保留");
+        QCOMPARE(scene.wireItems().size(), 2); // 竖线 + 支路
+
+        // 真的改了几何之后才需要整理，并且整理完仍然选中
+        vertical->setScenePoints({QPointF(0, 0), QPointF(0, 220)});
+        scene.commitEdit();
+        bool anySelected = false;
+        for (WireItem* wire : scene.wireItems())
+            anySelected = anySelected || wire->isSelected();
+        QVERIFY2(anySelected, "整理后仍应保留选中状态");
+    }
+
+    void drawnWireMergesWithNeighbour()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        auto* view = window.findChild<SchematicView*>();
+        QVERIFY(scene && view);
+
+        // 已有导线：(200,200) → (400,200)
+        WireItem* first = scene->addWire({QPointF(200, 200), QPointF(400, 200)});
+        QVERIFY(first);
+        settle();
+        QCOMPARE(scene->wireItems().size(), 1);
+
+        // 画一条接着它往右延伸的线：应当并成一条
+        WireItem* second = scene->addWire({QPointF(400, 200), QPointF(600, 200)});
+        QVERIFY(second);
+        scene->mergeWireWithNeighbors(second);
+        settle();
+        QCOMPARE(scene->wireItems().size(), 1);
+        const QVector<QPointF> merged = scene->wireItems().first()->scenePoints();
+        QCOMPARE(merged.size(), 2);
+        QCOMPARE(merged.first(), QPointF(200, 200));
+        QCOMPARE(merged.last(), QPointF(600, 200));
+
+        // 再画一条垂直的线接在末端：拐角相接，并成一条折线（文件里同样是一条线）
+        WireItem* third = scene->addWire({QPointF(600, 200), QPointF(600, 320)});
+        QVERIFY(third);
+        scene->mergeWireWithNeighbors(third);
+        settle();
+        QCOMPARE(scene->wireItems().size(), 1);
+        QCOMPARE(scene->wireItems().first()->scenePoints().size(), 3);
+
+        // 先画 C 形（上、左、下三段），再画中间支路：左边那条竖线应当并成一条
+        {
+            SchematicScene scene;
+            // 分三次画：上横、左竖、下横（各自独立导线）
+            WireItem* top = scene.addWire({QPointF(0, 0), QPointF(200, 0)});
+            WireItem* left = scene.addWire({QPointF(0, 0), QPointF(0, 100)});
+            WireItem* lower = scene.addWire({QPointF(0, 100), QPointF(0, 200)});
+            QVERIFY(top && left && lower);
+            // 画完左竖线时，两个端点都接得上（上横、下横）：整条 C 并成一条
+            scene.mergeWireWithNeighbors(left);
+            QCOMPARE(scene.wireItems().size(), 1);
+            // 上横 + 竖 + 下横：竖线中间的重复点会被规整掉，剩 3 个顶点
+            const QVector<QPointF> cshape = scene.wireItems().first()->scenePoints();
+            QCOMPARE(cshape.size(), 3);
+            // 走向（哪头是首）不影响结论，两端点应当是 C 的两个开口端
+            const QPointF a = cshape.first();
+            const QPointF b = cshape.last();
+            const bool openEnds = (a == QPointF(200, 0) && b == QPointF(0, 200))
+                || (a == QPointF(0, 200) && b == QPointF(200, 0));
+            QVERIFY2(openEnds, qPrintable(QStringLiteral("(%1,%2)-(%3,%4)")
+                                              .arg(a.x()).arg(a.y()).arg(b.x()).arg(b.y())));
+
+            // 再画中间支路接到竖线中点：支路独立，C 仍然是一条线
+            WireItem* branch = scene.addWire({QPointF(0, 100), QPointF(150, 100)});
+            QVERIFY(branch);
+            scene.mergeWireWithNeighbors(branch);
+
+            QCOMPARE(scene.wireItems().size(), 2); // C 形一条 + 支路一条
+            int withVerticalRun = 0;
+            for (WireItem* w : scene.wireItems()) {
+                const QVector<QPointF> pts = w->scenePoints();
+                bool spans = false;
+                for (const QPointF& p : pts) {
+                    if (QPointF(p) == QPointF(0, 0) || QPointF(p) == QPointF(0, 200))
+                        spans = true;
+                }
+                if (spans)
+                    ++withVerticalRun;
+            }
+            QCOMPARE(withVerticalRun, 1); // 左边那条竖线整条在同一根导线里
+        }
+
+        // 用户给的例子：第一笔画「上横+左竖到中点+中横」，第二笔从该点继续往下，
+        // 画完后左边竖线应当是一条（中横保持独立）
+        {
+            SchematicScene scene;
+            WireItem* first = scene.addWire({QPointF(100, 50), QPointF(0, 50),
+                                             QPointF(0, 150), QPointF(100, 150)});
+            QVERIFY(first);
+            scene.mergeWireWithNeighbors(first);
+            WireItem* second = scene.addWire({QPointF(0, 150), QPointF(0, 250),
+                                              QPointF(100, 250)});
+            QVERIFY(second);
+            scene.mergeWireWithNeighbors(second);
+
+            const Circuit drawn = scene.toCircuit();
+            QCOMPARE(drawn.wires.size(), 2);
+
+            bool verticalWhole = false;
+            bool branchAlone = false;
+            for (const Wire& wire : drawn.wires) {
+                if (wire.points.size() == 4 && wire.points.first() == QPointF(100, 50)
+                    && wire.points.last() == QPointF(100, 250))
+                    verticalWhole = true;
+                if (wire.points.size() == 2 && wire.points.contains(QPointF(0, 150))
+                    && wire.points.contains(QPointF(100, 150)))
+                    branchAlone = true;
+            }
+            QVERIFY2(verticalWhole, "左竖线应当是一条（上横—竖—下横连在一起）");
+            QVERIFY2(branchAlone, "中间横线应当独立");
+        }
+
+        // 3.csm 的画法：第一笔「上横+上竖到中点」，第二笔「下横+下竖到中点再右拐」，
+        // 画完应当是 2.csm 那样：一条完整竖线（带上下横）+ 一条独立的中横
+        {
+            SchematicScene scene;
+            WireItem* first = scene.addWire({QPointF(100, 50), QPointF(0, 50), QPointF(0, 150)});
+            QVERIFY(first);
+            scene.mergeWireWithNeighbors(first);
+            WireItem* second = scene.addWire({QPointF(100, 250), QPointF(0, 250),
+                                              QPointF(0, 150), QPointF(100, 150)});
+            QVERIFY(second);
+            scene.mergeWireWithNeighbors(second);
+
+            const Circuit drawn = scene.toCircuit();
+            QCOMPARE(drawn.wires.size(), 2);
+            bool verticalWhole = false;
+            bool branchAlone = false;
+            for (const Wire& wire : drawn.wires) {
+                if (wire.points.size() == 4 && wire.points.first() == QPointF(100, 50)
+                    && wire.points.last() == QPointF(100, 250))
+                    verticalWhole = true;
+                if (wire.points.size() == 2 && wire.points.contains(QPointF(0, 150))
+                    && wire.points.contains(QPointF(100, 150)))
+                    branchAlone = true;
+            }
+            QVERIFY2(verticalWhole, "竖线应当合成一条");
+            QVERIFY2(branchAlone, "中间横线应当独立");
+        }
+
+        // test2 → 往左拖动 → test1：拖动后共线相接的两段自动并成一条
+        {
+            SchematicScene scene;
+            WireItem* top = scene.addWire({QPointF(150, 200), QPointF(120, 200),
+                                           QPointF(120, 300)});
+            QVERIFY(top);
+            scene.addWire({QPointF(150, 400), QPointF(100, 400), QPointF(100, 300),
+                           QPointF(150, 300)});
+            QCOMPARE(scene.toCircuit().wires.size(), 2);
+
+            // 模拟把上方导线往左拖：竖段落到 x=100，与下方导线共线相接
+            top->setScenePoints({QPointF(150, 200), QPointF(100, 200), QPointF(100, 300)});
+            emit top->wireChanged();
+            settle();
+            settle();
+
+            const Circuit after = scene.toCircuit();
+            QCOMPARE(after.wires.size(), 2);
+            bool verticalWhole = false;
+            bool stubAlone = false;
+            for (const Wire& wire : after.wires) {
+                if (wire.points.size() == 4 && wire.points.first() == QPointF(150, 200)
+                    && wire.points.last() == QPointF(150, 400))
+                    verticalWhole = true;
+                if (wire.points.size() == 2 && wire.points.contains(QPointF(100, 300))
+                    && wire.points.contains(QPointF(150, 300)))
+                    stubAlone = true;
+            }
+            QVERIFY2(verticalWhole, "拖动后竖线应当合成一条");
+            QVERIFY2(stubAlone, "中间横线应当独立");
+        }
+
+        // 已存在的两根共线导线，载入/提交时不应被强行合并
+        Circuit circuit;
+        circuit.wires.append(Wire{{QPointF(0, 0), QPointF(100, 0)}});
+        circuit.wires.append(Wire{{QPointF(100, 0), QPointF(200, 0)}});
+        scene->load(circuit);
+        settle();
+        QCOMPARE(scene->wireItems().size(), 2);
+        scene->commitEdit();
+        settle();
+        QCOMPARE(scene->wireItems().size(), 2);
+    }
+
+    void wireCanBeSelectedAndDeleted()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        auto* view = window.findChild<SchematicView*>();
+        QVERIFY(scene && view);
+
+        WireItem* wire = scene->addWire({QPointF(200, 200), QPointF(400, 200)});
+        QVERIFY(wire);
+        settle();
+        scene->clearSelection();
+        settle();
+
+        // 单击导线应当选中它（不能因为自己处理按下事件就吞掉选中）
+        const QPointF mid = (wire->scenePoints().first() + wire->scenePoints().last()) / 2.0;
+        const QPoint at = view->mapFromScene(mid);
+        QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, at);
+        settle();
+        QVERIFY2(wire->isSelected(), "单击应当选中导线");
+
+        // 选中后能删除（走真正的 Del 快捷键，而不是直接调接口）
+        window.activateWindow();
+        view->setFocus();
+        settle();
+        QTest::keyClick(&window, Qt::Key_Delete);
+        settle();
+        QCOMPARE(scene->wireItems().size(), 0);
+        QCOMPARE(scene->toCircuit().wires.size(), 0);
+    }
+
     void dragWireEndpointKeepsOtherEnd()
     {
         MainWindow window;

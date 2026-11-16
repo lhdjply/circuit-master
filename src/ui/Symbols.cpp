@@ -68,11 +68,15 @@ QPainterPath symbolShape(ComponentType type)
         return path;
     }
     if (type == ComponentType::OpAmp) {
-        path.addRoundedRect(QRectF(-34.0, -27.0, 68.0, 54.0), 5.0, 5.0);
+        // 三角形本体即可，别把整块外接矩形都算成命中区，否则会把背后的导线抢走
+        QPolygonF tri;
+        tri << QPointF(-26.0, -22.0) << QPointF(-26.0, 22.0) << QPointF(24.0, 0.0);
+        path.addPolygon(tri);
+        path.closeSubpath();
         return path;
     }
     if (isThreeTerminalDevice(type)) {
-        path.addRoundedRect(QRectF(-34.0, -34.0, 68.0, 68.0), 5.0, 5.0);
+        path.addRoundedRect(QRectF(-16.0, -16.0, 46.0, 32.0), 4.0, 4.0);
         return path;
     }
     if (type == ComponentType::Probe) {
@@ -80,7 +84,8 @@ QPainterPath symbolShape(ComponentType type)
         path.addRect(QRectF(-4.0, -10.0, 8.0, 12.0));
         return path;
     }
-    path.addRoundedRect(QRectF(-33.0, -16.0, 66.0, 32.0), 5.0, 5.0);
+    // 两端元件：贴着符号本体，高度收到 ±12，避免把旁边经过的导线挡住
+    path.addRoundedRect(QRectF(-30.0, -12.0, 60.0, 24.0), 4.0, 4.0);
     path.addEllipse(QPointF(-30.0, 0.0), 5.0, 5.0);
     path.addEllipse(QPointF(30.0, 0.0), 5.0, 5.0);
     return path;

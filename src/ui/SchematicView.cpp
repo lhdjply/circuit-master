@@ -335,8 +335,12 @@ void SchematicView::updatePreview(const QPointF& scenePos)
 
 void SchematicView::finishWire()
 {
-    if (m_wirePoints.size() >= 2)
-        m_scene->addWire(m_wirePoints);
+    if (m_wirePoints.size() >= 2) {
+        WireItem* drawn = m_scene->addWire(m_wirePoints);
+        // 画出来的线和已有导线首尾相接且共线时并成一条（仅在绘制时发生）
+        m_scene->mergeWireWithNeighbors(drawn);
+        m_scene->commitEdit(); // 画完一段线记一次历史
+    }
 
     m_wirePoints.clear();
     if (m_preview) {
