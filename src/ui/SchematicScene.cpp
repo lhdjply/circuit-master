@@ -104,6 +104,8 @@ ComponentItem* SchematicScene::addComponent(const Component& component)
         emit circuitChanged();
     });
     connect(item, &ComponentItem::editRequested, this, [this, item] { emit editRequested(item); });
+    connect(item, &ComponentItem::movedBy, this,
+            [this, item](const QPointF& delta) { followComponent(item, delta); });
     addItem(item);
     return item;
 }
@@ -314,6 +316,37 @@ void SchematicScene::setShowGrid(bool show)
 QPointF SchematicScene::snap(const QPointF& point) const
 {
     return QPointF(std::round(point.x() / 10.0) * 10.0, std::round(point.y() / 10.0) * 10.0);
+}
+
+void SchematicScene::followComponent(ComponentItem* item, const QPointF& delta)
+{
+    if (!item || (qFuzzyIsNull(delta.x()) && qFuzzyIsNull(delta.y())))
+        return;
+
+    // 引脚现在的坐标减去增量，就是它移动前的位置：落在那里的顶点才是「接着这个引脚」
+    for (WireItem* wire : wireItems()) {
+        // 被一起选中的导线由 QGraphicsItem 自己整组平移，
+        // 这里再补一次增量会走双倍距离
+        if (wire->isSelected())
+            continue;
+        QVector<QPointF> points = wire->scenePoints();
+        bool changed = false;
+        for (const QPointF& pin : item->pinScenePositions()) {
+            const QPointF oldPin = pin - delta;
+            for (QPointF& point : points) {
+                if (QLineF(point, oldPin).length() <= 0.5) {
+                    point += delta;
+                    changed = true;
+                }
+            }
+        }
+        if (changed) {
+            wire->setScenePoints(points);
+            // 端点被带走后可能拉出斜段：立刻整理成横平竖直
+            wire->orthogonalize();
+        }
+    }
+    refresh();
 }
 
 QPointF SchematicScene::snapToPin(const QPointF& point, double tolerance) const

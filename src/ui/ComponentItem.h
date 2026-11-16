@@ -44,6 +44,8 @@ public:
 
 signals:
     void componentChanged();
+    /// 元件被拖动后的位移增量（场景坐标），场景据此带着连线一起走
+    void movedBy(const QPointF& delta);
     void editRequested();
 
 protected:
@@ -58,6 +60,7 @@ private:
     double m_ledBrightness = 0.0;
     bool m_blown = false;
     double m_blastProgress = 0.0;
+    QPointF m_lastPos; // 上一次的位置，用来算增量
 };
 
 } // namespace csm

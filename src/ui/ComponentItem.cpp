@@ -21,6 +21,7 @@ ComponentItem::ComponentItem(const Component& comp, QGraphicsItem* parent)
     setAcceptHoverEvents(true);
     setZValue(1.0);
     setPos(comp.pos);
+    m_lastPos = comp.pos;
 }
 
 QRectF ComponentItem::boundingRect() const
@@ -340,8 +341,12 @@ QVariant ComponentItem::itemChange(GraphicsItemChange change, const QVariant& va
         return QPointF(std::round(p.x() / 10.0) * 10.0, std::round(p.y() / 10.0) * 10.0);
     }
     if (change == ItemPositionHasChanged) {
+        const QPointF delta = pos() - m_lastPos;
+        m_lastPos = pos();
         m_comp.pos = pos();
         emit componentChanged();
+        if (!qFuzzyIsNull(delta.x()) || !qFuzzyIsNull(delta.y()))
+            emit movedBy(delta);
     }
     return QGraphicsObject::itemChange(change, value);
 }

@@ -1502,6 +1502,168 @@ private slots:
         QVERIFY(valueEdit->text().contains(QStringLiteral("100")));
     }
 
+    void movingComponentDragsItsWires()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        // 电阻 R1 在 (200,200)，导线从它的引脚引出到右下角
+        ComponentItem* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(200, 200));
+        QVERIFY(resistor);
+        const QVector<QPointF> pins = resistor->pinScenePositions();
+        QCOMPARE(pins.size(), 2);
+        WireItem* wire = scene->addWire({pins.at(1), QPointF(pins.at(1).x() + 80, pins.at(1).y())});
+        QVERIFY(wire);
+        settle();
+
+        const QVector<QPointF> before = wire->scenePoints();
+        QCOMPARE(before.first(), pins.at(1));
+
+        // 把电阻往右下挪 60/40：连着它的那端要跟着走，另一端不动
+        resistor->setPos(resistor->pos() + QPointF(60, 40));
+        settle();
+
+        const QVector<QPointF> after = wire->scenePoints();
+        QVERIFY(after.size() >= 2);
+        QCOMPARE(after.first(), before.first() + QPointF(60, 40));
+        QCOMPARE(after.last(), before.last());
+        // 端点跟着元件走，但走线要保持横平竖直（会补出直角拐点）
+        for (int i = 1; i < after.size(); ++i) {
+            const QPointF d = after.at(i) - after.at(i - 1);
+            QVERIFY2(std::abs(d.x()) < 0.5 || std::abs(d.y()) < 0.5,
+                     qPrintable(QStringLiteral("第 %1 段是斜线").arg(i)));
+        }
+    }
+
+    void draggingAnchoredWireStretchesInsteadOfDetaching()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        // 两个电阻之间接一条导线，两端都落在引脚上
+        ComponentItem* left = scene->placeComponent(ComponentType::Resistor, QPointF(200, 200));
+        ComponentItem* right = scene->placeComponent(ComponentType::Resistor, QPointF(400, 200));
+        QVERIFY(left && right);
+        const QPointF a = left->pinScenePositions().at(1);
+        const QPointF b = right->pinScenePositions().at(0);
+        WireItem* wire = scene->addWire({a, b});
+        QVERIFY(wire);
+        settle();
+
+        auto* view = window.findChild<SchematicView*>();
+        QVERIFY(view);
+        scene->clearSelection();
+        wire->setSelected(true);
+        settle();
+
+        // 抓导线中间往下拖：两端应当钉在引脚上，导线被拉成折线
+        const QPointF mid = (a + b) / 2.0;
+        const QPoint pressAt = view->mapFromScene(mid);
+        const QPoint dragTo = view->mapFromScene(mid + QPointF(0, 60));
+        QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, pressAt);
+        QMouseEvent move(QEvent::MouseMove, QPointF(dragTo), view->viewport()->mapToGlobal(dragTo),
+                         Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(view->viewport(), &move);
+        QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, dragTo);
+        settle();
+
+        const QVector<QPointF> after = wire->scenePoints();
+        QVERIFY2(after.size() >= 3, "应当插入拐点，把导线拉长而不是整条挪走");
+        QCOMPARE(after.first(), a);
+        QCOMPARE(after.last(), b);
+        // 中间确实往下走了
+        double lowest = a.y();
+        for (const QPointF& p : after)
+            lowest = std::max(lowest, p.y());
+        QVERIFY2(lowest >= mid.y() + 50, qPrintable(QString::number(lowest)));
+
+        QVERIFY(window.grab().save(QCoreApplication::applicationDirPath()
+                                   + QStringLiteral("/shots/wire_orthogonal.png")));
+
+        // 走线必须是直角：每段要么水平要么竖直
+        for (int i = 1; i < after.size(); ++i) {
+            const QPointF d = after.at(i) - after.at(i - 1);
+            const bool horizontal = std::abs(d.y()) < 0.5;
+            const bool vertical = std::abs(d.x()) < 0.5;
+            QVERIFY2(horizontal || vertical,
+                     qPrintable(QStringLiteral("第 %1 段是斜线：(%2,%3) → (%4,%5)")
+                                    .arg(i)
+                                    .arg(after.at(i - 1).x())
+                                    .arg(after.at(i - 1).y())
+                                    .arg(after.at(i).x())
+                                    .arg(after.at(i).y())));
+        }
+    }
+
+    void dragWireEndpointKeepsOtherEnd()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        WireItem* wire = scene->addWire({QPointF(200, 200), QPointF(400, 200)});
+        QVERIFY(wire);
+        settle();
+
+        const QVector<QPointF> before = wire->scenePoints();
+        QCOMPARE(before.size(), 2);
+
+        // 抓末端（400,200）往上拖到 (400,120)
+        auto* view = window.findChild<SchematicView*>();
+        QVERIFY(view);
+        const QPoint end = view->mapFromScene(before.last());
+        const QPoint moved = view->mapFromScene(QPointF(400, 120));
+
+        QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, end);
+        QCOMPARE(wire->draggedEndpoint(), 1);
+        QMouseEvent move(QEvent::MouseMove, QPointF(moved), view->viewport()->mapToGlobal(moved),
+                         Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(view->viewport(), &move);
+        QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, moved);
+        settle();
+
+        const QVector<QPointF> after = wire->scenePoints();
+        QCOMPARE(after.size(), 2);
+        // 首点不动，末点跟到新位置
+        QCOMPARE(after.first(), before.first());
+        QCOMPARE(after.last(), QPointF(400, 120));
+
+        // 电路数据也跟着变
+        const Circuit circuit = scene->toCircuit();
+        QCOMPARE(circuit.wires.size(), 1);
+        QCOMPARE(circuit.wires.first().points.last(), QPointF(400, 120));
+
+        // 抓住中间整体平移：两个端点一起动（中点要在导线上）
+        const QPointF midpoint = (after.first() + after.last()) / 2.0;
+        const QPoint mid = view->mapFromScene(midpoint);
+        const QPoint shifted = view->mapFromScene(midpoint + QPointF(40, 0));
+        QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, mid);
+        QCOMPARE(wire->draggedEndpoint(), -1);
+        QMouseEvent drag(QEvent::MouseMove, QPointF(shifted), view->viewport()->mapToGlobal(shifted),
+                         Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(view->viewport(), &drag);
+        QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, shifted);
+        settle();
+
+        const QVector<QPointF> moved2 = wire->scenePoints();
+        QCOMPARE(moved2.first(), after.first() + QPointF(40, 0));
+        QCOMPARE(moved2.last(), after.last() + QPointF(40, 0));
+    }
+
     void drawWireWithMouse()
     {
         MainWindow window;

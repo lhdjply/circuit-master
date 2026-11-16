@@ -41,6 +41,8 @@ public:
 
     QPointF snap(const QPointF& point) const;
     QPointF snapToPin(const QPointF& point, double tolerance = 12.0) const;
+    /// 元件移动后，把连在它引脚上的导线顶点一起带过去
+    void followComponent(ComponentItem* item, const QPointF& delta);
 
 signals:
     void circuitChanged();
