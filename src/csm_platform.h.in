@@ -1,0 +1,26 @@
+#pragma once
+
+// 由 CMake 在配置阶段按目标平台生成，请勿手工修改。
+// 平台与架构在编译期就定下来，运行期不必再猜字符串，跨平台分支也不会写错。
+
+namespace csm {
+
+enum class HostPlatform {
+    Linux,
+    Windows,
+    MacOS,
+    Other,
+};
+
+enum class HostArch {
+    Amd64,
+    Arm64,
+    Loong64,
+    Riscv64,
+    Other,
+};
+
+inline constexpr HostPlatform kHostPlatform = HostPlatform::@CSM_HOST_PLATFORM@;
+inline constexpr HostArch kHostArch = HostArch::@CSM_HOST_ARCH@;
+
+} // namespace csm

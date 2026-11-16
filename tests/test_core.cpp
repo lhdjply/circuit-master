@@ -6,6 +6,7 @@
 #include "sim/Simulator.h"
 
 #include <QDebug>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSignalSpy>
@@ -787,6 +788,215 @@ private slots:
         QVERIFY2(on > 0.0 && on < 18.0, qPrintable(QString::number(on)));
         QVERIFY2(off > 19.0, qPrintable(QString::number(off)));
         QVERIFY2(on < off, "IGBT 应当在高栅压下导通");
+    }
+
+    void updatePickerChoosesPlatformAsset()
+    {
+        ReleaseInfo release;
+        release.version = QStringLiteral("0.2.0");
+        const auto add = [&release](const QString& name) {
+            ReleaseAsset asset;
+            asset.name = name;
+            asset.url = QStringLiteral("https://example.invalid/") + name;
+            asset.size = 1024;
+            release.assets.append(asset);
+        };
+        add(QStringLiteral("circuit-master_0.2.0_amd64.deb"));
+        add(QStringLiteral("circuit-master_0.2.0_arm64.deb"));
+        add(QStringLiteral("circuit-master_0.2.0_loong64.deb"));
+        add(QStringLiteral("circuit-master-0.2.0-linux-amd64.tar.gz"));
+        add(QStringLiteral("circuit-master-0.2.0-windows-x64.zip"));
+        add(QStringLiteral("circuit-master-0.2.0-windows-x64-setup.exe"));
+        add(QStringLiteral("circuit-master-0.2.0-windows-arm64-setup.exe"));
+
+        // Linux：按架构挑 deb，优先 deb 而不是 tar.gz
+        const auto pick = [&release](HostPlatform os, HostArch arch,
+                                     InstallKind kind = InstallKind::System) {
+            return UpdateChecker::pickAsset(release, os, arch, kind).name;
+        };
+        QCOMPARE(pick(HostPlatform::Linux, HostArch::Amd64),
+                 QStringLiteral("circuit-master_0.2.0_amd64.deb"));
+        QCOMPARE(pick(HostPlatform::Linux, HostArch::Arm64),
+                 QStringLiteral("circuit-master_0.2.0_arm64.deb"));
+        QCOMPARE(pick(HostPlatform::Linux, HostArch::Loong64),
+                 QStringLiteral("circuit-master_0.2.0_loong64.deb"));
+
+        // Windows：优先安装包
+        QCOMPARE(pick(HostPlatform::Windows, HostArch::Amd64),
+                 QStringLiteral("circuit-master-0.2.0-windows-x64-setup.exe"));
+        QCOMPARE(pick(HostPlatform::Windows, HostArch::Arm64),
+                 QStringLiteral("circuit-master-0.2.0-windows-arm64-setup.exe"));
+
+        // 某架构没出包时退回 portable
+        ReleaseInfo only = release;
+        only.assets.clear();
+        ReleaseAsset zip;
+        zip.name = QStringLiteral("circuit-master-0.2.0-windows-x64.zip");
+        zip.url = QStringLiteral("https://example.invalid/x.zip");
+        only.assets.append(zip);
+        QCOMPARE(UpdateChecker::pickAsset(only, HostPlatform::Windows, HostArch::Amd64,
+                                          InstallKind::System).name,
+                 QStringLiteral("circuit-master-0.2.0-windows-x64.zip"));
+
+        // 包形态枚举：Linux 出 deb + 便携 tar.gz，Windows 出 setup + 便携 zip
+        const auto formats = [](HostPlatform os, InstallKind kind) {
+            return UpdateChecker::formatsFor(os, kind);
+        };
+        QCOMPARE(formats(HostPlatform::Linux, InstallKind::System).size(), 2);
+        QCOMPARE(formats(HostPlatform::Windows, InstallKind::System).size(), 2);
+        QVERIFY(formats(HostPlatform::MacOS, InstallKind::System).isEmpty());
+
+        // 便携版运行时要优先给便携包，和安装方式保持一致
+        QCOMPARE(formats(HostPlatform::Linux, InstallKind::System).first(), PackageFormat::Deb);
+        QCOMPARE(formats(HostPlatform::Linux, InstallKind::Portable).first(),
+                 PackageFormat::PortableTarGz);
+        QCOMPARE(formats(HostPlatform::Windows, InstallKind::System).first(),
+                 PackageFormat::SetupExe);
+        QCOMPARE(formats(HostPlatform::Windows, InstallKind::Portable).first(),
+                 PackageFormat::PortableZip);
+
+        // 挑包跟着安装方式走
+        QCOMPARE(pick(HostPlatform::Linux, HostArch::Amd64, InstallKind::Portable),
+                 QStringLiteral("circuit-master-0.2.0-linux-amd64.tar.gz"));
+        QCOMPARE(pick(HostPlatform::Linux, HostArch::Amd64, InstallKind::System),
+                 QStringLiteral("circuit-master_0.2.0_amd64.deb"));
+
+        QCOMPARE(UpdateChecker::suffixFor(HostPlatform::Linux, HostArch::Amd64, PackageFormat::Deb),
+                 QStringLiteral("_amd64.deb"));
+        QCOMPARE(UpdateChecker::suffixFor(HostPlatform::Linux, HostArch::Riscv64,
+                                          PackageFormat::PortableTarGz),
+                 QStringLiteral("-linux-riscv64.tar.gz"));
+        QCOMPARE(UpdateChecker::suffixFor(HostPlatform::Windows, HostArch::Arm64,
+                                          PackageFormat::SetupExe),
+                 QStringLiteral("-windows-arm64-setup.exe"));
+        QCOMPARE(UpdateChecker::suffixFor(HostPlatform::Windows, HostArch::Amd64,
+                                          PackageFormat::PortableZip),
+                 QStringLiteral("-windows-x64.zip"));
+        // 平台与形态不匹配时没有后缀
+        QVERIFY(UpdateChecker::suffixFor(HostPlatform::Linux, HostArch::Amd64,
+                                         PackageFormat::SetupExe).isEmpty());
+
+        // 同一平台两种形态都要能列出来
+        const auto linuxPackages = UpdateChecker::hostPackagesFor(
+            release, HostPlatform::Linux, HostArch::Amd64, InstallKind::System);
+        QCOMPARE(linuxPackages.size(), 2);
+        QCOMPARE(linuxPackages.at(0).format, PackageFormat::Deb);
+        QCOMPARE(linuxPackages.at(1).format, PackageFormat::PortableTarGz);
+        const auto winPackages = UpdateChecker::hostPackagesFor(
+            release, HostPlatform::Windows, HostArch::Amd64, InstallKind::System);
+        QCOMPARE(winPackages.size(), 2);
+        QCOMPARE(winPackages.at(0).format, PackageFormat::SetupExe);
+        QCOMPARE(winPackages.at(1).format, PackageFormat::PortableZip);
+
+        // 便携版只看得到便携包在最前
+        const auto portable = UpdateChecker::hostPackagesFor(
+            release, HostPlatform::Linux, HostArch::Amd64, InstallKind::Portable);
+        QCOMPARE(portable.at(0).format, PackageFormat::PortableTarGz);
+
+        // 环境变量可覆盖检测结果
+        qputenv("CSM_INSTALL_KIND", "portable");
+        QCOMPARE(UpdateChecker::detectInstallKind(), InstallKind::Portable);
+        qputenv("CSM_INSTALL_KIND", "system");
+        QCOMPARE(UpdateChecker::detectInstallKind(), InstallKind::System);
+        qunsetenv("CSM_INSTALL_KIND");
+
+        // 不支持的平台：返回空，界面回退到发布页
+        QVERIFY(UpdateChecker::pickAsset(release, HostPlatform::MacOS, HostArch::Arm64,
+                                         InstallKind::System).name.isEmpty());
+        // 当前构建目标一定能挑到 Linux 包（本机是 Linux-amd64）
+        QVERIFY(!UpdateChecker::pickAssetForHost(release).name.isEmpty());
+    }
+
+    void downloadUrlsPreferWorkingMirror()
+    {
+        const QString asset = QStringLiteral(
+            "https://github.com/lhdjply/circuit-master/releases/download/v0.2.0/a.deb");
+
+        // 取清单时用的是 ghfast.top：下载也应当先走它
+        const QVector<QUrl> preferred =
+            UpdateChecker::downloadUrls(asset, QStringLiteral("https://ghfast.top"));
+        QVERIFY(preferred.size() >= 2);
+        QCOMPARE(preferred.first().toString(),
+                 QStringLiteral("https://ghfast.top/") + asset);
+        // 直链放在最后
+        QCOMPARE(preferred.last().toString(), asset);
+        // 同样的镜像不会重复出现
+        int ghfast = 0;
+        for (const QUrl& url : preferred) {
+            if (url.toString().startsWith(QStringLiteral("https://ghfast.top/")))
+                ++ghfast;
+        }
+        QCOMPARE(ghfast, 1);
+
+        // 没记录通路时：先镜像，最后直链
+        const QVector<QUrl> plain = UpdateChecker::downloadUrls(asset, QString());
+        QVERIFY(plain.size() >= 2);
+        QVERIFY(plain.first().toString().startsWith(QStringLiteral("https://gh-proxy.org/")));
+        QCOMPARE(plain.last().toString(), asset);
+
+        // 空资产地址返回空列表
+        QVERIFY(UpdateChecker::downloadUrls(QString(), QString()).isEmpty());
+    }
+
+    void manifestRecordsMirrorForDownloads()
+    {
+        // 本地起一个「镜像」，同时提供 latest.json 和安装包
+        QTcpServer server;
+        QVERIFY(server.listen(QHostAddress::LocalHost));
+        QByteArray assetPayload = "package-bytes";
+        connect(&server, &QTcpServer::newConnection, this, [&server, &assetPayload] {
+            QTcpSocket* socket = server.nextPendingConnection();
+            connect(socket, &QTcpSocket::readyRead, socket, [socket, &assetPayload] {
+                const QByteArray request = socket->readAll();
+                const bool isAsset = request.contains("/pkg.bin");
+                const QByteArray body = isAsset ? assetPayload : QByteArray();
+                socket->write("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n"
+                              "Content-Length: "
+                              + QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n"
+                              + body);
+                socket->disconnectFromHost();
+            });
+        });
+
+        const QString base = QStringLiteral("http://127.0.0.1:%1").arg(server.serverPort());
+        QJsonObject object;
+        object.insert(QStringLiteral("version"), QStringLiteral("99.0.0"));
+        object.insert(QStringLiteral("tag"), QStringLiteral("v99.0.0"));
+        QJsonObject asset;
+        asset.insert(QStringLiteral("name"), QStringLiteral("circuit-master_99.0.0_amd64.deb"));
+        asset.insert(QStringLiteral("url"), base + QStringLiteral("/pkg.bin"));
+        asset.insert(QStringLiteral("size"), qint64(assetPayload.size()));
+        object.insert(QStringLiteral("assets"), QJsonArray{asset});
+        const QByteArray manifest = QJsonDocument(object).toJson(QJsonDocument::Compact);
+
+        QTcpServer manifestServer;
+        QVERIFY(manifestServer.listen(QHostAddress::LocalHost));
+        connect(&manifestServer, &QTcpServer::newConnection, this, [&manifestServer, &manifest] {
+            QTcpSocket* socket = manifestServer.nextPendingConnection();
+            connect(socket, &QTcpSocket::readyRead, socket, [socket, &manifest] {
+                socket->readAll();
+                socket->write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                              "Content-Length: "
+                              + QByteArray::number(manifest.size())
+                              + "\r\nConnection: close\r\n\r\n" + manifest);
+                socket->disconnectFromHost();
+            });
+        });
+
+        const QString mirror = QStringLiteral("http://127.0.0.1:%1").arg(manifestServer.serverPort());
+
+        UpdateChecker checker;
+        checker.setMirrorPrefixes({mirror});
+        checker.setManifestUrl(QUrl(base + QStringLiteral("/latest.json")));
+        QSignalSpy spy(&checker, &UpdateChecker::updateAvailable);
+        QVERIFY(checker.check());
+        QVERIFY(spy.wait(5000));
+        QCOMPARE(spy.count(), 1);
+
+        const auto release = spy.first().at(0).value<ReleaseInfo>();
+        QCOMPARE(release.assets.size(), 1);
+        QVERIFY2(!release.mirror.isEmpty(), "应当记录取到清单所用的镜像");
+        QVERIFY(release.mirror.startsWith(mirror));
     }
 
     void versionComparison()

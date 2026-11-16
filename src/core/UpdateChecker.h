@@ -24,6 +24,8 @@
 //  失败必须给出可读原因，不静默 —— 「没动静」最容易被理解成「没有更新」。
 // ---------------------------------------------------------------------------
 
+#include "csm_platform.h"
+
 #include <QElapsedTimer>
 #include <QList>
 #include <QObject>
@@ -38,6 +40,28 @@ class QTimer;
 
 namespace csm {
 
+/// 安装包形态。Linux 出 deb 与便携 tar.gz，Windows 出 setup.exe 与便携 zip。
+enum class PackageFormat {
+    Deb,          // Debian / Ubuntu / Deepin 安装包
+    PortableTarGz, // Linux 便携包，解压即用
+    SetupExe,     // Windows 安装程序
+    PortableZip,  // Windows 便携包，解压即用
+};
+
+/// 当前这份程序是怎么装的。分「系统安装」与「便携解压」两种，
+/// 升级时应当下载同一种形态，免得用 deb 的人被塞 tar.gz、用便携版的人被塞 deb。
+enum class InstallKind {
+    System,   // deb / setup.exe 装的
+    Portable, // tar.gz / zip 解压出来的
+};
+
+/// Release 里的一个下载资产
+struct ReleaseAsset {
+    QString name;   // 文件名，例如 circuit-master_0.2.0_amd64.deb
+    QString url;    // 直链（github.com/releases/download/<tag>/<file>）
+    qint64 size = 0; // 字节数，未知为 0
+};
+
 /// 一条 Release 里本功能用得到的字段
 struct ReleaseInfo {
     QString version;     // 规范化后的版本号（去掉 tag 的 v 前缀与预发布后缀）
@@ -46,6 +70,10 @@ struct ReleaseInfo {
     QString notes;       // 更新日志正文（清单里是 Markdown）
     QUrl pageUrl;        // 发布页：浏览器打开后可看到安装包
     QString publishedAt; // ISO 8601 时间
+    QVector<ReleaseAsset> assets; // 清单里列出的安装包
+    /// 这次是从哪个镜像取到清单的（空字符串表示直连 GitHub）。
+    /// 下载安装包时优先走同一条通路 —— 能取到清单的地址，下大文件通常也通。
+    QString mirror;
 };
 
 class UpdateChecker : public QObject {
@@ -71,6 +99,36 @@ public:
     /// 比较版本号：只比数字段（0.10.0 > 0.9.9），忽略 v 前缀、预发布后缀与
     /// 缺失的段（1.2 == 1.2.0）。返回 >0 表示 a 比 b 新
     static int compareVersions(const QString& a, const QString& b);
+
+    /// 按平台挑出最合适的安装包。平台与架构是编译期常量（见 csm_platform.h），
+    /// 显式传进来是为了能测各平台的组合。
+    /// 挑不到时返回 name 为空的资产，调用方回退到「打开发布页」。
+    static ReleaseAsset pickAsset(const ReleaseInfo& release, HostPlatform platform,
+                                  HostArch arch, InstallKind kind);
+
+    /// 判断当前这份程序是系统安装还是便携解压：
+    /// Windows 看安装目录里有没有 Inno 的卸载程序，Linux 看可执行文件在不在系统前缀下。
+    /// 环境变量 CSM_INSTALL_KIND=system|portable 可以覆盖（测试与特殊部署用）。
+    static InstallKind detectInstallKind();
+
+    /// 下载安装包时尝试的地址顺序：优先本次取清单成功的那条通路，
+    /// 再逐个试其它镜像，最后才直连 GitHub。assetUrl 是清单里的直链。
+    static QVector<QUrl> downloadUrls(const QString& assetUrl, const QString& preferredMirror);
+    /// 用当前构建目标挑包（首选形态）
+    static ReleaseAsset pickAssetForHost(const ReleaseInfo& release);
+
+    /// 当前平台支持哪些包形态，按推荐顺序排列（找不到产物时为空）
+    static QVector<PackageFormat> formatsFor(HostPlatform platform, InstallKind kind);
+    /// 某个形态在文件名里的后缀，例如 Linux/Amd64 的 deb → "_amd64.deb"
+    static QString suffixFor(HostPlatform platform, HostArch arch, PackageFormat format);
+
+    /// 清单里当前平台能用的包，按推荐顺序（安装方式决定顺序）；没有的形态直接跳过
+    struct HostPackage {
+        PackageFormat format;
+        ReleaseAsset asset;
+    };
+    static QVector<HostPackage> hostPackagesFor(const ReleaseInfo& release, HostPlatform platform,
+                                                HostArch arch, InstallKind kind);
 
 signals:
     void upToDate(const QString& currentVersion);
@@ -98,6 +156,7 @@ private:
     QUrl m_manifestUrl;
     QStringList m_mirrors;
     QVector<QUrl> m_urls;
+    QUrl m_activeUrl; // 正在请求的地址，成功时用来记住通路
     int m_attempts = 0;
     bool m_running = false;
     QElapsedTimer m_clock;

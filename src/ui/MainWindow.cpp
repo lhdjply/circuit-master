@@ -1542,9 +1542,13 @@ void MainWindow::checkForUpdates(bool manual)
                 checker->deleteLater();
                 if (!manual && !isVisible())
                     return;
-                appendLog(QStringLiteral("发现新版本 %1").arg(release.tagName));
+                appendLog(QStringLiteral("发现新版本 %1（%2 个安装包）")
+                              .arg(release.tagName)
+                              .arg(release.assets.size()));
                 UpdateDialog dialog(release, this);
                 dialog.exec();
+                if (!dialog.savedPath().isEmpty())
+                    appendLog(QStringLiteral("安装包已下载：%1").arg(dialog.savedPath()));
             });
     connect(checker, &UpdateChecker::failed, this,
             [this, checker, manual](const QString& reason) {

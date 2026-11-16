@@ -692,6 +692,22 @@ jobs:
           with open(notes_path, encoding="utf-8") as handle:
               notes = handle.read()
 
+          # 资产清单：客户端据此挑出当前平台该下的包，直接下载而不必打开网页。
+          # 名字与 Release 资产一致，URL 用 /releases/download/<tag>/<file> 拼出来。
+          assets = []
+          for root, _dirs, files in os.walk("artifacts"):
+              for name in sorted(files):
+                  if not name.endswith((".deb", ".tar.gz", ".zip", "-setup.exe")):
+                      continue
+                  if name.endswith((".sha256", ".dbgsym.deb", ".build-deps.deb")):
+                      continue
+                  full = os.path.join(root, name)
+                  assets.append({
+                      "name": name,
+                      "size": os.path.getsize(full),
+                      "url": f"https://github.com/{repo}/releases/download/{tag}/{name}",
+                  })
+
           manifest = {
               "version": version,
               "tag": tag,
@@ -699,6 +715,7 @@ jobs:
               "page": f"https://github.com/{repo}/releases/tag/{tag}",
               "notes": notes,
               "published_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "assets": assets,
           }
           with open(out_path, "w", encoding="utf-8") as handle:
               json.dump(manifest, handle, ensure_ascii=False, indent=2)

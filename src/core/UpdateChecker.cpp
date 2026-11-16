@@ -3,6 +3,8 @@
 #include "csm_version.h"
 
 #include <QCoreApplication>
+#include <QDir>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
@@ -67,6 +69,42 @@ QVector<int> versionParts(const QString& version)
     return parts;
 }
 
+/// Debian 的架构名（发布产物的文件名里就是这个）
+QString debArch(HostArch arch)
+{
+    switch (arch) {
+    case HostArch::Amd64:
+        return QStringLiteral("amd64");
+    case HostArch::Arm64:
+        return QStringLiteral("arm64");
+    case HostArch::Loong64:
+        return QStringLiteral("loong64");
+    case HostArch::Riscv64:
+        return QStringLiteral("riscv64");
+    case HostArch::Other:
+        break;
+    }
+    return QString();
+}
+
+/// Windows 产物里 x86_64 写作 x64
+QString winArch(HostArch arch)
+{
+    switch (arch) {
+    case HostArch::Amd64:
+        return QStringLiteral("x64");
+    case HostArch::Arm64:
+        return QStringLiteral("arm64");
+    case HostArch::Loong64:
+        return QStringLiteral("loong64");
+    case HostArch::Riscv64:
+        return QStringLiteral("riscv64");
+    case HostArch::Other:
+        break;
+    }
+    return QString();
+}
+
 } // namespace
 
 UpdateChecker::UpdateChecker(QObject* parent)
@@ -114,6 +152,143 @@ int UpdateChecker::compareVersions(const QString& a, const QString& b)
             return l > r ? 1 : -1;
     }
     return 0;
+}
+
+QVector<PackageFormat> UpdateChecker::formatsFor(HostPlatform platform, InstallKind kind)
+{
+    // 优先给「和当前安装方式一致」的形态，另一种作为退路
+    switch (platform) {
+    case HostPlatform::Linux:
+        return kind == InstallKind::Portable
+            ? QVector<PackageFormat>{PackageFormat::PortableTarGz, PackageFormat::Deb}
+            : QVector<PackageFormat>{PackageFormat::Deb, PackageFormat::PortableTarGz};
+    case HostPlatform::Windows:
+        return kind == InstallKind::Portable
+            ? QVector<PackageFormat>{PackageFormat::PortableZip, PackageFormat::SetupExe}
+            : QVector<PackageFormat>{PackageFormat::SetupExe, PackageFormat::PortableZip};
+    default:
+        return {};
+    }
+}
+
+InstallKind UpdateChecker::detectInstallKind()
+{
+    const QString forced = qEnvironmentVariable("CSM_INSTALL_KIND").trimmed().toLower();
+    if (forced == QLatin1String("portable"))
+        return InstallKind::Portable;
+    if (forced == QLatin1String("system"))
+        return InstallKind::System;
+
+#if defined(Q_OS_WIN)
+    // Inno Setup 会在安装目录留一个 unins000.exe：有它就是安装版，没有就是解压版
+    const QDir dir(QCoreApplication::applicationDirPath());
+    const QStringList uninstallers = dir.entryList({QStringLiteral("unins*.exe")}, QDir::Files);
+    return uninstallers.isEmpty() ? InstallKind::Portable : InstallKind::System;
+#else
+    // deb 装在 /usr 下；解压 tar.gz 的人通常放在家目录或 /opt 之外的地方
+    const QString appDir = QCoreApplication::applicationDirPath();
+    for (const QString& prefix : {QStringLiteral("/usr/"), QStringLiteral("/snap/"),
+                                  QStringLiteral("/app/")}) {
+        if (appDir.startsWith(prefix))
+            return InstallKind::System;
+    }
+    return InstallKind::Portable;
+#endif
+}
+
+QString UpdateChecker::suffixFor(HostPlatform platform, HostArch arch, PackageFormat format)
+{
+    switch (format) {
+    case PackageFormat::Deb:
+        if (platform != HostPlatform::Linux || debArch(arch).isEmpty())
+            return QString();
+        return QStringLiteral("_%1.deb").arg(debArch(arch));
+    case PackageFormat::PortableTarGz:
+        if (platform != HostPlatform::Linux || debArch(arch).isEmpty())
+            return QString();
+        return QStringLiteral("-linux-%1.tar.gz").arg(debArch(arch));
+    case PackageFormat::SetupExe:
+        if (platform != HostPlatform::Windows || winArch(arch).isEmpty())
+            return QString();
+        return QStringLiteral("-windows-%1-setup.exe").arg(winArch(arch));
+    case PackageFormat::PortableZip:
+        if (platform != HostPlatform::Windows || winArch(arch).isEmpty())
+            return QString();
+        return QStringLiteral("-windows-%1.zip").arg(winArch(arch));
+    }
+    return QString();
+}
+
+QVector<UpdateChecker::HostPackage> UpdateChecker::hostPackagesFor(const ReleaseInfo& release,
+                                                                 HostPlatform platform, HostArch arch,
+                                                                 InstallKind kind)
+{
+    QVector<HostPackage> result;
+    for (PackageFormat format : formatsFor(platform, kind)) {
+        const QString suffix = suffixFor(platform, arch, format);
+        if (suffix.isEmpty())
+            continue;
+        for (const ReleaseAsset& asset : release.assets) {
+            if (asset.name.endsWith(suffix, Qt::CaseInsensitive)) {
+                result.append({format, asset});
+                break;
+            }
+        }
+    }
+    return result;
+}
+
+ReleaseAsset UpdateChecker::pickAsset(const ReleaseInfo& release, HostPlatform platform,
+                                      HostArch arch, InstallKind kind)
+{
+    const QVector<HostPackage> packages = hostPackagesFor(release, platform, arch, kind);
+    if (!packages.isEmpty())
+        return packages.first().asset;
+
+    // 架构对不上时的退路：同平台随便给一个（apt / 安装程序自己会拒绝装错架构）
+    const char* loose = platform == HostPlatform::Linux ? ".deb"
+        : platform == HostPlatform::Windows             ? "-setup.exe"
+                                                        : nullptr;
+    if (loose) {
+        for (const ReleaseAsset& asset : release.assets) {
+            if (asset.name.endsWith(QLatin1String(loose), Qt::CaseInsensitive))
+                return asset;
+        }
+    }
+    return ReleaseAsset();
+}
+
+QVector<QUrl> UpdateChecker::downloadUrls(const QString& assetUrl, const QString& preferredMirror)
+{
+    QVector<QUrl> urls;
+    if (assetUrl.isEmpty())
+        return urls;
+
+    const auto withPrefix = [&assetUrl](QString prefix) {
+        while (prefix.endsWith(QLatin1Char('/')))
+            prefix.chop(1);
+        return QUrl(prefix + QLatin1Char('/') + assetUrl);
+    };
+
+    // 先把「取清单时成功过的那条路」放最前
+    const QString preferred = preferredMirror.trimmed();
+    if (!preferred.isEmpty())
+        urls.append(withPrefix(preferred));
+
+    for (const QString& prefix : builtinMirrors()) {
+        if (prefix.trimmed() == preferred)
+            continue;
+        urls.append(withPrefix(prefix));
+    }
+
+    // 直链放最后：能连上 GitHub 时它最快，连不上时前面几家已经试过了
+    urls.append(QUrl(assetUrl));
+    return urls;
+}
+
+ReleaseAsset UpdateChecker::pickAssetForHost(const ReleaseInfo& release)
+{
+    return pickAsset(release, kHostPlatform, kHostArch, detectInstallKind());
 }
 
 QVector<QUrl> UpdateChecker::candidates() const
@@ -205,6 +380,7 @@ void UpdateChecker::sendAttempt()
         return;
 
     const QUrl url = m_urls.at(m_attempts % m_urls.size());
+    m_activeUrl = url;
     ++m_attempts;
 
     QNetworkRequest request(url);
@@ -370,6 +546,18 @@ bool UpdateChecker::parseManifest(const QByteArray& payload)
     info.notes = object.value(QStringLiteral("notes")).toString();
     info.publishedAt = object.value(QStringLiteral("published_at")).toString();
 
+    // 安装包清单；旧清单没有这一项时留空，界面回退到「打开发布页」
+    const QJsonArray assets = object.value(QStringLiteral("assets")).toArray();
+    for (const QJsonValue& value : assets) {
+        const QJsonObject item = value.toObject();
+        ReleaseAsset asset;
+        asset.name = item.value(QStringLiteral("name")).toString();
+        asset.url = item.value(QStringLiteral("url")).toString();
+        asset.size = qint64(item.value(QStringLiteral("size")).toDouble(0.0));
+        if (!asset.name.isEmpty() && !asset.url.isEmpty())
+            info.assets.append(asset);
+    }
+
     // 清单经过第三方转发，而这里没有签名可验：页面地址只认本仓库的发布页，
     // 免得被篡改的清单把用户带到任意网站。不认就回到按 tag 拼出来的地址。
     const QUrl page(object.value(QStringLiteral("page")).toString());
@@ -381,6 +569,18 @@ bool UpdateChecker::parseManifest(const QByteArray& payload)
     } else {
         info.pageUrl = QUrl(QStringLiteral("https://github.com%1releases/tag/%2")
                                 .arg(QLatin1String(kRepoPath), info.tagName));
+    }
+
+    // 记下这次是哪条通路取到清单的：下载安装包时优先走同一条
+    const QString active = m_activeUrl.toString();
+    for (const QString& prefix : m_mirrors) {
+        QString trimmed = prefix.trimmed();
+        while (trimmed.endsWith(QLatin1Char('/')))
+            trimmed.chop(1);
+        if (!trimmed.isEmpty() && active.startsWith(trimmed)) {
+            info.mirror = prefix;
+            break;
+        }
     }
 
     report(info);

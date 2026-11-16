@@ -46,7 +46,15 @@
 - 菜单「帮助 → 检查更新…」手动检查，或启动 3 秒后自动检查一次（只在新版本出现时弹窗）
 - 数据来源是随 Release 上传的 `latest.json`，依次尝试 gh-proxy.org / ghfast.top / ghproxy.net 三个镜像，
   首条请求 700 ms 未返回就并行补发一条，避免单条连接卡住
-- 只查询与展示，不下载、不自动替换自身；清单里的发布页地址只认本仓库，防止被篡改的清单带偏
+- **可以直接下载安装包**：清单里带资产列表，包的类型自动选，用户只需选保存路径：
+  - 平台来自编译期枚举（Linux / Windows），架构也是（amd64 / arm64 / loong64 / riscv64）
+  - 安装方式在运行时判断 —— **deb 装的给 deb，便携拆包运行就给 tar.gz**；
+    Windows 同理（Inno 安装版给 setup.exe，解压版给 zip），另一种形态作为退路
+  - 判断依据：Windows 看安装目录有没有 `unins*.exe`，Linux 看可执行文件是否在 `/usr` 等下；
+    环境变量 `CSM_INSTALL_KIND=system|portable` 可强制覆盖
+- 下载通路与查版本一致：先用**刚才取清单成功的那条镜像**，再依次试其它镜像，
+  最后才直连 GitHub；失败自动换下一条重试
+- 只下载、不安装，程序不会自行替换自身；清单里的发布页地址只认本仓库，防止被篡改的清单带偏
 - 设置环境变量 `CSM_NO_UPDATE_CHECK=1` 可关闭启动检查（测试即用此方式）
 
 **测试点与波形**
@@ -82,6 +90,10 @@
 
 ![检查更新](docs/screenshots/update_dialog.png)
 
+从便携包运行时会自动选择便携包下载：
+
+![便携版更新](docs/screenshots/update_dialog_portable.png)
+
 五种三端器件（NPN / PNP / N 沟道 MOS / P 沟道 MOS / IGBT）：
 
 ![三端器件](docs/screenshots/transistors.png)
@@ -89,6 +101,10 @@
 波形监控窗口（静态波形 / 动态示波器，分析参数在静态页里）：
 
 ![波形监控](docs/screenshots/monitor.png)
+
+电容默认无极性，勾选「有极性」后按电解电容绘制（直板 + 弯板 + 「+」）：
+
+![电容符号](docs/screenshots/capacitor_polarity.png)
 
 电解电容反接：先烧红（红温），再炸成蘑菇云，特效保留到仿真结束。
 

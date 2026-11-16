@@ -1,6 +1,7 @@
 #include "csm_version.h"
 #include "ui/MainWindow.h"
 #include "ui/Symbols.h"
+#include "csm_platform.h"
 #include "ui/UpdateDialog.h"
 #include "ui/SchematicScene.h"
 #include "ui/SchematicView.h"
@@ -30,7 +31,9 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QSet>
+#include <QSignalSpy>
 #include <QTest>
 
 using namespace csm;
@@ -39,6 +42,82 @@ class UiTest : public QObject {
     Q_OBJECT
 
 private slots:
+    void updateDialogDownloadsPackage()
+    {
+        // 造一个本地「安装包」，用 file:// 直链模拟下载
+        const QString payload = QStringLiteral("fake package bytes 1234567890");
+        const QString source = QDir(QCoreApplication::applicationDirPath())
+                                   .filePath(QStringLiteral("shots/fake-setup.bin"));
+        QDir().mkpath(QFileInfo(source).absolutePath());
+        {
+            QFile file(source);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write(payload.toUtf8());
+        }
+
+        ReleaseInfo release;
+        release.version = QStringLiteral("0.2.0");
+        release.tagName = QStringLiteral("v0.2.0");
+        release.pageUrl = QUrl(QStringLiteral("https://github.com/lhdjply/circuit-master/releases/tag/v0.2.0"));
+        // 各平台的包都摆上（都指向同一个本地文件），挑包逻辑与宿主机无关
+        const QString localUrl = QUrl::fromLocalFile(source).toString();
+        for (const QString& name : {QStringLiteral("circuit-master_0.2.0_amd64.deb"),
+                                    QStringLiteral("circuit-master-0.2.0-linux-amd64.tar.gz"),
+                                    QStringLiteral("circuit-master-0.2.0-windows-x64-setup.exe"),
+                                    QStringLiteral("circuit-master-0.2.0-windows-arm64-setup.exe"),
+                                    QStringLiteral("circuit-master-0.2.0-windows-x64.zip")}) {
+            ReleaseAsset item;
+            item.name = name;
+            item.url = localUrl;
+            item.size = payload.toUtf8().size();
+            release.assets.append(item);
+        }
+
+        UpdateDialog dialog(release);
+        QVERIFY2(!dialog.asset().name.isEmpty(), "应当挑到当前平台对应的包");
+        QVERIFY(dialog.asset().name.startsWith(QStringLiteral("circuit-master")));
+        // 包形态按「平台 + 当前安装方式」自动选：安装版给 deb / setup，便携版给便携包
+        const InstallKind kind = UpdateChecker::detectInstallKind();
+        const QVector<PackageFormat> formats = UpdateChecker::formatsFor(csm::kHostPlatform, kind);
+        QVERIFY2(!formats.isEmpty(), "当前平台应当有可下载的包形态");
+        const QString expectedSuffix =
+            UpdateChecker::suffixFor(csm::kHostPlatform, csm::kHostArch, formats.first());
+        QVERIFY2(dialog.asset().name.endsWith(expectedSuffix),
+                 qPrintable(QStringLiteral("%1 应当以 %2 结尾")
+                                .arg(dialog.asset().name, expectedSuffix)));
+
+        const QString target = QDir(QCoreApplication::applicationDirPath())
+                                   .filePath(QStringLiteral("shots/downloaded.bin"));
+        QFile::remove(target);
+
+        QSignalSpy spy(&dialog, &UpdateDialog::downloadFinished);
+        QVERIFY(dialog.downloadTo(target));
+        QVERIFY(spy.wait(10000));
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(dialog.savedPath(), target);
+
+        // 便携版运行时应优先下便携包
+        qputenv("CSM_INSTALL_KIND", "portable");
+        {
+            UpdateDialog portable(release);
+            const QVector<PackageFormat> kinds =
+                UpdateChecker::formatsFor(csm::kHostPlatform, InstallKind::Portable);
+            QVERIFY(!kinds.isEmpty());
+            const QString suffix =
+                UpdateChecker::suffixFor(csm::kHostPlatform, csm::kHostArch, kinds.first());
+            QVERIFY2(portable.asset().name.endsWith(suffix),
+                     qPrintable(QStringLiteral("%1 应当以 %2 结尾")
+                                    .arg(portable.asset().name, suffix)));
+        }
+        qunsetenv("CSM_INSTALL_KIND");
+
+        QFile saved(target);
+        QVERIFY(saved.open(QIODevice::ReadOnly));
+        QCOMPARE(QString::fromUtf8(saved.readAll()), payload);
+        saved.close();
+        QFile::remove(target);
+    }
+
     void updateDialogRenders()
     {
         ReleaseInfo release;

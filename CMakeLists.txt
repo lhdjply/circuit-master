@@ -71,6 +71,38 @@ configure_file(
     "${CMAKE_CURRENT_BINARY_DIR}/generated/csm_version.h"
     @ONLY
 )
+# ------------------------------------------------------------ 平台与架构头文件
+# 编译期就把「当前是哪个平台、哪个架构」定下来，运行期只读常量，
+# 不必再依赖 QSysInfo 的字符串（不同 Qt 版本拼写并不完全一致）。
+if(WIN32)
+    set(CSM_HOST_PLATFORM "Windows")
+elseif(APPLE)
+    set(CSM_HOST_PLATFORM "MacOS")
+elseif(UNIX)
+    set(CSM_HOST_PLATFORM "Linux")
+else()
+    set(CSM_HOST_PLATFORM "Other")
+endif()
+
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" CSM_HOST_CPU)
+if(CSM_HOST_CPU MATCHES "^(x86_64|amd64|x64)$")
+    set(CSM_HOST_ARCH "Amd64")
+elseif(CSM_HOST_CPU MATCHES "^(aarch64|arm64)$")
+    set(CSM_HOST_ARCH "Arm64")
+elseif(CSM_HOST_CPU MATCHES "^loongarch64$|^loong64$")
+    set(CSM_HOST_ARCH "Loong64")
+elseif(CSM_HOST_CPU MATCHES "^riscv64$")
+    set(CSM_HOST_ARCH "Riscv64")
+else()
+    set(CSM_HOST_ARCH "Other")
+endif()
+message(STATUS "Target platform: ${CSM_HOST_PLATFORM}/${CSM_HOST_ARCH}")
+
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/csm_platform.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/csm_platform.h"
+    @ONLY
+)
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 # ---------------------------------------------------------------- 核心引擎
