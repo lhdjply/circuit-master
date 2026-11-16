@@ -91,6 +91,7 @@ struct ElementState {
     QHash<int, double> mosVgs;  // MOSFET / IGBT：上一次迭代的 vgs(或 vge)
     QHash<int, double> mosVds;  // MOSFET / IGBT：上一次迭代的 vds(或 vce)
     QHash<int, double> optoVce; // 光耦输出侧：上一次迭代的 Vce
+    QHash<int, double> tlVref;  // TL431：上一次迭代的参考端电压（相对阳极）
 };
 
 struct Problem {
@@ -359,6 +360,39 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
             addI(b, n1, n2, id - g * vd);
             break;
         }
+        case ComponentType::Tl431: {
+            // 引脚：0 = REF，1 = 阳极 A，2 = 阴极 K
+            const int nr = n1;
+            const int na = n2;
+            const int nk = p.nodeOf(comp.id, 2);
+            const double vref0 = comp.value > 0.5 ? comp.value : 2.495;
+
+            // 参考端电压（相对阳极）驱动一只「分流管」：Vref 高于基准时阴极开始吸电流，
+            // 指数特性让电流随过驱动电压快速上升，宏观上就是 Vka 被稳在设定值附近
+            const double vref = st.tlVref.value(comp.id, 0.0);
+            // 分流管：Vref 超过基准后开始吸电流，跨导取 100 S。
+            // 指数特性在这里不可用 —— 参考端与阴极短接时增益过高，迭代会发散
+            constexpr double kTlGain = 100.0;
+            const double overdrive = std::max(vref - vref0, 0.0);
+            const double ik = kTlGain * overdrive;
+            const double g = vref > vref0 ? kTlGain : 0.0;
+
+            // 分流电流 K→A，受 (REF, A) 控制。
+            // 线性化在「当前工作点 vref」处展开：Ik ≈ g·vref + (Ik0 − g·vref_current)，
+            // 用阈值 vref0 当展开点会多算一截电流，迭代永远收敛不了
+            addVccs(a, nk, na, nr, na, g);
+            addI(b, nk, na, ik - g * vref);
+
+            // 阳极→阴极的正向通路（相当于内部那只反偏保护二极管），
+            // 只在 V(A) > V(K) 时导通，正常稳压时几乎不流电流
+            const double vd = st.diodeV.value(comp.id, 0.0);
+            const double gd = dm.conductance(vd);
+            const double id = dm.current(vd);
+            addG(a, na, nk, gd);
+            addI(b, na, nk, id - gd * vd);
+            break;
+        }
+
         case ComponentType::Optocoupler: {
             // 引脚：0/1 = 输入 LED 的阳极/阴极，2/3 = 输出三极管的集电极/发射极
             const int na = n1;
@@ -576,6 +610,28 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
             st.bjtVbc.insert(cp->id, vbc);
         }
 
+        // TL431：记录参考端电压（相对阳极）与阴极-阳极电压
+        for (const Component* cp : p.elements) {
+            if (cp->type != ComponentType::Tl431)
+                continue;
+            hasDiode = true;
+            const int nr = p.nodeOf(cp->id, 0);
+            const int na = p.nodeOf(cp->id, 1);
+            const int nk = p.nodeOf(cp->id, 2);
+            const double vrefOld = st.tlVref.value(cp->id, 0.0);
+            const double vrefNew = p.voltage(x, nr) - p.voltage(x, na);
+            // 参考端每步最多变化 0.1 V：指数分流管的跨导很高，放开会来回振荡
+            const double vref = vrefOld + std::max(-0.1, std::min(vrefNew - vrefOld, 0.1));
+            diodeDelta = std::max(diodeDelta, std::abs(vref - vrefOld));
+            st.tlVref.insert(cp->id, vref);
+
+            const double vkaNew = p.voltage(x, na) - p.voltage(x, nk); // 阳极相对阴极
+            const double vkaOld = st.diodeV.value(cp->id, 0.0);
+            const double vka = pnjlim(vkaNew, vkaOld, dm.nvt(), dm.vcrit(), 1.0);
+            diodeDelta = std::max(diodeDelta, std::abs(vka - vkaOld));
+            st.diodeV.insert(cp->id, vka);
+        }
+
         // 光耦：记录输出侧 Vce，供饱和判断用
         // 每步最多变化 0.1 V —— 饱和区边界是不连续点，放开步长会来回振荡
         for (const Component* cp : p.elements) {
@@ -669,7 +725,22 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
             current = comp.sourceValueAt(t);
             break;
         case ComponentType::Diode:
-        case ComponentType::Led:
+        case ComponentType::Led: {
+            const DiodeModel model = comp.type == ComponentType::Led
+                ? ledModel(comp.vf, dm.vt)
+                : dm;
+            current = model.current(v);
+            break;
+        }
+        case ComponentType::Tl431: {
+            // 报告阴极吸入的电流
+            const double vref0 = comp.value > 0.5 ? comp.value : 2.495;
+            const double vref = st.tlVref.value(comp.id, 0.0);
+            constexpr double kTlGain = 100.0;
+            current = kTlGain * std::max(vref - vref0, 0.0);
+            break;
+        }
+
         case ComponentType::Optocoupler: {
             const DiodeModel model = (comp.type == ComponentType::Led
                                       || comp.type == ComponentType::Optocoupler)
@@ -820,6 +891,21 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
                 ? ledModel(comp.vf, dm.vt)
                 : dm;
             addG(a, n1, n2, Cx(model.conductance(st.diodeV.value(comp.id, 0.6)), 0.0));
+            break;
+        }
+
+        case ComponentType::Tl431: {
+            const int nr = n1;
+            const int na = n2;
+            const int nk = p.nodeOf(comp.id, 2);
+            const double vref0 = comp.value > 0.5 ? comp.value : 2.495;
+            const double vref = st.tlVref.value(comp.id, 0.0);
+            constexpr double kTlIs = 1e-6;
+            constexpr double kTlNvt = 0.05;
+            constexpr double kTlGain = 100.0;
+            const double g = vref > vref0 ? kTlGain : 0.0;
+            addVccs(a, nk, na, nr, na, Cx(g, 0.0));
+            addG(a, na, nk, Cx(dm.conductance(st.diodeV.value(comp.id, 0.0)), 0.0));
             break;
         }
 

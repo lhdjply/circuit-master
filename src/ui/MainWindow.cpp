@@ -668,6 +668,7 @@ void MainWindow::buildLibrary()
         {ComponentType::Pmos, QStringLiteral("P 沟道 MOS  M"), QStringLiteral("半导体")},
         {ComponentType::Igbt, QStringLiteral("IGBT  Z"), QStringLiteral("半导体")},
         {ComponentType::Optocoupler, QStringLiteral("光耦  OC"), QStringLiteral("半导体")},
+        {ComponentType::Tl431, QStringLiteral("TL431 基准  VR"), QStringLiteral("半导体")},
         {ComponentType::OpAmp, QStringLiteral("运算放大器  U"), QStringLiteral("半导体")},
         {ComponentType::VoltageSource, QStringLiteral("电压源  V"), QStringLiteral("电源")},
         {ComponentType::CurrentSource, QStringLiteral("电流源  I"), QStringLiteral("电源")},

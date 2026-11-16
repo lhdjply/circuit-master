@@ -275,7 +275,7 @@ void PropertyPanel::updateVisibility()
     const bool analog = c.type == ComponentType::Resistor || c.type == ComponentType::Capacitor
         || c.type == ComponentType::Inductor || c.type == ComponentType::OpAmp
         || c.type == ComponentType::Led || c.type == ComponentType::Optocoupler
-        || isThreeTerminalDevice(c.type);
+        || c.type == ComponentType::Tl431 || isThreeTerminalDevice(c.type);
 
     const bool isMos = c.type == ComponentType::Nmos || c.type == ComponentType::Pmos
         || c.type == ComponentType::Igbt;
@@ -324,6 +324,10 @@ void PropertyPanel::updateVisibility()
         case ComponentType::Optocoupler:
             m_valueLabel->setText(QStringLiteral("正向压降 Vf"));
             m_value->setPlaceholderText(QStringLiteral("例如 1.2"));
+            break;
+        case ComponentType::Tl431:
+            m_valueLabel->setText(QStringLiteral("基准电压 Vref"));
+            m_value->setPlaceholderText(QStringLiteral("例如 2.5"));
             break;
         default:
             m_valueLabel->setText(QStringLiteral("数值"));

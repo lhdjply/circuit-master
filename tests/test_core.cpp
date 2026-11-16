@@ -526,6 +526,110 @@ private slots:
                  qPrintable(QString::number(vc->y.last())));
     }
 
+    void tl431ExampleLoads()
+    {
+        // 内置示例必须能打开、能跑出稳定结果
+        QFile file(QStringLiteral(CSM_EXAMPLE_DIR "/07_tl431_regulator.csm"));
+        QVERIFY2(file.open(QIODevice::ReadOnly), "示例文件缺失");
+        QString error;
+        const Circuit circuit = Circuit::fromJson(QJsonDocument::fromJson(file.readAll()).object(),
+                                                  &error);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        QVERIFY(circuit.components.size() >= 10);
+
+        const Netlist net = circuit.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        QVERIFY2(net.warnings.isEmpty(), qPrintable(net.warnings.join(QStringLiteral("; "))));
+
+        SimulationOptions opt;
+        opt.kind = AnalysisKind::OperatingPoint;
+        const SimulationResult result = Simulator::run(circuit, opt);
+        QVERIFY2(result.ok, qPrintable(result.error));
+
+        // 分压 10k/10k 把输出稳在 2·Vref ≈ 5 V
+        const int out = net.nodeOf(7, 0); // TP1
+        const QString needle = QStringLiteral("节点 %1").arg(out);
+        QVERIFY2(result.report.contains(QStringLiteral("4.9")), qPrintable(result.report.left(400)));
+        Q_UNUSED(needle);
+    }
+
+    void tl431RegulatesToReference()
+    {
+        // 5 V 经 1 kΩ 接阴极，REF 与阴极相连（2.5 V 基准的典型接法），阳极接地：
+        // 稳压后阴极约 2.5 V，电阻上的电流约 (5 − 2.5)/1k = 2.5 mA
+        auto build = [](bool refTied) {
+            Circuit c;
+            Component v;
+            v.id = 1;
+            v.type = ComponentType::VoltageSource;
+            v.pos = QPointF(60, 300);
+            v.rotation = 90;
+            v.refdes = QStringLiteral("V1");
+            v.function = SourceFunction::Constant;
+            v.dcValue = 5.0;
+            c.components.append(v);
+
+            Component r;
+            r.id = 2;
+            r.type = ComponentType::Resistor;
+            r.pos = QPointF(180, 200);
+            r.refdes = QStringLiteral("R1");
+            r.value = 1000.0;
+            c.components.append(r);
+
+            Component tl;
+            tl.id = 3;
+            tl.type = ComponentType::Tl431;
+            tl.pos = QPointF(320, 300);
+            tl.refdes = QStringLiteral("VR1");
+            tl.value = 2.495;
+            c.components.append(tl);
+
+            Component g;
+            g.id = 4;
+            g.type = ComponentType::Ground;
+            g.pos = QPointF(320, 400);
+            g.refdes = QStringLiteral("GND");
+            c.components.append(g);
+            Component g2 = g;
+            g2.id = 5;
+            g2.pos = QPointF(60, 400);
+            c.components.append(g2);
+
+            // V1 → R1 → 阴极（上端，引脚 2）；阳极（下端，引脚 1）→ 地
+            c.wires.append(Wire{{QPointF(60, 270), QPointF(60, 200), QPointF(150, 200)}});
+            c.wires.append(Wire{{QPointF(210, 200), QPointF(320, 200), QPointF(320, 270)}});
+            c.wires.append(Wire{{QPointF(320, 330), QPointF(320, 400)}});
+            c.wires.append(Wire{{QPointF(60, 330), QPointF(60, 400)}});
+            if (refTied) // REF（左侧引脚）绕上去接阴极
+                c.wires.append(Wire{{QPointF(290, 300), QPointF(290, 270), QPointF(320, 270)}});
+            return c;
+        };
+
+        auto cathode = [](const Circuit& c) {
+            const Netlist net = c.buildNetlist();
+            if (!net.valid)
+                return -1.0;
+            SimulationOptions tr;
+            tr.kind = AnalysisKind::Transient;
+            tr.tStop = 1e-4;
+            tr.tStep = 1e-5;
+            const SimulationResult r = Simulator::run(c, tr);
+            if (!r.ok)
+                return -1.0;
+            const Signal* v = r.signal(QStringLiteral("V(%1)").arg(net.nodeOf(3, 2)));
+            return v ? v->y.last() : -1.0;
+        };
+
+        // REF 接阴极：稳压到基准电压附近
+        const double regulated = cathode(build(true));
+        QVERIFY2(regulated > 2.2 && regulated < 2.8, qPrintable(QString::number(regulated)));
+
+        // REF 悬空（这里接不到基准）：分流管不导通，阴极被拉到 5 V
+        const double off = cathode(build(false));
+        QVERIFY2(off > 4.5, qPrintable(QString::number(off)));
+    }
+
     void optocouplerCouplesLight()
     {
         // 输入侧：5 V 经 1 kΩ 驱动 LED（Vf≈1.2 V → If≈3.6 mA）

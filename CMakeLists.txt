@@ -177,6 +177,9 @@ if (CSM_BUILD_TESTS AND TARGET Qt6::Test)
 
     add_executable(test_core tests/test_core.cpp)
     target_link_libraries(test_core PRIVATE csm_core Qt6::Test)
+    # 让用例能直接读仓库里的示例文件（校验内置示例可用）
+    target_compile_definitions(test_core PRIVATE
+        CSM_EXAMPLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/resources/examples")
     add_test(NAME core COMMAND test_core)
 
     add_executable(test_ui tests/test_ui.cpp ${CSM_RESOURCES})

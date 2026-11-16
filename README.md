@@ -22,7 +22,7 @@
 - 折线导线绘制：端点自动吸附引脚，T 型连接与交叉点自动生成连接圆点
 - 双击元件或选中后在右侧属性面板编辑参数，数值可直接带单位：`10kΩ`、`4.7µF`、`10mH`、`5V`、`1mA`；
   不写单位时按元件默认单位（Ω/F/H/V/A）
-- 内置 6 个可直接运行的示例电路（位于 `resources/examples`，可直接编辑）
+- 内置 7 个可直接运行的示例电路（位于 `resources/examples`，可直接编辑）
 
 **仿真引擎（改进节点法 MNA）**
 
@@ -97,6 +97,14 @@
 从便携包运行时会自动选择便携包下载：
 
 ![便携版更新](docs/screenshots/update_dialog_portable.png)
+
+内置示例「TL431 可调稳压（5 V）」：
+
+![TL431 示例](docs/screenshots/tl431_example.png)
+
+TL431 可调基准（REF / 阳极 / 阴极）：
+
+![TL431](docs/screenshots/tl431.png)
 
 光耦（四引脚：输入 LED 阳极/阴极、输出集电极/发射极）：
 
@@ -208,6 +216,7 @@ ctest --test-dir build --output-on-failure
 | 三极管 Q | NPN / PNP，Ebers-Moll 模型；参数：电流放大系数 β（默认 100） |
 | MOS 管 M | N / P 沟道增强型，level-1 平方律模型；参数：开启电压 Vth、跨导参数 K |
 | 光耦 OC | 输入侧红外 LED + 输出侧光敏三极管。默认参数按 **LTV-817S-TA1-C**：Vf = 1.2 V、CTR = 3.0（C 档 200–400%）、Vce(sat) = 0.2 V。输出特性带饱和：`Ic = CTR·If·x/(1+x)`，`x = Vce/Vce(sat)`，因此发射极不会被顶到集电极之上 |
+| TL431 基准 VR | 三端可调基准：REF 高于基准电压（默认 2.495 V）时阴极开始吸电流，把 Vka 稳在设定值；REF 接阴极即 2.5 V 基准，配分压电阻可做可调稳压 |
 | IGBT Z | 栅极按 MOS 模型、输出侧带导通压降 Vf；参数：Vth、K、Vf |
 | 运算放大器 U | 三端理想运放（VCVS + 50 Ω 输出电阻），开环增益默认 100 k |
 | 电压测试点 TP | 单引脚探针，读取节点电压，不参与矩阵求解 |

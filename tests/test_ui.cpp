@@ -1087,7 +1087,7 @@ private slots:
 
         QCOMPARE(counts.value(QStringLiteral("基础")), 3);
         QCOMPARE(counts.value(QStringLiteral("电源")), 2);
-        QCOMPARE(counts.value(QStringLiteral("半导体")), 9); // 含光耦
+        QCOMPARE(counts.value(QStringLiteral("半导体")), 10); // 含光耦与 TL431
 
         int sum = 0;
         for (int n : counts)

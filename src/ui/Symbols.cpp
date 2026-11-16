@@ -75,6 +75,10 @@ QPainterPath symbolShape(ComponentType type)
         path.closeSubpath();
         return path;
     }
+    if (type == ComponentType::Tl431) {
+        path.addRoundedRect(QRectF(-22.0, -20.0, 44.0, 40.0), 4.0, 4.0);
+        return path;
+    }
     if (type == ComponentType::Optocoupler) {
         path.addRoundedRect(QRectF(-30.0, -22.0, 60.0, 44.0), 4.0, 4.0);
         return path;
@@ -300,6 +304,29 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
             p->setBrush(Qt::NoBrush);
             p->drawLine(QPointF(x - 5.0, 11.0), QPointF(x + 5.0, 11.0));
         }
+        break;
+    }
+
+    case ComponentType::Tl431: {
+        // 可调基准：三角形（阴极朝上）+ 阴极横杠 + 左侧参考端
+        p->drawLine(QPointF(-30.0, 0.0), QPointF(-14.0, 0.0)); // 参考端引线
+        p->setPen(pen);
+        p->drawLine(QPointF(0.0, -30.0), QPointF(0.0, -12.0)); // 阴极
+        p->drawLine(QPointF(0.0, 12.0), QPointF(0.0, 30.0));   // 阳极
+        QPolygonF tri;
+        tri << QPointF(-11.0, 10.0) << QPointF(11.0, 10.0) << QPointF(0.0, -10.0);
+        p->setBrush(Qt::NoBrush);
+        p->drawPolygon(tri);
+        p->setPen(symbolPen(color, 2.6));
+        p->drawLine(QPointF(-11.0, -10.0), QPointF(11.0, -10.0)); // 阴极横杠
+        // 参考端接到三角形侧边，末端画一个小折角表示「取样」
+        p->setPen(pen);
+        p->drawLine(QPointF(-14.0, 0.0), QPointF(-14.0, 0.0));
+        QPolygonF ref;
+        ref << QPointF(-14.0, 0.0) << QPointF(-6.0, -3.0) << QPointF(-6.0, 3.0);
+        p->setBrush(color);
+        p->drawPolygon(ref);
+        p->setBrush(Qt::NoBrush);
         break;
     }
 

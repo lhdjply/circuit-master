@@ -18,6 +18,7 @@ enum class ComponentType {
     Pmos,
     Igbt,
     Optocoupler,
+    Tl431,
     OpAmp,
     Switch,
     VoltageSource,

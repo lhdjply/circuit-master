@@ -24,6 +24,7 @@ QString typeToTag(ComponentType type)
     case ComponentType::OpAmp:         return QStringLiteral("U");
     case ComponentType::Led:           return QStringLiteral("LED");
     case ComponentType::Optocoupler:   return QStringLiteral("OPTO");
+    case ComponentType::Tl431:         return QStringLiteral("TL431");
     case ComponentType::Npn:           return QStringLiteral("Q");
     case ComponentType::Pnp:           return QStringLiteral("QP");
     case ComponentType::Nmos:          return QStringLiteral("M");
@@ -47,6 +48,7 @@ ComponentType tagToType(const QString& tag)
     if (tag == QLatin1String("U")) return ComponentType::OpAmp;
     if (tag == QLatin1String("LED")) return ComponentType::Led;
     if (tag == QLatin1String("OPTO")) return ComponentType::Optocoupler;
+    if (tag == QLatin1String("TL431")) return ComponentType::Tl431;
     if (tag == QLatin1String("Q")) return ComponentType::Npn;
     if (tag == QLatin1String("QP")) return ComponentType::Pnp;
     if (tag == QLatin1String("MP")) return ComponentType::Pmos;
@@ -142,6 +144,8 @@ QString Circuit::toSpiceNetlist() const
     lines << QString();
 
     bool hasDiode = false;
+    bool hasZener = false;
+    double zenerV = 2.5;
     bool hasLed = false;
     double ledVf = 2.0;
     bool hasBjt = false;
@@ -191,6 +195,18 @@ QString Circuit::toSpiceNetlist() const
             hasLed = true;
             ledVf = comp.vf;
             lines << QStringLiteral("%1 %2 %3 DLED").arg(comp.refdes).arg(nodes.at(0)).arg(nodes.at(1));
+            continue;
+        }
+        if (comp.type == ComponentType::Tl431) {
+            // SPICE 没有 TL431 的通用模型：按「阴极-阳极之间一只 Vref 稳压管」近似，
+            // 适用于 REF 直接接阴极的常见用法；带分压电阻的接法需要用户自行展开
+            hasZener = true;
+            zenerV = comp.value;
+            lines << QStringLiteral("* %1: TL431 近似（REF 接阴极时等效于 %2 V 稳压管）")
+                         .arg(comp.refdes, spiceNumber(comp.value));
+            lines << QStringLiteral("%1 %2 %3 DZENER").arg(comp.refdes)
+                         .arg(nodes.at(2)) // 阴极
+                         .arg(nodes.at(1)); // 阳极
             continue;
         }
         if (comp.type == ComponentType::Optocoupler) {
@@ -297,6 +313,10 @@ QString Circuit::toSpiceNetlist() const
         lines << QString();
         lines << QStringLiteral("* 1N4148 小信号二极管模型");
         lines << QStringLiteral(".model D1N4148 D(IS=2.52E-9 N=1.752 RS=0.568)");
+    }
+    if (hasZener) {
+        lines << QStringLiteral(".model DZENER D(IS=1E-14 N=1.5 BV=%1 IBV=1E-3)")
+                     .arg(spiceNumber(zenerV));
     }
     if (hasLed) {
         // 由正向压降反推饱和电流：20 mA 时压降正好是 Vf，n 取 2（LED 的典型值）

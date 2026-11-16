@@ -6,5 +6,6 @@
     <file>04_rlc_damping.csm</file>
     <file>05_rc_lowpass.csm</file>
     <file>06_opamp_inverting.csm</file>
+    <file>07_tl431_regulator.csm</file>
   </qresource>
 </RCC>
