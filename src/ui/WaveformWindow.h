@@ -39,6 +39,11 @@ public:
     void startLive(const class Circuit& circuit,
                    const QVector<QPair<QString, QString>>& probes);
 
+    /// 用新电路继续实时仿真，不清空波形与时间轴。
+    /// 返回 false 表示无法原地更新（测试点变了或电路不可解），调用方决定是否重启。
+    bool updateLiveCircuit(const class Circuit& circuit,
+                           const QVector<QPair<QString, QString>>& probes);
+
     /// 启动前预设示波器刻度（来自工程文件）
     void setLiveScalePreferences(double timeDiv, double voltDiv, double ampDiv);
     double liveTimeDiv() const { return m_liveDiv; }
@@ -99,6 +104,7 @@ private:
 
     std::unique_ptr<class LiveTransient> m_live;
     QTimer* m_liveTimer = nullptr;
+    bool m_restartingLive = false; // 重建引擎时不向外发「已停止」
     QElapsedTimer m_liveClock;
     QVector<Signal> m_liveBuffers;
     QVector<QLineSeries*> m_liveSeries;

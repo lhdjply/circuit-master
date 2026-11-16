@@ -71,6 +71,12 @@ public:
     bool start(const Circuit& circuit, double step, QString* error);
     bool advance(int steps, QString* error);
 
+    /// 用新电路继续仿真（不清空时间轴）。
+    /// 拓扑没变（只改了开关状态、元件数值等）时保留电容电压、电感电流，
+    /// 时间 t 继续往前走；拓扑变了则重置状态变量，但 t 仍然接着走。
+    /// 返回 false 表示新电路无法求解，调用方应保留原状态。
+    bool updateCircuit(const Circuit& circuit, QString* error);
+
     double time() const;
     double step() const;
     int nodeCount() const;

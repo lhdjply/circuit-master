@@ -10,6 +10,7 @@ class QAction;
 class QComboBox;
 class QDockWidget;
 class QTabWidget;
+class QTimer;
 class QLabel;
 class QListWidget;
 class QListWidgetItem;
@@ -116,6 +117,7 @@ private:
     bool m_updateCheckScheduled = false;
     SimulationResult m_lastResult;   // 最近一次仿真的结果，供「静态波形」使用
     bool m_hasResult = false;
+    QTimer* m_liveRestartTimer = nullptr; // 电路改动后重建实时引擎（防抖）
     /// 正在销毁：子控件在 ~QWidget() 阶段被析构时仍会发信号（例如 QLineEdit
     /// 失焦触发 editingFinished），那时本窗口的成员已经析构，回调必须直接返回。
     bool m_destroying = false;

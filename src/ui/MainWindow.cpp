@@ -323,7 +323,13 @@ MainWindow::MainWindow(QWidget* parent)
     createMonitorWindow();
     createStatusBar();
 
-    connect(m_scene, &SchematicScene::circuitChanged, this, [this] { setDirty(true); });
+    connect(m_scene, &SchematicScene::circuitChanged, this, [this] {
+        setDirty(true);
+        // 仿真运行中改了电路（例如开关闭合/断开）：稍后重建引擎，
+        // 否则实时仿真还跑在旧拓扑上，LED 不会跟着变
+        if (m_waveLive && m_waveLive->isLive() && m_liveRestartTimer)
+            m_liveRestartTimer->start();
+    });
     connect(m_scene, &SchematicScene::editCommitted, this, &MainWindow::pushHistory);
     connect(m_scene, &QGraphicsScene::selectionChanged, this, &MainWindow::onSelectionChanged);
     connect(m_scene, &SchematicScene::editRequested, this, &MainWindow::onEditRequested);
@@ -1246,6 +1252,28 @@ void MainWindow::createMonitorWindow()
                 m_options.scopeVoltDiv = voltDiv;
                 m_options.scopeAmpDiv = ampDiv;
             });
+
+    // 电路改动（比如拨动开关）后重建实时引擎，让仿真跟着新拓扑走
+    m_liveRestartTimer = new QTimer(this);
+    m_liveRestartTimer->setSingleShot(true);
+    m_liveRestartTimer->setInterval(200);
+    connect(m_liveRestartTimer, &QTimer::timeout, this, [this] {
+        if (!m_waveLive || !m_waveLive->isLive())
+            return;
+
+        // 优先原地更新：时间轴与已有波形都保留，只把新拓扑/数值喂给引擎
+        const Circuit circuit = m_scene->toCircuit();
+        const Netlist net = circuit.buildNetlist();
+        if (!net.valid) {
+            appendLog(QStringLiteral("⚠ 电路无法求解：%1").arg(net.error));
+            return;
+        }
+        const QVector<QPair<QString, QString>> probes = probeSpecs(circuit, net);
+        if (!m_waveLive->updateLiveCircuit(circuit, probes)) {
+            // 测试点或节点编号变了，只能重启引擎
+            startLiveScope();
+        }
+    });
 
     // 实时仿真推进时同步刷新 LED 亮度
     connect(m_waveLive, &WaveformWindow::liveUpdated, this, [this] {

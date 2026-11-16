@@ -467,6 +467,28 @@ void WaveformWindow::applyAnalysisFields()
     Q_UNUSED(ok);
 }
 
+bool WaveformWindow::updateLiveCircuit(const Circuit& circuit,
+                                       const QVector<QPair<QString, QString>>& probes)
+{
+    if (!m_live || !m_livePlaying)
+        return false;
+
+    // 测试点变了（例如节点编号变了）就要重建，否则原地更新即可
+    if (probes != m_probes)
+        return false;
+
+    QString error;
+    if (!m_live->updateCircuit(circuit, &error)) {
+        m_info->setText(QStringLiteral("电路更新失败：%1").arg(error));
+        return false;
+    }
+
+    m_liveCircuit = circuit;
+    m_info->setText(QStringLiteral("电路已更新，仿真继续"));
+    emit liveUpdated(); // 立刻按新电流刷新 LED 等指示
+    return true;
+}
+
 void WaveformWindow::setLiveScalePreferences(double timeDiv, double voltDiv, double ampDiv)
 {
     const auto pick = [](QComboBox* box, double value) {
@@ -858,7 +880,9 @@ double WaveformWindow::liveTime() const
 void WaveformWindow::startLive(const Circuit& circuit,
                                const QVector<QPair<QString, QString>>& probes)
 {
+    m_restartingLive = true;
     stopLive();
+    m_restartingLive = false;
     m_probes = probes;
     m_liveCircuit = circuit;
 
@@ -1001,7 +1025,7 @@ void WaveformWindow::stopLive()
         m_analysisBar->setVisible(true);
     if (m_autoButton)
         m_autoButton->setEnabled(true);
-    if (wasLive)
+    if (wasLive && !m_restartingLive)
         emit liveStateChanged(false);
 }
 

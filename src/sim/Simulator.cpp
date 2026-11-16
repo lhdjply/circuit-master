@@ -877,6 +877,58 @@ bool LiveTransient::start(const Circuit& circuit, double step, QString* error)
     return true;
 }
 
+bool LiveTransient::updateCircuit(const Circuit& circuit, QString* error)
+{
+    Impl& d = *m_impl;
+    if (!d.started)
+        return start(circuit, d.h, error);
+
+    Netlist net = circuit.buildNetlist();
+    if (!net.valid) {
+        if (error)
+            *error = net.error;
+        return false;
+    }
+    if (net.nodeCount == 0) {
+        if (error)
+            *error = QStringLiteral("电路中没有可求解的节点。");
+        return false;
+    }
+
+    // 拓扑是否一致：节点数相同，且每个元件的引脚落点都没变
+    const bool sameTopology = net.nodeCount == d.net.nodeCount && net.compPins == d.net.compPins;
+
+    const double t = d.t; // 时间轴继续走，不清零
+    ElementState oldState = d.state;
+    std::vector<double> oldX = d.x;
+
+    d.circuit = circuit;
+    d.net = net;
+    d.problem = buildProblem(d.circuit, d.net);
+
+    const int size = d.problem.nNodes + d.problem.nBranches;
+    if (sameTopology && int(oldX.size()) == size) {
+        d.x = oldX;         // 保持上一时刻的解，迭代收敛更快
+        d.state = oldState; // 电容电压、电感电流继续用
+    } else {
+        d.state = ElementState();
+        d.x.assign(size_t(size), 0.0);
+    }
+    d.t = t;
+
+    // 在当前时刻重解一次工作点，让新的拓扑/数值立即生效
+    if (!newtonSolve(d.problem, d.state, false, 0.0, d.t, d.x, d.diode, error))
+        return false;
+    updateState(d.problem, d.state, d.x);
+
+    d.names.clear();
+    for (int i = 1; i <= d.problem.nNodes; ++i)
+        d.names << QStringLiteral("V(%1)").arg(i);
+    for (const Component* comp : d.problem.elements)
+        d.names << QStringLiteral("I(%1)").arg(comp->refdes);
+    return true;
+}
+
 bool LiveTransient::advance(int steps, QString* error)
 {
     Impl& d = *m_impl;

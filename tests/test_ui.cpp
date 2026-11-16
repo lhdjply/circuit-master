@@ -317,6 +317,75 @@ private slots:
         QVERIFY2(!monitor->isEnabled(), "停止后波形监控应不可点击");
     }
 
+    void switchToggleUpdatesLedWhileRunning()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        // 5 V → 开关 → 1 kΩ → LED → 地
+        auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 300));
+        source->setRotationAngle(90);
+        Component src = source->component();
+        src.dcValue = 5.0;
+        source->setComponent(src);
+
+        auto* sw = scene->placeComponent(ComponentType::Switch, QPointF(200, 200));
+        Component swc = sw->component();
+        swc.closed = true;
+        sw->setComponent(swc);
+
+        auto* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(300, 200));
+        Component r = resistor->component();
+        r.value = 1000.0;
+        resistor->setComponent(r);
+
+        auto* led = scene->placeComponent(ComponentType::Led, QPointF(400, 300));
+        led->setRotationAngle(90);
+
+        scene->placeComponent(ComponentType::Ground, QPointF(100, 400));
+        scene->placeComponent(ComponentType::Ground, QPointF(400, 400));
+
+        scene->addWire({QPointF(100, 270), QPointF(100, 200), QPointF(170, 200)});
+        scene->addWire({QPointF(230, 200), QPointF(270, 200)});
+        scene->addWire({QPointF(330, 200), QPointF(400, 200), QPointF(400, 270)});
+        scene->addWire({QPointF(400, 330), QPointF(400, 400)});
+        scene->addWire({QPointF(100, 330), QPointF(100, 400)});
+        settle();
+
+        QAction* run = window.findChild<QAction*>(QStringLiteral("actRun"));
+        QVERIFY(run);
+        run->trigger();
+        settle();
+
+        auto* live = livePanel(window);
+        QVERIFY(live);
+        QVERIFY(live->isLive());
+        QTRY_VERIFY_WITH_TIMEOUT(led->ledBrightness() > 0.3, 5000);
+
+        // 记下当前时刻：拨开关不应该把时间轴清零
+        const double before = live->liveTime();
+        QVERIFY(before > 0.0);
+
+        // 断开开关：原地更新引擎，LED 熄灭
+        sw->setClosed(false);
+        QTRY_VERIFY_WITH_TIMEOUT(led->ledBrightness() == 0.0, 5000);
+        QVERIFY(live->isLive());
+        QVERIFY2(live->liveTime() >= before, "拨开关不应重置时间轴");
+
+        // 再闭合：重新点亮
+        sw->setClosed(true);
+        QTRY_VERIFY_WITH_TIMEOUT(led->ledBrightness() > 0.3, 5000);
+        QVERIFY2(live->liveTime() >= before, "拨开关不应重置时间轴");
+
+        run->trigger();
+        settle();
+    }
+
     void scopeScalesAreRemembered()
     {
         MainWindow window;
