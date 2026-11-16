@@ -87,9 +87,17 @@ QPainterPath symbolShape(ComponentType type)
 }
 
 void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPins, int rotation,
-                 bool mirrorX, bool mirrorY, double glow)
+                 bool mirrorX, bool mirrorY, double glow, double heat)
 {
-    const QColor color = selected ? theme::selected : theme::symbol;
+    QColor color = selected ? theme::selected : theme::symbol;
+    if (heat > 0.01) {
+        // 红温：符号颜色朝炽红过渡，heat = 1 时基本是暗红
+        const QColor hot(200, 30, 10);
+        const double h = std::min(1.0, heat);
+        color = QColor(int(color.red() + (hot.red() - color.red()) * h),
+                       int(color.green() + (hot.green() - color.green()) * h),
+                       int(color.blue() + (hot.blue() - color.blue()) * h));
+    }
     const QPen pen = symbolPen(color, selected ? 2.4 : 2.0);
 
     p->save();

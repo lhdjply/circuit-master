@@ -27,6 +27,12 @@ public:
     void setRotationAngle(int degrees);
     void setMirrored(bool horizontal, bool vertical);
     void setClosed(bool closed);
+    /// 极性电容反接击穿：画爆炸特效，progress 0→1 是动画进度
+    void setBlown(bool blown);
+    bool isBlown() const { return m_blown; }
+    void setBlastProgress(double progress);
+    double blastProgress() const { return m_blastProgress; }
+
     /// 发光二极管的亮度（0 = 灭，1 = 最亮），仿真后由主窗口写入
     void setLedBrightness(double brightness);
     double ledBrightness() const { return m_ledBrightness; }
@@ -50,6 +56,8 @@ private:
     Component m_comp;
     bool m_hover = false;
     double m_ledBrightness = 0.0;
+    bool m_blown = false;
+    double m_blastProgress = 0.0;
 };
 
 } // namespace csm

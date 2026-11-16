@@ -67,6 +67,9 @@ private:
     void applyLedStates(const SimulationResult& result);
     /// 熄灭所有 LED（停止仿真或换电路时调用）
     void clearLedStates();
+    /// 极性电容反接击穿：标记元件并播放爆炸动画
+    void applyBlownCapacitors(const QHash<int, double>& blown);
+    void clearBlast();
     void showQuickGuide();
     void showAbout();
 
@@ -118,6 +121,9 @@ private:
     SimulationResult m_lastResult;   // 最近一次仿真的结果，供「静态波形」使用
     bool m_hasResult = false;
     QTimer* m_liveRestartTimer = nullptr; // 电路改动后重建实时引擎（防抖）
+    QTimer* m_blastTimer = nullptr;       // 爆炸动画驱动
+    double m_blastProgress = 0.0;
+    QSet<int> m_blownIds;
     /// 正在销毁：子控件在 ~QWidget() 阶段被析构时仍会发信号（例如 QLineEdit
     /// 失焦触发 editingFinished），那时本窗口的成员已经析构，回调必须直接返回。
     bool m_destroying = false;

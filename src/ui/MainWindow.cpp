@@ -955,6 +955,7 @@ void MainWindow::newCircuit()
     if (m_waveLive)
         m_waveLive->stopLiveScope();
     clearLedStates();
+    clearBlast();
     updateTitle();
     resetHistory();
     updateRunAction();
@@ -1114,8 +1115,9 @@ void MainWindow::runSimulation()
 
     appendLog(QStringLiteral("✔ 完成，用时 %1 ms").arg(QString::number(result.elapsedMs, 'f', 1)));
 
-    // 先点亮 LED：工作点分支会直接弹对话框返回，放在后面就轮不到它了
+    // 先点亮 LED / 播放爆炸：工作点分支会直接弹对话框返回，放在后面就轮不到它了
     applyLedStates(result);
+    applyBlownCapacitors(result.blownCapacitors);
 
     const bool hasProbes = applyProbeSignals(circuit, net, result);
     if (!hasProbes && result.kind != AnalysisKind::OperatingPoint)
@@ -1190,6 +1192,7 @@ void MainWindow::updateRunAction()
         if (m_waveWindow && m_waveWindow->isVisible())
             m_waveWindow->hide();
         clearLedStates();
+        clearBlast();
     }
 
     if (running) {
@@ -1285,6 +1288,15 @@ void MainWindow::createMonitorWindow()
             const double i = std::abs(amps);
             item->setLedBrightness(i < 1e-4 ? 0.0
                                             : std::min(1.0, std::log10(i / 1e-4) / 2.0));
+        }
+        // 实时仿真里也可能把电解电容接反
+        const QHash<int, double> blown = m_waveLive->liveBlownCapacitors();
+        for (auto it = blown.constBegin(); it != blown.constEnd(); ++it) {
+            if (m_blownIds.contains(it.key()))
+                continue;
+            QHash<int, double> fresh;
+            fresh.insert(it.key(), it.value());
+            applyBlownCapacitors(fresh);
         }
     });
 }
@@ -1442,6 +1454,62 @@ void MainWindow::applyLedStates(const SimulationResult& result)
             current = result.elementCurrents.value(name, 0.0);
         }
         item->setLedBrightness(brightnessFor(current));
+    }
+}
+
+void MainWindow::applyBlownCapacitors(const QHash<int, double>& blown)
+{
+    if (blown.isEmpty())
+        return;
+
+    for (auto it = blown.constBegin(); it != blown.constEnd(); ++it) {
+        const int id = it.key();
+        m_blownIds.insert(id);
+        const double reverse = it.value();
+        QString refdes = QStringLiteral("#%1").arg(id);
+        for (ComponentItem* item : m_scene->componentItems()) {
+            if (item->component().id != id)
+                continue;
+            refdes = item->component().refdes;
+            item->setBlown(true);
+            item->setBlastProgress(0.0);
+        }
+        appendLog(QStringLiteral("💥 %1 电解电容反接击穿：反向电压 %2")
+                      .arg(refdes, formatEng(reverse, QStringLiteral("V"), 3)));
+    }
+    appendLog(QStringLiteral("提示：电解电容的正极在引脚 1 一侧，反接会击穿。选中电容可勾选/取消极性。"));
+
+    // 600ms 的爆炸动画
+    if (!m_blastTimer) {
+        m_blastTimer = new QTimer(this);
+        m_blastTimer->setInterval(16);
+        connect(m_blastTimer, &QTimer::timeout, this, [this] {
+            m_blastProgress += 0.025; // 约 40 帧、640ms：先红温再炸
+            for (ComponentItem* item : m_scene->componentItems()) {
+                if (m_blownIds.contains(item->component().id))
+                    item->setBlastProgress(m_blastProgress);
+            }
+            if (m_blastProgress >= 1.0)
+                m_blastTimer->stop();
+        });
+    }
+    if (!m_blastTimer->isActive()) {
+        m_blastProgress = 0.0;
+        m_blastTimer->start();
+    }
+}
+
+void MainWindow::clearBlast()
+{
+    if (m_blastTimer)
+        m_blastTimer->stop();
+    m_blastProgress = 0.0;
+    m_blownIds.clear();
+    if (!m_scene)
+        return;
+    for (ComponentItem* item : m_scene->componentItems()) {
+        if (item->isBlown())
+            item->setBlown(false);
     }
 }
 

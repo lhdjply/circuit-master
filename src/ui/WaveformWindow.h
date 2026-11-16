@@ -56,6 +56,8 @@ public:
 
     /// 实时仿真每推进一批采样点后发出，主窗口用它刷新 LED 等指示
     double liveValue(const QString& name) const;
+    /// 反接击穿的极性电容（元件 id → 反向电压）
+    QHash<int, double> liveBlownCapacitors() const;
 
 signals:
     void scopeRequested();

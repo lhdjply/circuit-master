@@ -277,6 +277,90 @@ private slots:
                  qPrintable(QString::number(vb->y.last())));
     }
 
+    void polarizedCapacitorReverseDetected()
+    {
+        // 5 V 电源反接在极性电容上：正极接 0 V、负极接 5 V，反向电压 5 V
+        auto build = [](bool reverse) {
+            Circuit c;
+            Component v;
+            v.id = 1;
+            v.type = ComponentType::VoltageSource;
+            v.pos = QPointF(100, 300);
+            v.rotation = 90;
+            v.refdes = QStringLiteral("V1");
+            v.function = SourceFunction::Constant;
+            v.dcValue = 5.0;
+            c.components.append(v);
+
+            Component cap;
+            cap.id = 2;
+            cap.type = ComponentType::Capacitor;
+            cap.pos = QPointF(300, 300);
+            cap.rotation = 90;
+            cap.refdes = QStringLiteral("C1");
+            cap.value = 100e-6;
+            cap.polarized = true;
+            c.components.append(cap);
+
+            Component g;
+            g.id = 3;
+            g.type = ComponentType::Ground;
+            g.pos = QPointF(100, 400);
+            g.refdes = QStringLiteral("GND");
+            c.components.append(g);
+            Component g2 = g;
+            g2.id = 4;
+            g2.pos = QPointF(300, 400);
+            c.components.append(g2);
+
+            // 电容竖直放置（rot 90）：引脚 0 在上、引脚 1 在下
+            // 反接：5 V 接到引脚 1，引脚 0 接地
+            if (reverse) {
+                // 5 V → 右侧绕过去接引脚 1（负极）；引脚 0（正极）接地
+                c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(380, 200),
+                                     QPointF(380, 330), QPointF(300, 330)}});
+                c.wires.append(Wire{{QPointF(300, 270), QPointF(300, 100), QPointF(60, 100),
+                                     QPointF(60, 400)}});
+                c.wires.append(Wire{{QPointF(60, 400), QPointF(300, 400)}});
+                c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
+            } else {
+                c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(300, 200),
+                                     QPointF(300, 270)}}); // 5 V 接引脚 0（正极）
+                c.wires.append(Wire{{QPointF(300, 330), QPointF(300, 400)}});
+                c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
+            }
+            return c;
+        };
+
+        SimulationOptions tr;
+        tr.kind = AnalysisKind::Transient;
+        tr.tStop = 1e-3;
+        tr.tStep = 1e-5;
+
+        // 正接：不该击穿
+        const SimulationResult ok = Simulator::run(build(false), tr);
+        QVERIFY2(ok.ok, qPrintable(ok.error));
+        QVERIFY2(ok.blownCapacitors.isEmpty(), "正接不应报击穿");
+
+        // 反接：应当报击穿，并给出反向电压
+        const SimulationResult bad = Simulator::run(build(true), tr);
+        QVERIFY2(bad.ok, qPrintable(bad.error));
+        QVERIFY2(bad.blownCapacitors.contains(2), "反接应当被检测到");
+        // 记录的是电容端电压（引脚 0 相对引脚 1），反接时为负
+        QVERIFY2(bad.blownCapacitors.value(2) < -1.0,
+                 qPrintable(QString::number(bad.blownCapacitors.value(2))));
+
+        // 非极性电容反接不算击穿
+        Circuit plain = build(true);
+        for (Component& comp : plain.components) {
+            if (comp.type == ComponentType::Capacitor)
+                comp.polarized = false;
+        }
+        const SimulationResult none = Simulator::run(plain, tr);
+        QVERIFY2(none.ok, qPrintable(none.error));
+        QVERIFY2(none.blownCapacitors.isEmpty(), "无极性电容不应报击穿");
+    }
+
     void ledForwardVoltage()
     {
         // 5 V 电源经 1 kΩ 点亮 LED（Vf = 2 V）：

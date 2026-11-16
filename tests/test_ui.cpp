@@ -319,6 +319,65 @@ private slots:
         QVERIFY2(!monitor->isEnabled(), "停止后波形监控应不可点击");
     }
 
+    void reversedPolarizedCapacitorExplodes()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        // 5 V 反接在极性电容上（正极接地、负极接 5 V）
+        auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 300));
+        source->setRotationAngle(90);
+        Component src = source->component();
+        src.dcValue = 5.0;
+        source->setComponent(src);
+
+        auto* cap = scene->placeComponent(ComponentType::Capacitor, QPointF(300, 300));
+        cap->setRotationAngle(90);
+        Component cc = cap->component();
+        cc.value = 100e-6;
+        cc.polarized = true;
+        cap->setComponent(cc);
+
+        scene->placeComponent(ComponentType::Ground, QPointF(100, 400));
+        scene->placeComponent(ComponentType::Ground, QPointF(300, 400));
+
+        // 正极（引脚 0，上端）接地；负极接 5 V，绕开另一只引脚
+        scene->addWire({QPointF(100, 270), QPointF(100, 200), QPointF(380, 200),
+                        QPointF(380, 330), QPointF(300, 330)});
+        scene->addWire({QPointF(300, 270), QPointF(300, 100), QPointF(60, 100),
+                        QPointF(60, 400)});
+        scene->addWire({QPointF(60, 400), QPointF(300, 400)});
+        scene->addWire({QPointF(100, 330), QPointF(100, 400)});
+        settle();
+
+        QVERIFY(!cap->isBlown());
+        window.runSimulation();
+        settle();
+
+        QVERIFY2(cap->isBlown(), "极性电容反接应当击穿");
+
+        // 等动画播完，云应当留在画布上而不是消失
+        QTRY_VERIFY_WITH_TIMEOUT(cap->blastProgress() >= 1.0, 3000);
+        QTest::qWait(400);
+        settle();
+        QCOMPARE(cap->blastProgress(), 1.0);
+        QVERIFY2(cap->isBlown(), "动画结束后爆炸特效应保留");
+        QVERIFY(window.grab().save(QCoreApplication::applicationDirPath()
+                                   + QStringLiteral("/shots/cap_explosion.png")));
+
+        // 停止仿真后特效清除
+        QAction* run = window.findChild<QAction*>(QStringLiteral("actRun"));
+        QVERIFY(run);
+        run->trigger();
+        settle();
+        QVERIFY2(!cap->isBlown(), "停止仿真后应当清除爆炸特效");
+    }
+
     void capacitorPolarityToggle()
     {
         MainWindow window;

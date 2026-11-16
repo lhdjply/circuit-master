@@ -181,6 +181,22 @@ void addBranch(Matrix<T>& a, std::vector<T>& b, const Problem& p, int compId, T 
 }
 
 constexpr double kBjtIs = 1e-14;   // 三极管饱和电流
+/// 极性电容的反向耐压：超过这个反向电压就当作击穿（界面放爆炸特效）
+constexpr double kCapReverseLimit = -1.0;
+
+/// 记录极性电容的端电压（引脚 0 为「+」）：只保留最负的一次
+void trackReverseCaps(const Problem& p, const std::vector<double>& x,
+                      QHash<int, double>& worst)
+{
+    for (const Component* comp : p.elements) {
+        if (comp->type != ComponentType::Capacitor || !comp->polarized)
+            continue;
+        const double v = p.voltage(x, p.nodeOf(comp->id, 0)) - p.voltage(x, p.nodeOf(comp->id, 1));
+        if (!worst.contains(comp->id) || v < worst.value(comp->id))
+            worst.insert(comp->id, v); // 反接时为负，越负越严重
+    }
+}
+
 constexpr double kMosGmin = 1e-9;  // MOSFET 输出电导下限，避免矩阵奇异
 
 /// NPN 的 Ebers-Moll 方程与线性化系数
@@ -820,6 +836,7 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
 
 // ---------------------------------------------------------------- 增量瞬态
 struct LiveTransient::Impl {
+    QHash<int, double> worstReverse; // 极性电容见过的最严重反向电压
     Circuit circuit;
     Netlist net;
     Problem problem;
@@ -861,6 +878,7 @@ bool LiveTransient::start(const Circuit& circuit, double step, QString* error)
     d.problem = buildProblem(d.circuit, d.net);
     d.x.assign(size_t(d.problem.nNodes + d.problem.nBranches), 0.0);
     d.state = ElementState();
+    d.worstReverse.clear();
     d.t = 0.0;
 
     if (!newtonSolve(d.problem, d.state, false, 0.0, 0.0, d.x, d.diode, error))
@@ -920,6 +938,7 @@ bool LiveTransient::updateCircuit(const Circuit& circuit, QString* error)
     if (!newtonSolve(d.problem, d.state, false, 0.0, d.t, d.x, d.diode, error))
         return false;
     updateState(d.problem, d.state, d.x);
+    trackReverseCaps(d.problem, d.x, d.worstReverse);
 
     d.names.clear();
     for (int i = 1; i <= d.problem.nNodes; ++i)
@@ -940,6 +959,7 @@ bool LiveTransient::advance(int steps, QString* error)
         if (!newtonSolve(d.problem, d.state, true, d.h, d.t, d.x, d.diode, error))
             return false;
         updateState(d.problem, d.state, d.x);
+        trackReverseCaps(d.problem, d.x, d.worstReverse);
     }
     return true;
 }
@@ -962,6 +982,17 @@ int LiveTransient::nodeCount() const
 const QStringList& LiveTransient::signalNames() const
 {
     return m_impl->names;
+}
+
+QHash<int, double> LiveTransient::reverseCapacitors() const
+{
+    QHash<int, double> result;
+    const Impl& d = *m_impl;
+    for (auto it = d.worstReverse.constBegin(); it != d.worstReverse.constEnd(); ++it) {
+        if (it.value() < kCapReverseLimit)
+            result.insert(it.key(), it.value());
+    }
+    return result;
 }
 
 QVector<double> LiveTransient::values() const
@@ -1015,6 +1046,13 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
 
     if (options.kind == AnalysisKind::OperatingPoint) {
         result.ok = true;
+        QHash<int, double> worst;
+        trackReverseCaps(p, x, worst);
+        for (auto it = worst.constBegin(); it != worst.constEnd(); ++it) {
+            if (it.value() < kCapReverseLimit)
+                result.blownCapacitors.insert(it.key(), it.value());
+        }
+
         QVector<double> currents;
         sample(p, x, st, false, 0.0, 0.0, dm, currents);
         for (int i = 0; i < p.elements.size(); ++i) {
@@ -1049,6 +1087,8 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
         QVector<double> values;
         sample(p, x, st, false, h, 0.0, dm, values);
 
+        QHash<int, double> worstReverse;
+
         auto appendPoint = [&](double time) {
             for (int i = 0; i < result.waves.size(); ++i) {
                 result.waves[i].x.append(time);
@@ -1068,6 +1108,13 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
             sample(p, x, st, true, h, t, dm, values);
             appendPoint(t);
             updateState(p, st, x);
+            trackReverseCaps(p, x, worstReverse);
+        }
+
+        // 反向电压超过耐压的极性电容：记录下来，界面据此放爆炸特效
+        for (auto it = worstReverse.constBegin(); it != worstReverse.constEnd(); ++it) {
+            if (it.value() < kCapReverseLimit)
+                result.blownCapacitors.insert(it.key(), it.value());
         }
 
         result.ok = true;

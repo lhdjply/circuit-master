@@ -90,6 +90,12 @@
 
 ![波形监控](docs/screenshots/monitor.png)
 
+电解电容反接：先烧红（红温），再炸成蘑菇云，特效保留到仿真结束。
+
+![电容爆炸过程](docs/screenshots/cap_explosion_frames.png)
+
+![电容爆炸](docs/screenshots/cap_explosion.png)
+
 发光二极管会按正向电流点亮（3 mA 时）：
 
 ![LED 点亮](docs/screenshots/led_on.png)
@@ -163,7 +169,7 @@ ctest --test-dir build --output-on-failure
 | 元件 | 参数 |
 | --- | --- |
 | 电阻 R | 阻值（Ω） |
-| 电容 C | 容值（F），瞬态使用后向欧拉伴随模型；默认无极性，可勾选「有极性」按电解电容绘制 |
+| 电容 C | 容值（F），瞬态使用后向欧拉伴随模型；默认无极性，可勾选「有极性」按电解电容绘制。反接超 1 V 会「炸」——原理图上冒蘑菇云（保留到仿真结束）并写日志 |
 | 电感 L | 感值（H），以支路电流为未知量 |
 | 二极管 D | 1N4148 简化模型（IS=2.52 nA，N=1.752） |
 | 发光二极管 LED | 与二极管同方程，由正向压降反推模型；参数：Vf（默认 2 V）。仿真后按正向电流点亮，电流越大越亮 |

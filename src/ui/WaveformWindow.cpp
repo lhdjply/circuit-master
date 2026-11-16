@@ -1044,6 +1044,11 @@ void WaveformWindow::setLivePlaying(bool playing)
     }
 }
 
+QHash<int, double> WaveformWindow::liveBlownCapacitors() const
+{
+    return m_live ? m_live->reverseCapacitors() : QHash<int, double>();
+}
+
 double WaveformWindow::liveValue(const QString& name) const
 {
     if (!m_live)
