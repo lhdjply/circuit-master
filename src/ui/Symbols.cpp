@@ -668,23 +668,29 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         const qreal w = textW + 12.0;
 
         const int rot = ((rotation % 360) + 360) % 360;
-        const bool vertical = (rot == 90 || rot == 270);
-        // 旗标朝哪边伸：0/90 走正方向，180/270 走负方向
-        const bool positive = (rot == 0 || rot == 90);
+        // 旗标朝向（逆时针）：0° 右、90° 上、180° 左、270° 下
+        // 整个标签当作一块整体转：90° 时文字自下而上，270° 时自上而下，
+        // 这样四个角度看着都是「跟着元件转」，而不是文字一直横着拧。
+        const bool positive = (rot != 180); // 180° 时画在 -x
+        const qreal dx = positive ? 1.0 : -1.0;
         const qreal bx = positive ? x0 : -(x0 + w);
 
         p->save();
-        p->rotate(-double(rotation)); // 先回到屏幕方向
-        if (vertical)
-            p->rotate(-90.0);         // 再把旗标竖起来（文字跟着竖）
+        // 元件整体是按 painter->rotate(+rotation) 转的，而且「旋转」动作给的是
+        // rotation-90（逆时针），于是 R=270 才是「转一次」。旗标必须跟着同一套
+        // 变换走：R=90 朝下、R=270 朝上，否则和别的元件转起来方向相反。
+        p->rotate(-double(rotation)); // 先抵消元件自身的旋转
+        if (rot == 90)
+            p->rotate(90.0); // 顺时针竖起（文字自上而下）
+        else if (rot == 270)
+            p->rotate(-90.0); // 逆时针竖起（文字自下而上）
         if (mirrorX)
             p->scale(-1.0, 1.0);
 
-        p->drawLine(QPointF(0.0, 0.0), QPointF(positive ? x0 : -x0, 0.0));
+        p->drawLine(QPointF(0.0, 0.0), QPointF(dx * x0, 0.0));
         p->setBrush(theme::symbolFill);
         p->drawRoundedRect(QRectF(bx, -h / 2.0, w, h), 3.0, 3.0);
         p->setBrush(Qt::NoBrush);
-        // 文字始终按「从左往右」排在盒子里，所以 180° 时也是正的
         p->drawText(QRectF(bx + 6.0, -h / 2.0, textW + 1.0, h),
                     Qt::AlignVCenter | Qt::AlignLeft, name);
         p->restore();
