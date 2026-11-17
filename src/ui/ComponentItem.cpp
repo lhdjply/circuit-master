@@ -26,8 +26,14 @@ ComponentItem::ComponentItem(const Component& comp, QGraphicsItem* parent)
 
 QRectF ComponentItem::boundingRect() const
 {
-    if (m_comp.type == ComponentType::Probe)
-        return QRectF(-75.0, -60.0, 150.0, 120.0);
+    if (m_comp.type == ComponentType::Probe) {
+        // 符号本体 + 标号（标号会随旋转跑到四个方向，或被拖到别处）
+        QRectF r(-20.0, -30.0, 40.0, 40.0);
+        const QRectF label = refLabelRect();
+        if (!label.isEmpty())
+            r = r.united(label);
+        return r.adjusted(-8.0, -8.0, 8.0, 8.0);
+    }
     if (m_comp.type == ComponentType::Ground)
         return QRectF(-60.0, -60.0, 120.0, 120.0); // 四个方向都要放得下符号与文字
     if (m_comp.type == ComponentType::NetLabel) {
@@ -56,9 +62,21 @@ QRectF ComponentItem::boundingRect() const
 
 QPainterPath ComponentItem::shape() const
 {
-    // 符号本体 + 两个标签的可点范围。标签画在符号外面，只返回 symbolShape()
-    // 的话鼠标根本落不到它上面，也就没法拖动。
-    QPainterPath path = symbolShape(m_comp.type);
+    // 符号本体 + 两个标签的可点范围。
+    //
+    // 符号本体必须套上和 paint() 完全一样的变换：paint 里是
+    //   scale(镜像) → rotate(角度) → paintSymbol(...)
+    // 整块符号都被旋转过。这里只返回未旋转的 symbolShape() 的话，命中区还停在
+    // 0° 的位置 —— 元件一转，可点范围就和画出来的图形错开了。测试点最明显：
+    // 小圈画到 +x 方向去了，命中区还留在 -y 方向，差着三十多像素。
+    QTransform symbolTransform;
+    symbolTransform.scale(m_comp.mirrorX ? -1.0 : 1.0, m_comp.mirrorY ? -1.0 : 1.0);
+    symbolTransform.rotate(double(m_comp.rotation));
+    QPainterPath path = symbolTransform.map(symbolShape(m_comp.type));
+
+    // 标号也并进命中区 —— 点「TP1」这种文字应当能选中元件。
+    // 关键是 refLabelRect() 给的是「贴着文字」的小矩形，
+    // 而不是画文字用的那个 80 px 宽的空盒子，否则符号周围一大片空白都能点中。
     const QRectF refRect = refLabelRect();
     if (!refRect.isEmpty()) {
         QPainterPath extra;
@@ -229,9 +247,8 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
     }
 
     if (m_comp.type == ComponentType::Probe) {
-        // 标签随旋转方向摆放，避免压在导线上
-        const double rad = qDegreesToRadians(double(m_comp.rotation));
-        const QPointF offset(40.0 * std::sin(rad), -40.0 * std::cos(rad));
+        // 标签随旋转方向摆放，避免压在导线上；用户还能再拖开
+        const QPointF offset = probeLabelAnchor();
         QFont f = painter->font();
         f.setPointSizeF(8.5);
         f.setBold(true);
@@ -367,10 +384,38 @@ static QRectF tightenLabelRect(const QRectF& base, int align, const QString& tex
     return r;
 }
 
+bool ComponentItem::symbolContains(const QPointF& itemPos) const
+{
+    // 与 paint()/shape() 相同的变换：先镜像再旋转
+    QTransform t;
+    t.scale(m_comp.mirrorX ? -1.0 : 1.0, m_comp.mirrorY ? -1.0 : 1.0);
+    t.rotate(double(m_comp.rotation));
+    return t.map(symbolShape(m_comp.type)).contains(itemPos);
+}
+
+QPointF ComponentItem::probeLabelAnchor() const
+{
+    // 标签放到「和引脚相反」的方向：0° 在上、90° 在右、180° 在下、270° 在左
+    const double rad = qDegreesToRadians(double(m_comp.rotation));
+    return QPointF(40.0 * std::sin(rad), -40.0 * std::cos(rad)) + m_comp.refLabelOffset;
+}
+
 QRectF ComponentItem::refLabelRect() const
 {
     if (m_comp.refdes.isEmpty())
         return QRectF();
+    // 测试点的标号是单独画的（位置随旋转走），这里按同一套规则算出来，
+    // 否则光点符号那根小棍儿根本点不中
+    if (m_comp.type == ComponentType::Probe) {
+        const QPointF at = probeLabelAnchor();
+        // 画的时候文字是居中排在 80×18 的盒子里，命中区只取文字本身那么宽：
+        // 否则 90° / 270° 时那个大盒子会盖住符号，按本体反倒拖走了标号
+        QFont font;
+        font.setPointSizeF(8.5);
+        font.setBold(true);
+        const qreal w = QFontMetricsF(font).horizontalAdvance(m_comp.refdes) + 10.0;
+        return QRectF(at.x() - w / 2.0, at.y() - 9.0, w, 18.0);
+    }
     QRectF refRect, valueRect;
     int refAlign = 0, valueAlign = 0;
     labelLayout(&refRect, &refAlign, &valueRect, &valueAlign);
@@ -393,6 +438,12 @@ void ComponentItem::mousePressEvent(QGraphicsSceneMouseEvent* event)
     // 按在标号 / 数值上时拖的是标签，不是元件本身
     if (event->button() == Qt::LeftButton) {
         const QPointF p = event->pos();
+        // 压在符号本体上一律算拖元件；只有落在符号外面、又确实在文字上时才拖标签，
+        // 免得旋转之后「拖本体」变成「拖位号」
+        if (symbolContains(p)) {
+            QGraphicsObject::mousePressEvent(event);
+            return;
+        }
         if (refLabelRect().contains(p)) {
             m_labelDrag = LabelDrag::Refdes;
             m_labelPressPos = p;

@@ -102,8 +102,9 @@ QPainterPath symbolShape(ComponentType type)
         return path;
     }
     if (type == ComponentType::Probe) {
-        path.addEllipse(QPointF(0.0, -15.0), 8.0, 8.0);
-        path.addRect(QRectF(-4.0, -10.0, 8.0, 12.0));
+        // 符号本体只有一根短棍 + 一个小圈，命中区给得比图形略大一点（还是贴着它），
+        // 免得必须点在那条细线上
+        path.addRoundedRect(QRectF(-9.0, -24.0, 18.0, 27.0), 6.0, 6.0);
         return path;
     }
     // 两端元件：贴着符号本体，高度收到 ±12，避免把旁边经过的导线挡住

@@ -66,6 +66,10 @@ protected:
 private:
     /// 标签的默认摆放位置（已叠加用户拖动出来的偏移）
     void labelLayout(QRectF* refRect, int* refAlign, QRectF* valueRect, int* valueAlign) const;
+    /// 测试点标号的锚点（随旋转方向摆，再叠加用户拖动出来的偏移）
+    QPointF probeLabelAnchor() const;
+    /// 点是否落在符号本体上（套用旋转/镜像变换）
+    bool symbolContains(const QPointF& itemPos) const;
 
     enum class LabelDrag { None, Refdes, Value };
 

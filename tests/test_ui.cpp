@@ -748,6 +748,10 @@ private slots:
         const QPointF before = item->pos();
         QCOMPARE(item->component().refLabelOffset, QPointF());
 
+        // 标号只有在元件选中之后才算进命中区（否则周围一大片空白都能点中）
+        item->setSelected(true);
+        settle();
+
         // 在标号上按下并拖动
         const QRectF refRect = item->refLabelRect();
         QVERIFY(!refRect.isEmpty());
@@ -889,6 +893,110 @@ private slots:
                                     .arg(v)
                                     .arg(display.readoutText(), display.displayedUnit())
                                     .arg(shown)));
+        }
+    }
+
+    void hitAreaFollowsRotation()
+    {
+        // paint() 里整块符号是被 painter->rotate() 转过去的，shape() 必须套同一套
+        // 变换。否则元件一转，画出来的图形和可点范围就错开了：
+        // 测试点最明显 —— 小圈画到 +x 方向，命中区却还在 -y 方向。
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        auto* item = scene->placeComponent(ComponentType::Probe, QPointF(400, 400));
+        QVERIFY(item);
+        settle();
+
+        // 符号在 item 坐标里的位置：0° 时小圈在 (0, -16) 附近
+        const QPointF localProbe(0.0, -16.0);
+
+        for (int rot : {0, 90, 180, 270}) {
+            item->setRotationAngle(rot);
+            settle();
+
+            // 按 paint() 的变换把「画出来的位置」算出来
+            QTransform t;
+            t.scale(item->mirroredX() ? -1.0 : 1.0, item->mirroredY() ? -1.0 : 1.0);
+            t.rotate(double(rot));
+            const QPointF drawn = t.map(localProbe);
+
+            QVERIFY2(item->contains(drawn),
+                     qPrintable(QStringLiteral("%1°：画出来的符号在 (%2, %3)，却点不中")
+                                    .arg(rot)
+                                    .arg(drawn.x())
+                                    .arg(drawn.y())));
+
+            const QPointF inScene = item->mapToScene(drawn);
+            QGraphicsItem* hit = scene->itemAt(inScene, QTransform());
+            QVERIFY2(hit == item,
+                     qPrintable(QStringLiteral("%1°：符号位置拾取到的是 %2")
+                                    .arg(rot)
+                                    .arg(hit ? hit->type() : -1)));
+        }
+    }
+
+    void probeStaysClickableWhenRotated()
+    {
+        // 测试点的标号写在符号外几十像素处。两条要求同时成立：
+        //  · 点「TP1」这行字能选中元件（不是一片空白都能点中）
+        //  · 旋转之后，按符号本体绝不能变成拖标号
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        auto* item = scene->placeComponent(ComponentType::Probe, QPointF(400, 400));
+        QVERIFY(item);
+        item->setComponent([&] {
+            Component c = item->component();
+            c.refdes = QStringLiteral("TP1");
+            return c;
+        }());
+        settle();
+
+        for (int rot : {0, 90, 180, 270}) {
+            item->setRotationAngle(rot);
+            item->setSelected(false);
+            settle();
+
+            const QRectF label = item->refLabelRect();
+            QVERIFY2(!label.isEmpty(), "标号矩形不该是空的");
+
+            // 1) 点标号中心能选中元件
+            const QPointF labelScene = item->mapToScene(label.center());
+            QVERIFY2(scene->itemAt(labelScene, QTransform()) == item,
+                     qPrintable(QStringLiteral("%1°：点标号应当选中元件").arg(rot)));
+
+            // 2) 标号矩形不能盖住符号 —— 否则按本体就变成拖标号
+            QTransform t;
+            t.rotate(double(rot));
+            for (const QPointF& body : {t.map(QPointF(0.0, -16.0)),   // 小圈
+                                        t.map(QPointF(0.0, -4.0)),    // 短棍
+                                        QPointF(0.0, 0.0)}) {         // 引脚
+                QVERIFY2(!label.contains(body),
+                         qPrintable(QStringLiteral("%1°：标号矩形盖住了符号 (%2, %3)")
+                                        .arg(rot)
+                                        .arg(body.x())
+                                        .arg(body.y())));
+            }
+
+            // 3) 符号本体仍然点得中
+            const QPointF circle = t.map(QPointF(0.0, -16.0));
+            QVERIFY2(scene->itemAt(item->mapToScene(circle), QTransform()) == item,
+                     qPrintable(QStringLiteral("%1°：符号本体点不中").arg(rot)));
+
+            // 4) 包围盒装得下标号
+            QVERIFY2(item->boundingRect().contains(label),
+                     qPrintable(QStringLiteral("%1° 时标号露出包围盒").arg(rot)));
         }
     }
 
