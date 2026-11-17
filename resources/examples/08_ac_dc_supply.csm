@@ -4,15 +4,15 @@
         "fStart": 10,
         "fStop": 1000000,
         "kind": "transient",
-        "scopeAmpDiv": 0.001,
+        "scopeAmpDiv": 0.5,
         "scopeTimeDiv": 0.002,
-        "scopeVoltDiv": 10,
-        "tStep": 1e-06,
-        "tStop": 0.03
+        "scopeVoltDiv": 5,
+        "tStep": 2e-06,
+        "tStop": 0.15
     },
     "components": [
         {
-            "amplitude": 311,
+            "amplitude": 1,
             "auxRatio": 1,
             "beta": 100,
             "closed": true,
@@ -20,8 +20,9 @@
             "damping": 0,
             "dcValue": 0,
             "delayTime": 0,
-            "frequency": 50,
-            "function": "SIN",
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
             "id": 1,
             "k": 0.002,
             "lpri": 1,
@@ -36,17 +37,17 @@
             "pulseV1": 0,
             "pulseV2": 5,
             "pulseWidth": 0.0005,
-            "refdes": "V1",
+            "refdes": "D1",
             "rotation": 0,
             "secondaryInverted": false,
             "transformerKind": "single",
-            "type": "V",
+            "type": "D",
             "value": 0,
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
             "x": 410,
-            "y": 240
+            "y": 520
         },
         {
             "amplitude": 1,
@@ -59,6 +60,7 @@
             "delayTime": 0,
             "frequency": 1000,
             "function": "DC",
+            "groundKind": 0,
             "id": 2,
             "k": 0.002,
             "lpri": 1,
@@ -73,8 +75,8 @@
             "pulseV1": 0,
             "pulseV2": 5,
             "pulseWidth": 0.0005,
-            "refdes": "D1",
-            "rotation": 270,
+            "refdes": "D2",
+            "rotation": 0,
             "secondaryInverted": false,
             "transformerKind": "single",
             "type": "D",
@@ -82,8 +84,8 @@
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
-            "x": 520,
-            "y": 190
+            "x": 410,
+            "y": 630
         },
         {
             "amplitude": 1,
@@ -96,6 +98,7 @@
             "delayTime": 0,
             "frequency": 1000,
             "function": "DC",
+            "groundKind": 0,
             "id": 3,
             "k": 0.002,
             "lpri": 1,
@@ -110,8 +113,8 @@
             "pulseV1": 0,
             "pulseV2": 5,
             "pulseWidth": 0.0005,
-            "refdes": "D2",
-            "rotation": 270,
+            "refdes": "D3",
+            "rotation": 0,
             "secondaryInverted": false,
             "transformerKind": "single",
             "type": "D",
@@ -119,8 +122,8 @@
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
-            "x": 680,
-            "y": 190
+            "x": 470,
+            "y": 520
         },
         {
             "amplitude": 1,
@@ -133,6 +136,7 @@
             "delayTime": 0,
             "frequency": 1000,
             "function": "DC",
+            "groundKind": 0,
             "id": 4,
             "k": 0.002,
             "lpri": 1,
@@ -147,8 +151,8 @@
             "pulseV1": 0,
             "pulseV2": 5,
             "pulseWidth": 0.0005,
-            "refdes": "D3",
-            "rotation": 270,
+            "refdes": "D4",
+            "rotation": 0,
             "secondaryInverted": false,
             "transformerKind": "single",
             "type": "D",
@@ -156,20 +160,21 @@
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
-            "x": 520,
-            "y": 300
+            "x": 470,
+            "y": 630
         },
         {
-            "amplitude": 1,
+            "amplitude": 220.0,
             "auxRatio": 1,
             "beta": 100,
             "closed": true,
             "ctr": 3,
             "damping": 0,
-            "dcValue": 0,
+            "dcValue": 5,
             "delayTime": 0,
-            "frequency": 1000,
-            "function": "DC",
+            "frequency": 50,
+            "function": "SIN",
+            "groundKind": 0,
             "id": 5,
             "k": 0.002,
             "lpri": 1,
@@ -184,17 +189,17 @@
             "pulseV1": 0,
             "pulseV2": 5,
             "pulseWidth": 0.0005,
-            "refdes": "D4",
+            "refdes": "V1",
             "rotation": 270,
             "secondaryInverted": false,
             "transformerKind": "single",
-            "type": "D",
+            "type": "V",
             "value": 0,
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
-            "x": 680,
-            "y": 300
+            "x": 320,
+            "y": 580
         },
         {
             "amplitude": 1,
@@ -207,6 +212,7 @@
             "delayTime": 0,
             "frequency": 1000,
             "function": "DC",
+            "groundKind": 0,
             "id": 6,
             "k": 0.002,
             "lpri": 1,
@@ -221,17 +227,17 @@
             "pulseV1": 0,
             "pulseV2": 5,
             "pulseWidth": 0.0005,
-            "refdes": "C1",
+            "refdes": "GND",
             "rotation": 90,
             "secondaryInverted": false,
             "transformerKind": "single",
-            "type": "C",
-            "value": 0.001,
+            "type": "GND",
+            "value": 0,
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
-            "x": 780,
-            "y": 250
+            "x": 380,
+            "y": 520
         },
         {
             "amplitude": 1,
@@ -244,45 +250,9 @@
             "delayTime": 0,
             "frequency": 1000,
             "function": "DC",
+            "groundKind": 0,
             "id": 7,
             "k": 0.002,
-            "lpri": 0.005,
-            "mirrorX": false,
-            "mirrorY": false,
-            "offset": 0,
-            "phaseDeg": 0,
-            "polarized": false,
-            "pulseFall": 1e-06,
-            "pulsePeriod": 0.001,
-            "pulseRise": 1e-06,
-            "pulseV1": 0,
-            "pulseV2": 5,
-            "pulseWidth": 0.0005,
-            "refdes": "T1",
-            "rotation": 0,
-            "secondaryInverted": true,
-            "transformerKind": "single",
-            "type": "TRANS",
-            "value": 0.067,
-            "vceSat": 0.2,
-            "vf": 0.7,
-            "vth": 2,
-            "x": 1080,
-            "y": 200
-        },
-        {
-            "amplitude": 1,
-            "auxRatio": 1,
-            "beta": 100,
-            "closed": true,
-            "ctr": 3,
-            "damping": 0,
-            "dcValue": 0,
-            "delayTime": 0,
-            "frequency": 1000,
-            "function": "DC",
-            "id": 8,
-            "k": 0.5,
             "lpri": 1,
             "mirrorX": false,
             "mirrorY": false,
@@ -295,128 +265,17 @@
             "pulseV1": 0,
             "pulseV2": 5,
             "pulseWidth": 0.0005,
-            "refdes": "Q1",
-            "rotation": 0,
-            "secondaryInverted": false,
-            "transformerKind": "single",
-            "type": "M",
-            "value": 0,
-            "vceSat": 0.2,
-            "vf": 0.7,
-            "vth": 4,
-            "x": 1080,
-            "y": 320
-        },
-        {
-            "amplitude": 1,
-            "auxRatio": 1,
-            "beta": 100,
-            "closed": true,
-            "ctr": 3,
-            "damping": 0,
-            "dcValue": 0,
-            "delayTime": 0,
-            "frequency": 1000,
-            "function": "PULSE",
-            "id": 9,
-            "k": 0.002,
-            "lpri": 1,
-            "mirrorX": false,
-            "mirrorY": false,
-            "offset": 0,
-            "phaseDeg": 0,
-            "polarized": false,
-            "pulseFall": 1e-06,
-            "pulsePeriod": 2e-05,
-            "pulseRise": 1e-06,
-            "pulseV1": 0,
-            "pulseV2": 15,
-            "pulseWidth": 6e-06,
-            "refdes": "V2",
-            "rotation": 90,
-            "secondaryInverted": false,
-            "transformerKind": "single",
-            "type": "V",
-            "value": 0,
-            "vceSat": 0.2,
-            "vf": 0.7,
-            "vth": 2,
-            "x": 950,
-            "y": 320
-        },
-        {
-            "amplitude": 1,
-            "auxRatio": 1,
-            "beta": 100,
-            "closed": true,
-            "ctr": 3,
-            "damping": 0,
-            "dcValue": 0,
-            "delayTime": 0,
-            "frequency": 1000,
-            "function": "DC",
-            "id": 10,
-            "k": 0.002,
-            "lpri": 1,
-            "mirrorX": false,
-            "mirrorY": false,
-            "offset": 0,
-            "phaseDeg": 0,
-            "polarized": false,
-            "pulseFall": 1e-06,
-            "pulsePeriod": 0.001,
-            "pulseRise": 1e-06,
-            "pulseV1": 0,
-            "pulseV2": 5,
-            "pulseWidth": 0.0005,
-            "refdes": "D5",
-            "rotation": 0,
-            "secondaryInverted": false,
-            "transformerKind": "single",
-            "type": "D",
-            "value": 0,
-            "vceSat": 0.2,
-            "vf": 0.7,
-            "vth": 2,
-            "x": 1200,
-            "y": 190
-        },
-        {
-            "amplitude": 1,
-            "auxRatio": 1,
-            "beta": 100,
-            "closed": true,
-            "ctr": 3,
-            "damping": 0,
-            "dcValue": 0,
-            "delayTime": 0,
-            "frequency": 1000,
-            "function": "DC",
-            "id": 11,
-            "k": 0.002,
-            "lpri": 1,
-            "mirrorX": false,
-            "mirrorY": false,
-            "offset": 0,
-            "phaseDeg": 0,
-            "polarized": false,
-            "pulseFall": 1e-06,
-            "pulsePeriod": 0.001,
-            "pulseRise": 1e-06,
-            "pulseV1": 0,
-            "pulseV2": 5,
-            "pulseWidth": 0.0005,
-            "refdes": "C2",
-            "rotation": 90,
+            "refdes": "C1",
+            "rotation": 270,
             "secondaryInverted": false,
             "transformerKind": "single",
             "type": "C",
-            "value": 0.00047,
+            "value": 0.0003,
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
-            "x": 1300,
-            "y": 250
+            "x": 550,
+            "y": 640
         },
         {
             "amplitude": 1,
@@ -429,44 +288,8 @@
             "delayTime": 0,
             "frequency": 1000,
             "function": "DC",
-            "id": 12,
-            "k": 0.002,
-            "lpri": 1,
-            "mirrorX": false,
-            "mirrorY": false,
-            "offset": 0,
-            "phaseDeg": 0,
-            "polarized": false,
-            "pulseFall": 1e-06,
-            "pulsePeriod": 0.001,
-            "pulseRise": 1e-06,
-            "pulseV1": 0,
-            "pulseV2": 5,
-            "pulseWidth": 0.0005,
-            "refdes": "RL",
-            "rotation": 90,
-            "secondaryInverted": false,
-            "transformerKind": "single",
-            "type": "R",
-            "value": 24,
-            "vceSat": 0.2,
-            "vf": 0.7,
-            "vth": 2,
-            "x": 1400,
-            "y": 250
-        },
-        {
-            "amplitude": 1,
-            "auxRatio": 1,
-            "beta": 100,
-            "closed": true,
-            "ctr": 3,
-            "damping": 0,
-            "dcValue": 0,
-            "delayTime": 0,
-            "frequency": 1000,
-            "function": "DC",
-            "id": 17,
+            "groundKind": 0,
+            "id": 8,
             "k": 0.002,
             "lpri": 1,
             "mirrorX": false,
@@ -489,8 +312,46 @@
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
-            "x": 780,
-            "y": 440
+            "x": 550,
+            "y": 670
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 0.1615,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 10,
+            "k": 0.002,
+            "lpri": 0.001,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "T1",
+            "rotation": 0,
+            "secondaryInverted": false,
+            "transformerKind": "primary-aux-secondary",
+            "type": "TRANS",
+            "value": 0.05385,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 1000,
+            "y": 690
         },
         {
             "amplitude": 1,
@@ -503,6 +364,273 @@
             "delayTime": 0,
             "frequency": 1000,
             "function": "DC",
+            "groundKind": 0,
+            "id": 11,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "R1",
+            "rotation": 270,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "R",
+            "value": 100000,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 740,
+            "y": 640
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 12,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "C2",
+            "rotation": 270,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "C",
+            "value": 2.2000000000000003e-09,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 830,
+            "y": 640
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 13,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "D5",
+            "rotation": 180,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "D",
+            "value": 0,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 890,
+            "y": 670
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 65000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 14,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "U1",
+            "rotation": 0,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "OB2362",
+            "value": 0.8,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 540,
+            "y": 870
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 15,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "R2",
+            "rotation": 270,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "R",
+            "value": 47000,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 640,
+            "y": 640
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 16,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "D6",
+            "rotation": 180,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "D",
+            "value": 0,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 890,
+            "y": 710
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 17,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "C3",
+            "rotation": 270,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "C",
+            "value": 9.999999999999999e-06,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 840,
+            "y": 740
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
             "id": 18,
             "k": 0.002,
             "lpri": 1,
@@ -526,8 +654,8 @@
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
-            "x": 950,
-            "y": 450
+            "x": 840,
+            "y": 770
         },
         {
             "amplitude": 1,
@@ -540,45 +668,9 @@
             "delayTime": 0,
             "frequency": 1000,
             "function": "DC",
-            "id": 19,
-            "k": 0.002,
-            "lpri": 1,
-            "mirrorX": false,
-            "mirrorY": false,
-            "offset": 0,
-            "phaseDeg": 0,
-            "polarized": false,
-            "pulseFall": 1e-06,
-            "pulsePeriod": 0.001,
-            "pulseRise": 1e-06,
-            "pulseV1": 0,
-            "pulseV2": 5,
-            "pulseWidth": 0.0005,
-            "refdes": "GND",
-            "rotation": 0,
-            "secondaryInverted": false,
-            "transformerKind": "single",
-            "type": "GND",
-            "value": 0,
-            "vceSat": 0.2,
-            "vf": 0.7,
-            "vth": 2,
-            "x": 1110,
-            "y": 450
-        },
-        {
-            "amplitude": 1,
-            "auxRatio": 1,
-            "beta": 100,
-            "closed": true,
-            "ctr": 3,
-            "damping": 0,
-            "dcValue": 0,
-            "delayTime": 0,
-            "frequency": 1000,
-            "function": "DC",
+            "groundKind": 0,
             "id": 20,
-            "k": 0.002,
+            "k": 1,
             "lpri": 1,
             "mirrorX": false,
             "mirrorY": false,
@@ -591,18 +683,17 @@
             "pulseV1": 0,
             "pulseV2": 5,
             "pulseWidth": 0.0005,
-            "refdes": "GND",
+            "refdes": "M1",
             "rotation": 0,
             "secondaryInverted": false,
             "transformerKind": "single",
-            "type": "GND",
+            "type": "M",
             "value": 0,
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
-            "x": 1150,
-            "y": 450,
-            "groundKind": 1
+            "x": 700,
+            "y": 860
         },
         {
             "amplitude": 1,
@@ -615,6 +706,7 @@
             "delayTime": 0,
             "frequency": 1000,
             "function": "DC",
+            "groundKind": 0,
             "id": 21,
             "k": 0.002,
             "lpri": 1,
@@ -638,9 +730,8 @@
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
-            "x": 1300,
-            "y": 450,
-            "groundKind": 1
+            "x": 540,
+            "y": 940
         },
         {
             "amplitude": 1,
@@ -653,6 +744,7 @@
             "delayTime": 0,
             "frequency": 1000,
             "function": "DC",
+            "groundKind": 0,
             "id": 22,
             "k": 0.002,
             "lpri": 1,
@@ -667,18 +759,17 @@
             "pulseV1": 0,
             "pulseV2": 5,
             "pulseWidth": 0.0005,
-            "refdes": "GND",
-            "rotation": 0,
+            "refdes": "R3",
+            "rotation": 180,
             "secondaryInverted": false,
             "transformerKind": "single",
-            "type": "GND",
-            "value": 0,
+            "type": "R",
+            "value": 220,
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
-            "x": 1400,
-            "y": 450,
-            "groundKind": 1
+            "x": 640,
+            "y": 920
         },
         {
             "amplitude": 1,
@@ -691,6 +782,7 @@
             "delayTime": 0,
             "frequency": 1000,
             "function": "DC",
+            "groundKind": 0,
             "id": 23,
             "k": 0.002,
             "lpri": 1,
@@ -705,17 +797,17 @@
             "pulseV1": 0,
             "pulseV2": 5,
             "pulseWidth": 0.0005,
-            "refdes": "RB",
+            "refdes": "R4",
             "rotation": 90,
             "secondaryInverted": false,
             "transformerKind": "single",
             "type": "R",
-            "value": 100000,
+            "value": 0.56,
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
-            "x": 880,
-            "y": 250
+            "x": 730,
+            "y": 950
         },
         {
             "amplitude": 1,
@@ -728,6 +820,7 @@
             "delayTime": 0,
             "frequency": 1000,
             "function": "DC",
+            "groundKind": 0,
             "id": 24,
             "k": 0.002,
             "lpri": 1,
@@ -751,8 +844,8 @@
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
-            "x": 880,
-            "y": 450
+            "x": 730,
+            "y": 980
         },
         {
             "amplitude": 1,
@@ -765,6 +858,7 @@
             "delayTime": 0,
             "frequency": 1000,
             "function": "DC",
+            "groundKind": 0,
             "id": 26,
             "k": 0.002,
             "lpri": 1,
@@ -779,17 +873,17 @@
             "pulseV1": 0,
             "pulseV2": 5,
             "pulseWidth": 0.0005,
-            "refdes": "C3",
-            "rotation": 90,
+            "refdes": "C4",
+            "rotation": 270,
             "secondaryInverted": false,
             "transformerKind": "single",
             "type": "C",
-            "value": 1e-07,
+            "value": 4.7e-10,
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
-            "x": 1000,
-            "y": 180
+            "x": 610,
+            "y": 950
         },
         {
             "amplitude": 1,
@@ -802,10 +896,11 @@
             "delayTime": 0,
             "frequency": 1000,
             "function": "DC",
+            "groundKind": 0,
             "id": 27,
             "k": 0.002,
             "lpri": 1,
-            "mirrorX": false,
+            "mirrorX": true,
             "mirrorY": false,
             "offset": 0,
             "phaseDeg": 0,
@@ -816,54 +911,17 @@
             "pulseV1": 0,
             "pulseV2": 5,
             "pulseWidth": 0.0005,
-            "refdes": "R3",
-            "rotation": 90,
-            "secondaryInverted": false,
-            "transformerKind": "single",
-            "type": "R",
-            "value": 10,
-            "vceSat": 0.2,
-            "vf": 0.7,
-            "vth": 2,
-            "x": 1000,
-            "y": 240
-        },
-        {
-            "amplitude": 1,
-            "auxRatio": 1,
-            "beta": 100,
-            "closed": true,
-            "ctr": 3,
-            "damping": 0,
-            "dcValue": 0,
-            "delayTime": 0,
-            "frequency": 1000,
-            "function": "DC",
-            "id": 28,
-            "k": 0.002,
-            "lpri": 1,
-            "mirrorX": false,
-            "mirrorY": false,
-            "offset": 0,
-            "phaseDeg": 0,
-            "polarized": false,
-            "pulseFall": 1e-06,
-            "pulsePeriod": 0.001,
-            "pulseRise": 1e-06,
-            "pulseV1": 0,
-            "pulseV2": 5,
-            "pulseWidth": 0.0005,
-            "refdes": "R2",
+            "refdes": "OC1",
             "rotation": 0,
             "secondaryInverted": false,
             "transformerKind": "single",
-            "type": "R",
-            "value": 5,
+            "type": "OPTO",
+            "value": 0,
             "vceSat": 0.2,
-            "vf": 0.7,
+            "vf": 1.2,
             "vth": 2,
-            "x": 1140,
-            "y": 190
+            "x": 1000,
+            "y": 1070
         },
         {
             "amplitude": 1,
@@ -876,7 +934,8 @@
             "delayTime": 0,
             "frequency": 1000,
             "function": "DC",
-            "id": 29,
+            "groundKind": 0,
+            "id": 28,
             "k": 0.002,
             "lpri": 1,
             "mirrorX": false,
@@ -899,8 +958,8 @@
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
-            "x": 520,
-            "y": 360
+            "x": 940,
+            "y": 1080
         },
         {
             "amplitude": 1,
@@ -913,7 +972,578 @@
             "delayTime": 0,
             "frequency": 1000,
             "function": "DC",
+            "groundKind": 0,
+            "id": 29,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "D7",
+            "rotation": 0,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "D",
+            "value": 0,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 1100,
+            "y": 640
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
             "id": 30,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "C5",
+            "rotation": 270,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "C",
+            "value": 0.00047,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 1180,
+            "y": 700
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 31,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": true,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "VR1",
+            "rotation": 0,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "TL431",
+            "value": 2.495,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 1170,
+            "y": 1140
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 32,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "R5",
+            "rotation": 0,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "R",
+            "value": 6800,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 1100,
+            "y": 960
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 33,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "R6",
+            "rotation": 270,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "R",
+            "value": 10000,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 1170,
+            "y": 1000
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 34,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "C6",
+            "rotation": 180,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "C",
+            "value": 1.0000000000000001e-07,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 1200,
+            "y": 1080
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 35,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "R7",
+            "rotation": 180,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "R",
+            "value": 1000,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 1260,
+            "y": 1080
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 36,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "R8",
+            "rotation": 90,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "R",
+            "value": 38200,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 1290,
+            "y": 1010
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 37,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "R9",
+            "rotation": 270,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "R",
+            "value": 10000,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 1290,
+            "y": 1180
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 1,
+            "id": 38,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "GND",
+            "rotation": 0,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "GND",
+            "value": 0,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 1180,
+            "y": 740
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 1,
+            "id": 39,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "GND",
+            "rotation": 0,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "GND",
+            "value": 0,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 1290,
+            "y": 1210
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 41,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "R10",
+            "rotation": 270,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "R",
+            "value": 100000,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 330,
+            "y": 860
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 42,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "D8",
+            "rotation": 90,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "D",
+            "value": 0,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 330,
+            "y": 920
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 43,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "R11",
+            "rotation": 270,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "R",
+            "value": 100000,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 330,
+            "y": 980
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 44,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "GND",
+            "rotation": 0,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "GND",
+            "value": 0,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 330,
+            "y": 1010
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 0,
+            "id": 45,
             "k": 0.002,
             "lpri": 1,
             "mirrorX": false,
@@ -936,296 +1566,535 @@
             "vceSat": 0.2,
             "vf": 0.7,
             "vth": 2,
-            "x": 1450,
-            "y": 150,
-            "groundKind": 1
+            "x": 590,
+            "y": 790
+        },
+        {
+            "amplitude": 1,
+            "auxRatio": 1,
+            "beta": 100,
+            "closed": true,
+            "ctr": 3,
+            "damping": 0,
+            "dcValue": 0,
+            "delayTime": 0,
+            "frequency": 1000,
+            "function": "DC",
+            "groundKind": 1,
+            "id": 46,
+            "k": 0.002,
+            "lpri": 1,
+            "mirrorX": false,
+            "mirrorY": false,
+            "offset": 0,
+            "phaseDeg": 0,
+            "polarized": false,
+            "pulseFall": 1e-06,
+            "pulsePeriod": 0.001,
+            "pulseRise": 1e-06,
+            "pulseV1": 0,
+            "pulseV2": 5,
+            "pulseWidth": 0.0005,
+            "refdes": "TP2",
+            "rotation": 0,
+            "secondaryInverted": false,
+            "transformerKind": "single",
+            "type": "TP",
+            "value": 0,
+            "vceSat": 0.2,
+            "vf": 0.7,
+            "vth": 2,
+            "x": 1180,
+            "y": 640
         }
     ],
     "format": "circuit-master",
-    "version": 1,
+    "version": 2,
     "wires": [
         [
             [
-                520,
-                160
+                570,
+                880
             ],
             [
-                520,
-                150
+                610,
+                880
             ],
             [
-                1050,
-                150
-            ],
-            [
-                1050,
-                190
+                610,
+                920
             ]
         ],
         [
             [
-                520,
-                330
+                670,
+                920
             ],
             [
-                520,
-                360
-            ],
-            [
-                680,
-                360
-            ],
-            [
-                680,
-                330
+                730,
+                920
             ]
         ],
         [
             [
-                780,
-                280
+                730,
+                920
             ],
             [
-                780,
-                440
-            ]
-        ],
-        [
-            [
-                1050,
-                210
-            ],
-            [
-                1050,
-                250
-            ],
-            [
-                1110,
-                250
-            ],
-            [
-                1110,
-                290
-            ]
-        ],
-        [
-            [
-                1110,
-                350
-            ],
-            [
-                1110,
-                450
-            ]
-        ],
-        [
-            [
-                950,
-                290
-            ],
-            [
-                950,
-                320
-            ],
-            [
-                1050,
-                320
-            ]
-        ],
-        [
-            [
-                950,
-                350
-            ],
-            [
-                950,
-                450
-            ]
-        ],
-        [
-            [
-                1230,
-                190
-            ],
-            [
-                1230,
-                150
-            ],
-            [
-                1450,
-                150
-            ]
-        ],
-        [
-            [
-                1300,
-                150
-            ],
-            [
-                1300,
-                220
-            ]
-        ],
-        [
-            [
-                1400,
-                150
-            ],
-            [
-                1400,
-                220
-            ]
-        ],
-        [
-            [
-                1300,
-                280
-            ],
-            [
-                1300,
-                450
-            ]
-        ],
-        [
-            [
-                1400,
-                280
-            ],
-            [
-                1400,
-                450
-            ]
-        ],
-        [
-            [
-                1110,
-                210
-            ],
-            [
-                1150,
-                210
-            ],
-            [
-                1150,
-                450
-            ]
-        ],
-        [
-            [
-                880,
-                280
-            ],
-            [
-                880,
-                450
-            ]
-        ],
-        [
-            [
-                780,
-                150
-            ],
-            [
-                780,
-                220
-            ]
-        ],
-        [
-            [
-                1050,
-                150
-            ],
-            [
-                1000,
-                150
-            ]
-        ],
-        [
-            [
-                1000,
-                270
-            ],
-            [
-                1000,
-                290
-            ],
-            [
-                1110,
-                290
-            ]
-        ],
-        [
-            [
-                680,
-                270
-            ],
-            [
-                680,
-                220
-            ]
-        ],
-        [
-            [
-                520,
-                270
-            ],
-            [
-                520,
-                220
-            ]
-        ],
-        [
-            [
-                880,
-                220
-            ],
-            [
-                880,
-                150
-            ]
-        ],
-        [
-            [
-                680,
-                150
-            ],
-            [
-                680,
-                160
+                730,
+                890
             ]
         ],
         [
             [
                 440,
-                240
+                520
             ],
             [
-                520,
-                240
+                440,
+                450
+            ],
+            [
+                320,
+                450
+            ],
+            [
+                320,
+                550
+            ]
+        ],
+        [
+            [
+                830,
+                610
+            ],
+            [
+                740,
+                610
+            ]
+        ],
+        [
+            [
+                550,
+                610
+            ],
+            [
+                740,
+                610
+            ]
+        ],
+        [
+            [
+                970,
+                640
+            ],
+            [
+                910,
+                640
+            ],
+            [
+                910,
+                610
+            ],
+            [
+                830,
+                610
+            ]
+        ],
+        [
+            [
+                500,
+                520
+            ],
+            [
+                500,
+                630
             ]
         ],
         [
             [
                 380,
-                240
+                520
             ],
             [
                 380,
-                430
+                630
+            ]
+        ],
+        [
+            [
+                440,
+                630
             ],
             [
-                720,
-                430
+                440,
+                730
             ],
             [
-                720,
-                250
+                320,
+                730
             ],
             [
-                680,
-                250
+                320,
+                610
+            ]
+        ],
+        [
+            [
+                550,
+                610
+            ],
+            [
+                500,
+                610
+            ]
+        ],
+        [
+            [
+                970,
+                670
+            ],
+            [
+                920,
+                670
+            ]
+        ],
+        [
+            [
+                860,
+                670
+            ],
+            [
+                830,
+                670
+            ]
+        ],
+        [
+            [
+                740,
+                670
+            ],
+            [
+                830,
+                670
+            ]
+        ],
+        [
+            [
+                970,
+                710
+            ],
+            [
+                920,
+                710
+            ]
+        ],
+        [
+            [
+                860,
+                710
+            ],
+            [
+                840,
+                710
+            ]
+        ],
+        [
+            [
+                970,
+                740
+            ],
+            [
+                970,
+                770
+            ],
+            [
+                840,
+                770
+            ]
+        ],
+        [
+            [
+                640,
+                670
+            ],
+            [
+                640,
+                710
+            ],
+            [
+                840,
+                710
+            ]
+        ],
+        [
+            [
+                670,
+                710
+            ],
+            [
+                670,
+                790
+            ],
+            [
+                540,
+                790
+            ],
+            [
+                540,
+                840
+            ]
+        ],
+        [
+            [
+                570,
+                860
+            ],
+            [
+                670,
+                860
+            ]
+        ],
+        [
+            [
+                540,
+                900
+            ],
+            [
+                540,
+                940
+            ]
+        ],
+        [
+            [
+                950,
+                670
+            ],
+            [
+                950,
+                690
+            ],
+            [
+                730,
+                690
+            ],
+            [
+                730,
+                830
+            ]
+        ],
+        [
+            [
+                610,
+                980
+            ],
+            [
+                730,
+                980
+            ]
+        ],
+        [
+            [
+                970,
+                1060
+            ],
+            [
+                430,
+                1060
+            ],
+            [
+                430,
+                870
+            ],
+            [
+                510,
+                870
+            ]
+        ],
+        [
+            [
+                970,
+                1080
+            ],
+            [
+                940,
+                1080
+            ]
+        ],
+        [
+            [
+                1070,
+                640
+            ],
+            [
+                1030,
+                640
+            ]
+        ],
+        [
+            [
+                1130,
+                640
+            ],
+            [
+                1290,
+                640
+            ],
+            [
+                1290,
+                980
+            ]
+        ],
+        [
+            [
+                1180,
+                730
+            ],
+            [
+                1180,
+                740
+            ],
+            [
+                1030,
+                740
+            ]
+        ],
+        [
+            [
+                1030,
+                1060
+            ],
+            [
+                1030,
+                960
+            ],
+            [
+                1070,
+                960
+            ]
+        ],
+        [
+            [
+                1130,
+                960
+            ],
+            [
+                1290,
+                960
+            ]
+        ],
+        [
+            [
+                1170,
+                1110
+            ],
+            [
+                1170,
+                1030
+            ]
+        ],
+        [
+            [
+                1030,
+                1080
+            ],
+            [
+                1170,
+                1080
+            ]
+        ],
+        [
+            [
+                1170,
+                960
+            ],
+            [
+                1170,
+                970
+            ]
+        ],
+        [
+            [
+                1290,
+                1040
+            ],
+            [
+                1290,
+                1080
+            ]
+        ],
+        [
+            [
+                1200,
+                1140
+            ],
+            [
+                1290,
+                1140
+            ]
+        ],
+        [
+            [
+                1290,
+                1150
+            ],
+            [
+                1290,
+                1080
+            ]
+        ],
+        [
+            [
+                1290,
+                1210
+            ],
+            [
+                1170,
+                1210
+            ],
+            [
+                1170,
+                1170
+            ]
+        ],
+        [
+            [
+                1180,
+                640
+            ],
+            [
+                1180,
+                670
+            ]
+        ],
+        [
+            [
+                510,
+                890
+            ],
+            [
+                330,
+                890
+            ]
+        ],
+        [
+            [
+                330,
+                830
+            ],
+            [
+                330,
+                800
+            ],
+            [
+                940,
+                800
+            ],
+            [
+                940,
+                710
             ]
         ]
     ],
-    "name": "220 V 交流 → 桥式整流 → 变压器（约 12 V）"
+    "name": "220 V 转 12 V 反激电源（OB2362）"
 }

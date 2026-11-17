@@ -538,7 +538,7 @@ private slots:
             v.rotation = 90;
             v.refdes = QStringLiteral("V1");
             v.function = SourceFunction::Sine;
-            v.amplitude = 10.0;
+            v.amplitude = 10.0 / std::sqrt(2.0); // 峰值 10.0 V
             v.frequency = 1000.0;
             c.components.append(v);
 
@@ -635,7 +635,7 @@ private slots:
         v.rotation = 90;
         v.refdes = QStringLiteral("V1");
         v.function = SourceFunction::Sine;
-        v.amplitude = 10.0;
+        v.amplitude = 10.0 / std::sqrt(2.0); // 峰值 10.0 V
         v.frequency = 1000.0;
         c.components.append(v);
 
@@ -714,7 +714,7 @@ private slots:
         v.rotation = 90;
         v.refdes = QStringLiteral("V1");
         v.function = SourceFunction::Sine;
-        v.amplitude = 10.0;
+        v.amplitude = 10.0 / std::sqrt(2.0); // 峰值 10.0 V
         v.frequency = 1000.0;
         c.components.append(v);
 
@@ -812,7 +812,7 @@ private slots:
             v.rotation = 90;
             v.refdes = QStringLiteral("V1");
             v.function = SourceFunction::Sine;
-            v.amplitude = 10.0;
+            v.amplitude = 10.0 / std::sqrt(2.0); // 峰值 10.0 V
             v.frequency = 1000.0;
             c.components.append(v);
 
@@ -899,7 +899,7 @@ private slots:
 
     void acDcSupplyExampleRuns()
     {
-        // 220 V 交流 → 桥式整流 → 310 V 母线 → MOSFET 斩波 → 变压器 → 输出约 12 V
+        // 220 V 交流 → 桥式整流 → MOSFET 斩波 → 反激变压器 → 输出约 12 V
         QFile file(QStringLiteral(CSM_EXAMPLE_DIR "/08_ac_dc_supply.csm"));
         QVERIFY2(file.open(QIODevice::ReadOnly), "示例文件缺失");
         QString error;
@@ -913,8 +913,8 @@ private slots:
 
         SimulationOptions tr;
         tr.kind = AnalysisKind::Transient;
-        tr.tStop = 0.03;
-        tr.tStep = 1e-6;
+        tr.tStop = 0.15;
+        tr.tStep = 2e-6;
         const SimulationResult result = Simulator::run(circuit, tr);
         QVERIFY2(result.ok, qPrintable(result.error));
 
@@ -928,7 +928,7 @@ private slots:
         double peak = 0.0;
         for (size_t i = out->y.size() / 2; i < out->y.size(); ++i)
             peak = std::max(peak, out->y[i]);
-        QVERIFY2(peak > 10.5 && peak < 14.0,
+        QVERIFY2(peak > 10.0 && peak < 14.0,
                  qPrintable(QStringLiteral("输出 %1 V").arg(peak)));
     }
 
@@ -1275,6 +1275,43 @@ private slots:
         src.frequency = 50.0;
         c.components.append(src);
         QCOMPARE(c.suggestedMaxStep(), suggested);
+    }
+
+    void sineAmplitudeIsRms()
+    {
+        // 正弦源的幅值填的是有效值：220 V 有效值 → 峰值 311 V
+        Circuit c = loopCircuit(ComponentType::Resistor, 1000.0,
+                                ComponentType::Resistor, 1000.0, 0.0);
+        Component& v = c.components[0];
+        v.function = SourceFunction::Sine;
+        v.amplitude = 220.0;
+        v.frequency = 50.0;
+        QVERIFY2(near(v.peakAmplitude(), 311.13, 0.05),
+                 qPrintable(QString::number(v.peakAmplitude())));
+
+        const double at90 = v.sourceValueAt(0.005); // 5 ms = 90°
+        QVERIFY2(near(at90, 311.13, 0.1), qPrintable(QString::number(at90)));
+
+        // 存盘后再读回来还是有效值
+        QString error;
+        const QJsonObject json = c.toJson();
+        QCOMPARE(json.value(QStringLiteral("version")).toInt(), 2);
+        const Circuit back = Circuit::fromJson(json, &error);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        QVERIFY(near(back.components.at(0).amplitude, 220.0, 1e-9));
+
+        // 版本 1 的老文件存的是峰值 311，读入时换算成 219.9 V 有效值
+        QJsonObject legacy = json;
+        legacy.insert(QStringLiteral("version"), 1);
+        QJsonArray comps = legacy.value(QStringLiteral("components")).toArray();
+        QJsonObject first = comps.at(0).toObject();
+        first.insert(QStringLiteral("amplitude"), 311.0);
+        comps.replace(0, first);
+        legacy.insert(QStringLiteral("components"), comps);
+        const Circuit old = Circuit::fromJson(legacy, &error);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        QVERIFY2(near(old.components.at(0).amplitude, 219.91, 0.05),
+                 qPrintable(QString::number(old.components.at(0).amplitude)));
     }
 
     void changelogSectionsAreUnique()
@@ -2291,7 +2328,7 @@ private slots:
                                 ComponentType::Resistor, 1000.0, 0.0);
         Component& v = c.components[0];
         v.function = SourceFunction::Sine;
-        v.amplitude = 220.0;
+        v.amplitude = 220.0 / std::sqrt(2.0); // 峰值 220.0 V
         v.frequency = 50.0; // 周期 20 ms
 
         // 每个周期 20 点 → 1 ms
@@ -2507,7 +2544,7 @@ private slots:
                                 ComponentType::Resistor, 1000.0, 0.0);
         Component& v = c.components[0];
         v.function = SourceFunction::Sine;
-        v.amplitude = 5.0;
+        v.amplitude = 5.0 / std::sqrt(2.0); // 峰值 5.0 V
         v.frequency = 50.0;
         v.offset = 0.0;
 

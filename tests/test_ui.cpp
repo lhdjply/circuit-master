@@ -60,6 +60,8 @@
 #include <QSignalSpy>
 #include <QTest>
 
+#include <cmath>
+
 using namespace csm;
 
 class UiTest : public QObject {
@@ -2209,7 +2211,7 @@ private slots:
         v.rotation = 90;
         v.refdes = QStringLiteral("V1");
         v.function = SourceFunction::Sine;
-        v.amplitude = 220.0;
+        v.amplitude = 220.0 / std::sqrt(2.0); // 峰值 220.0 V
         v.frequency = 50.0;
         circuit.components.append(v);
 

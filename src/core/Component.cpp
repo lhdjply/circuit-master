@@ -246,6 +246,11 @@ QVector<QPointF> Component::pinPositions() const
     return out;
 }
 
+double Component::peakAmplitude() const
+{
+    return amplitude * std::sqrt(2.0);
+}
+
 double Component::sourceValueAt(double t) const
 {
     if (!isSource(type))
@@ -256,11 +261,13 @@ double Component::sourceValueAt(double t) const
         return dcValue;
 
     case SourceFunction::Sine: {
+        // amplitude 存的是有效值，输出时换算成峰值
+        const double peak = peakAmplitude();
         const double local = t - delayTime;
         if (local < 0.0)
-            return offset + amplitude * std::sin(qDegreesToRadians(phaseDeg));
+            return offset + peak * std::sin(qDegreesToRadians(phaseDeg));
         const double angle = 2.0 * kPi * frequency * local + qDegreesToRadians(phaseDeg);
-        return offset + amplitude * std::exp(-damping * local) * std::sin(angle);
+        return offset + peak * std::exp(-damping * local) * std::sin(angle);
     }
 
     case SourceFunction::Pulse: {
@@ -424,7 +431,7 @@ QString Component::spiceValueSpec() const
             return QStringLiteral("DC ") + spiceNumber(dcValue);
         case SourceFunction::Sine:
             return QStringLiteral("SIN(%1 %2 %3 %4 %5)")
-                .arg(spiceNumber(offset), spiceNumber(amplitude), spiceNumber(frequency),
+                .arg(spiceNumber(offset), spiceNumber(peakAmplitude()), spiceNumber(frequency),
                      spiceNumber(delayTime), spiceNumber(damping));
         case SourceFunction::Pulse: {
             QString spec = QStringLiteral("PULSE(%1 %2 %3 %4 %5 %6 %7)");

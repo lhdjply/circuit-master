@@ -275,7 +275,7 @@
     ],
     "format": "circuit-master",
     "name": "TL431 可调稳压（5 V）",
-    "version": 1,
+    "version": 2,
     "wires": [
         [
             [

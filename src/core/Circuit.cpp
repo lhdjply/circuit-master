@@ -430,7 +430,8 @@ QJsonObject Circuit::toJson() const
 
     QJsonObject root;
     root.insert(QStringLiteral("format"), QStringLiteral("circuit-master"));
-    root.insert(QStringLiteral("version"), 1);
+    // 版本 2 起 amplitude 存有效值（RMS）；版本 1 存的是峰值
+    root.insert(QStringLiteral("version"), 2);
     root.insert(QStringLiteral("components"), compArray);
     root.insert(QStringLiteral("wires"), wireArray);
     return root;
@@ -444,6 +445,10 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
             *error = QStringLiteral("不是电路仿真大师的电路文件。");
         return circuit;
     }
+
+    // 版本 2 起正弦源的 amplitude 是有效值；老文件存的是峰值，读入时换算
+    const int formatVersion = obj.value(QStringLiteral("version")).toInt(1);
+    const bool legacyPeakAmplitude = formatVersion < 2;
 
     const QJsonArray compArray = obj.value(QStringLiteral("components")).toArray();
     for (const QJsonValue& v : compArray) {
@@ -460,6 +465,8 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
         c.function = tagToFunction(o.value(QStringLiteral("function")).toString());
         c.dcValue = o.value(QStringLiteral("dcValue")).toDouble();
         c.amplitude = o.value(QStringLiteral("amplitude")).toDouble(1.0);
+        if (legacyPeakAmplitude && c.function == SourceFunction::Sine)
+            c.amplitude /= std::sqrt(2.0);
         c.offset = o.value(QStringLiteral("offset")).toDouble();
         c.frequency = o.value(QStringLiteral("frequency")).toDouble(1000.0);
         c.phaseDeg = o.value(QStringLiteral("phaseDeg")).toDouble();

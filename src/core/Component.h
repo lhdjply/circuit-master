@@ -112,6 +112,7 @@ struct Component {
     // 独立源参数
     SourceFunction function = SourceFunction::Constant;
     double dcValue = 0.0;
+    /// 正弦源的有效值（RMS）。峰值 = 有效值 × √2
     double amplitude = 1.0;
     double offset = 0.0;
     double frequency = 1000.0; // Hz
@@ -135,6 +136,8 @@ struct Component {
 
     /// 独立源在 t 时刻的输出值；非独立源返回 0。
     double sourceValueAt(double t) const;
+    /// 正弦源的峰值（有效值 × √2）
+    double peakAmplitude() const;
 
     QString displayValue() const;   // 画在原理图上的数值文本
     QString displayName() const;    // 例如 "R1"

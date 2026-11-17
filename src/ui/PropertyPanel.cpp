@@ -156,7 +156,8 @@ void PropertyPanel::buildUi()
     m_form->addRow(QStringLiteral("直流值"), m_dc);
 
     m_amplitude = makeEdit();
-    m_form->addRow(QStringLiteral("幅值"), m_amplitude);
+    m_amplitude->setToolTip(QStringLiteral("正弦源的**有效值**（RMS）；峰值 = 有效值 × 1.414"));
+    m_form->addRow(QStringLiteral("有效值 (RMS)"), m_amplitude);
     m_frequency = makeEdit();
     m_form->addRow(QStringLiteral("频率"), m_frequency);
     m_phase = makeEdit();
@@ -412,7 +413,7 @@ void PropertyPanel::updateVisibility()
     if (isSource(c.type)) {
         const QString unit = unitSymbol(sourceUnitFor(c.type));
         m_dc->setPlaceholderText(QStringLiteral("例如 5%1").arg(unit));
-        m_amplitude->setPlaceholderText(QStringLiteral("例如 1%1").arg(unit));
+        m_amplitude->setPlaceholderText(QStringLiteral("例如 220%1").arg(unit));
         m_offset->setPlaceholderText(QStringLiteral("例如 0%1").arg(unit));
         m_pulseV1->setPlaceholderText(QStringLiteral("例如 0%1").arg(unit));
         m_pulseV2->setPlaceholderText(QStringLiteral("例如 5%1").arg(unit));
