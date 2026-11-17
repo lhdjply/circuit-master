@@ -1,3 +1,14 @@
+circuit-master (0.2.2) unstable; urgency=medium
+
+  * 新增接地分类（GND/AGND/DGND/PGND/EARTH），测试点可选参考地。
+  * 新增变压器：单绕组或初级+辅助+次级，可设匝数比与同名端。
+  * 新增 OB2362A 开关控制器，含 FB 偏置、VCC 欠压与过压钳位。
+  * 画布支持任意角度旋转、十字交叉打交点、导线对齐网格。
+  * 正弦交流源幅值改为有效值，老工程打开后波形不变。
+  * 08 示例换成 OB2362 反激电源（220 V 转 12 V）。
+
+ -- Circuit Master Maintainers <lhdjply@users.noreply.github.com>  Tue, 17 Nov 2026 11:00:00 +0800
+
 circuit-master (0.2.1) unstable; urgency=medium
 
   * 新增 TL431 可调基准（REF / 阳极 / 阴极）与「TL431 可调稳压」示例。
