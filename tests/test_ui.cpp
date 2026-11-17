@@ -2237,7 +2237,7 @@ private slots:
                 category = box;
         }
         QVERIFY(category);
-        QCOMPARE(category->count(), 6);
+        QCOMPARE(category->count(), 7); // 「全部」+ 6 个分类
 
         // 每个分类都应当有内容，且加起来不超过全部
         QMap<QString, int> counts;
@@ -2249,9 +2249,13 @@ private slots:
                      qPrintable(QStringLiteral("分类为空: ") + category->currentText()));
         }
 
-        QCOMPARE(counts.value(QStringLiteral("基础")), 4); // 含变压器
-        QCOMPARE(counts.value(QStringLiteral("电源")), 2);
-        QCOMPARE(counts.value(QStringLiteral("半导体")), 11); // 含光耦、TL431 与 OB2362
+        // 分类按「器件性质」划分，同类元件数量不该悬殊
+        QCOMPARE(counts.value(QStringLiteral("基础")), 4);        // R / C / L / 变压器
+        QCOMPARE(counts.value(QStringLiteral("半导体")), 7);      // 二极管、LED、三极管、MOS、IGBT
+        QCOMPARE(counts.value(QStringLiteral("模拟 IC")), 4);     // 运放 / TL431 / 光耦 / OB2362
+        QCOMPARE(counts.value(QStringLiteral("电源")), 2);        // 电压源 / 电流源
+        QCOMPARE(counts.value(QStringLiteral("开关与接地")), 3);  // 开关 / 接地 / 网络标签
+        QCOMPARE(counts.value(QStringLiteral("测量")), 3);        // TP / IP / 万用表
 
         int sum = 0;
         for (int n : counts)

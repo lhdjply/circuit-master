@@ -712,9 +712,12 @@ void MainWindow::buildLibrary()
         GroundKind groundKind = GroundKind::Gnd; // 接地符号的种类
     };
     const QVector<Entry> entries = {
+        // 按分类排好，同类的挨在一起，「全部」列表也有顺序
         {ComponentType::Resistor, QStringLiteral("电阻  R"), QStringLiteral("基础")},
         {ComponentType::Capacitor, QStringLiteral("电容  C"), QStringLiteral("基础")},
         {ComponentType::Inductor, QStringLiteral("电感  L"), QStringLiteral("基础")},
+        {ComponentType::Transformer, QStringLiteral("变压器  T"), QStringLiteral("基础")},
+
         {ComponentType::Diode, QStringLiteral("二极管  D"), QStringLiteral("半导体")},
         {ComponentType::Led, QStringLiteral("发光二极管  LED"), QStringLiteral("半导体")},
         {ComponentType::Npn, QStringLiteral("NPN 三极管  Q"), QStringLiteral("半导体")},
@@ -722,20 +725,23 @@ void MainWindow::buildLibrary()
         {ComponentType::Nmos, QStringLiteral("N 沟道 MOS  M"), QStringLiteral("半导体")},
         {ComponentType::Pmos, QStringLiteral("P 沟道 MOS  M"), QStringLiteral("半导体")},
         {ComponentType::Igbt, QStringLiteral("IGBT  Z"), QStringLiteral("半导体")},
-        {ComponentType::Optocoupler, QStringLiteral("光耦  OC"), QStringLiteral("半导体")},
-        {ComponentType::Tl431, QStringLiteral("TL431 基准  VR"), QStringLiteral("半导体")},
-        {ComponentType::Transformer, QStringLiteral("变压器  T"), QStringLiteral("基础")},
-        {ComponentType::Ob2362, QStringLiteral("OB2362 控制器  U"), QStringLiteral("半导体")},
-        {ComponentType::OpAmp, QStringLiteral("运算放大器  U"), QStringLiteral("半导体")},
+
+        {ComponentType::OpAmp, QStringLiteral("运算放大器  U"), QStringLiteral("模拟 IC")},
+        {ComponentType::Tl431, QStringLiteral("TL431 基准  VR"), QStringLiteral("模拟 IC")},
+        {ComponentType::Optocoupler, QStringLiteral("光耦  OC"), QStringLiteral("模拟 IC")},
+        {ComponentType::Ob2362, QStringLiteral("OB2362 控制器  U"), QStringLiteral("模拟 IC")},
+
         {ComponentType::VoltageSource, QStringLiteral("电压源  V"), QStringLiteral("电源")},
         {ComponentType::CurrentSource, QStringLiteral("电流源  I"), QStringLiteral("电源")},
+
         {ComponentType::Switch, QStringLiteral("开关  S"), QStringLiteral("开关与接地")},
         {ComponentType::Ground, QStringLiteral("接地  GND"), QStringLiteral("开关与接地"),
          GroundKind::Gnd},
-        {ComponentType::Probe, QStringLiteral("电压测试点  TP"), QStringLiteral("测试点")},
-        {ComponentType::CurrentProbe, QStringLiteral("电流测试点  IP"), QStringLiteral("测试点")},
-        {ComponentType::Multimeter, QStringLiteral("万用表  XMM"), QStringLiteral("测试点")},
         {ComponentType::NetLabel, QStringLiteral("网络标签  NET"), QStringLiteral("开关与接地")},
+
+        {ComponentType::Probe, QStringLiteral("电压测试点  TP"), QStringLiteral("测量")},
+        {ComponentType::CurrentProbe, QStringLiteral("电流测试点  IP"), QStringLiteral("测量")},
+        {ComponentType::Multimeter, QStringLiteral("万用表  XMM"), QStringLiteral("测量")},
     };
 
     const QString category = m_libraryCategory ? m_libraryCategory->currentText() : QString();
@@ -766,9 +772,10 @@ void MainWindow::createDocks()
 
     m_libraryCategory = new QComboBox(libraryContainer);
     m_libraryCategory->addItem(QStringLiteral("全部"));
+    // 按「器件性质」分，别把 11 个东西都堆在「半导体」里
     for (const QString& name : {QStringLiteral("基础"), QStringLiteral("半导体"),
-                                QStringLiteral("电源"), QStringLiteral("开关与接地"),
-                                QStringLiteral("测试点")}) {
+                                QStringLiteral("模拟 IC"), QStringLiteral("电源"),
+                                QStringLiteral("开关与接地"), QStringLiteral("测量")}) {
         m_libraryCategory->addItem(name);
     }
     m_libraryCategory->setToolTip(QStringLiteral("按类别筛选元件"));
