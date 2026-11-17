@@ -250,11 +250,4 @@ QString formatEng(double value, const QString& unit, int precision)
     return out;
 }
 
-QString spiceNumber(double value)
-{
-    if (!std::isfinite(value))
-        return QStringLiteral("0");
-    return QString::number(value, 'g', 12);
-}
-
 } // namespace csm

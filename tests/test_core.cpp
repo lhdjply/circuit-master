@@ -2575,10 +2575,6 @@ private slots:
         QVERIFY2(error.isEmpty(), qPrintable(error));
         QVERIFY(loaded.find(op->id));
         QCOMPARE(loaded.find(op->id)->type, ComponentType::OpAmp);
-
-        const QString spice = c.toSpiceNetlist();
-        QVERIFY(spice.contains(QStringLiteral("EU1")));
-        QVERIFY(spice.contains(QStringLiteral("100000")));
     }
 
     void wireEndpointOnSegmentConnects()
@@ -2758,9 +2754,6 @@ private slots:
         QCOMPARE(node2, node1 + 1);
         QCOMPARE(node3, node2 + 1);
 
-        const QString spice = c.toSpiceNetlist();
-        QVERIFY(!spice.contains(QStringLiteral("TP1")));
-
         SimulationOptions tr;
         tr.kind = AnalysisKind::Transient;
         tr.tStop = 1e-4;
@@ -2836,9 +2829,6 @@ private slots:
         QVERIFY(acCurrent);
         QVERIFY2(near(acCurrent->y.first(), -60.0, 0.5),
                  qPrintable(QString::number(acCurrent->y.first())));
-
-        const QString spice = c.toSpiceNetlist();
-        QVERIFY(spice.contains(QStringLiteral("VIP1")));
 
         const Circuit loaded = Circuit::fromJson(c.toJson());
         QVERIFY(loaded.find(ip.id));
@@ -2935,16 +2925,6 @@ private slots:
         const Netlist net = loaded.buildNetlist();
         QVERIFY2(net.valid, qPrintable(net.error));
         QCOMPARE(net.nodeCount, 2);
-    }
-
-    void spiceNetlistExport()
-    {
-        Circuit c = loopCircuit(ComponentType::Resistor, 1000.0,
-                                ComponentType::Resistor, 2000.0, 10.0);
-        const QString spice = c.toSpiceNetlist();
-        QVERIFY(spice.contains(QStringLiteral("R1 ")));
-        QVERIFY(spice.contains(QStringLiteral("V1 ")));
-        QVERIFY(spice.contains(QStringLiteral(".end")));
     }
 
     void groundRequired()

@@ -29,7 +29,5 @@ double parseQuantity(const QString& text, UnitKind expected, bool* ok = nullptr,
 /// 以工程记数法格式化，如 4700 -> "4.7 kΩ"。
 QString formatEng(double value, const QString& unit = QString(), int precision = 3);
 
-/// 不带单位的纯数字（用于 SPICE 网表），保证可被 SPICE 解析。
-QString spiceNumber(double value);
 
 } // namespace csm

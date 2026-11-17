@@ -447,8 +447,6 @@ void MainWindow::createActions()
     m_actSaveAs = new QAction(QStringLiteral("另存为(&A)…"), this);
     m_actSaveAs->setShortcut(QKeySequence::SaveAs);
 
-    m_actExport = new QAction(QStringLiteral("导出 SPICE 网表…"), this);
-    m_actExport->setShortcut(QKeySequence(QStringLiteral("Ctrl+E")));
 
     m_actQuit = new QAction(QStringLiteral("退出(&Q)"), this);
     m_actQuit->setShortcut(QKeySequence::Quit);
@@ -557,7 +555,6 @@ void MainWindow::createActions()
     connect(m_actOpen, &QAction::triggered, this, &MainWindow::openCircuit);
     connect(m_actSave, &QAction::triggered, this, [this] { saveCircuit(); });
     connect(m_actSaveAs, &QAction::triggered, this, [this] { saveCircuitAs(); });
-    connect(m_actExport, &QAction::triggered, this, &MainWindow::exportNetlist);
     connect(m_actQuit, &QAction::triggered, this, &QWidget::close);
 
     connect(m_actUndo, &QAction::triggered, this, &MainWindow::undo);
@@ -641,8 +638,6 @@ void MainWindow::createMenus()
     fileMenu->addSeparator();
     fileMenu->addAction(m_actSave);
     fileMenu->addAction(m_actSaveAs);
-    fileMenu->addSeparator();
-    fileMenu->addAction(m_actExport);
     fileMenu->addSeparator();
     fileMenu->addAction(m_actQuit);
 
@@ -1245,34 +1240,6 @@ bool MainWindow::openPath(const QString& path)
                   .arg(path)
                   .arg(circuit.components.size()));
     return true;
-}
-
-void MainWindow::exportNetlist()
-{
-    const Circuit circuit = m_scene->toCircuit();
-    const Netlist net = circuit.buildNetlist();
-    if (!net.valid) {
-        QMessageBox::warning(this, QStringLiteral("无法导出"), net.error);
-        return;
-    }
-
-    QString path = QFileDialog::getSaveFileName(
-        this, QStringLiteral("导出 SPICE 网表"), m_documentName + QStringLiteral(".cir"),
-        QStringLiteral("SPICE 网表 (*.cir);;所有文件 (*)"));
-    if (path.isEmpty())
-        return;
-    if (!path.endsWith(QLatin1String(".cir"), Qt::CaseInsensitive))
-        path += QStringLiteral(".cir");
-
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, QStringLiteral("导出失败"), file.errorString());
-        return;
-    }
-    QTextStream out(&file);
-    out << circuit.toSpiceNetlist();
-    file.close();
-    appendLog(QStringLiteral("已导出网表：%1").arg(path));
 }
 
 void MainWindow::runSimulation()

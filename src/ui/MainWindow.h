@@ -52,7 +52,6 @@ private:
     void openCircuit();
     bool saveCircuit();
     bool saveCircuitAs();
-    void exportNetlist();
     void scanExamples();
     void loadExample(int index);
     void checkForUpdates(bool manual);
@@ -145,7 +144,6 @@ private:
     QAction* m_actOpen = nullptr;
     QAction* m_actSave = nullptr;
     QAction* m_actSaveAs = nullptr;
-    QAction* m_actExport = nullptr;
     QAction* m_actQuit = nullptr;
 
     QAction* m_actUndo = nullptr;

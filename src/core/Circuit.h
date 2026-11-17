@@ -27,7 +27,6 @@ public:
     QString nextRefdes(ComponentType type) const;
 
     Netlist buildNetlist() const;
-    QString toSpiceNetlist() const;
 
     QJsonObject toJson() const;
     static Circuit fromJson(const QJsonObject& obj, QString* error = nullptr);

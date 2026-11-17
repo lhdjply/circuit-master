@@ -172,7 +172,7 @@ struct Component {
     QString displayValue() const;   // 画在原理图上的数值文本
     QString displayName() const;    // 例如 "R1"
     QString unitName() const;
-    QString spiceValueSpec() const; // SPICE 网表中的数值部分，如 "10k" 或 "SIN(0 5 1k)"
+
 };
 
 } // namespace csm

@@ -7,6 +7,13 @@
 
 ## [未发布]
 
+### 变更
+
+- 移除「导出 SPICE 网表」：自己就能跑完整仿真，导出去交给 ngspice 复核实际没人用，
+  还带了一整套器件模型映射与注释（近 200 行）。同时去掉
+  `Circuit::toSpiceNetlist()` / `Component::spiceValueSpec()` / `spiceNumber()`
+  和菜单项（原 Ctrl+E）。
+
 ### 修复
 
 - **网络标签的旋转方向和别的元件相反**：元件整体是按 `rotation` 正向旋转、

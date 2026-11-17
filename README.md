@@ -89,7 +89,6 @@
 **文件与互操作**
 
 - `.csm` 工程文件（JSON，可读、易扩展；可携带分析类型与参数）
-- 一键导出 SPICE 网表（`.cir`），可交给 ngspice 等外部工具复核
 - 桌面集成：`.desktop` 文件与矢量图标，`cmake --install` 即可出现在应用菜单
 
 ### 界面截图
@@ -233,7 +232,7 @@ sudo cmake --install build --prefix /usr/local
 ctest --test-dir build --output-on-failure
 ```
 
-- `core`：工程记数法解析、网表提取、分压/RC 充电/二极管整流/AC 低通数值正确性、JSON 往返、SPICE 导出
+- `core`：工程记数法解析、网表提取、分压/RC 充电/二极管整流/AC 低通数值正确性、JSON 往返
 - `ui`：窗口渲染截图、属性编辑、旋转、鼠标绘制导线、从零搭建 RC 电路并仿真、交流分析截图
 
 ## 使用说明
@@ -310,7 +309,7 @@ ctest --test-dir build --output-on-failure
 ├── src/
 │   ├── core/                       数据模型与网表
 │   │   ├── Component.{h,cpp}       元件定义、引脚几何、源波形
-│   │   ├── Circuit.{h,cpp}         电路文档、JSON、SPICE 导出
+│   │   ├── Circuit.{h,cpp}         电路文档、JSON 存盘
 │   │   ├── Netlist.{h,cpp}         引脚坐标并查集 → 节点编号
 │   │   └── Units.{h,cpp}           工程记数法解析/格式化
 │   ├── sim/
