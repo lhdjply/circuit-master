@@ -884,8 +884,12 @@ void WaveformWindow::restartLiveEngine()
     const double suggested = m_liveCircuit.suggestedMaxStep();
     if (suggested > 0.0)
         step = std::min(step, suggested);
-    // 下限防止步数爆炸（每窗口最多 2 万步）
-    step = std::max({step, m_liveWindow / 20000.0, 1e-12});
+    // 下限防止步数爆炸（每窗口最多 2 万步），但绝不能粗过 suggested：
+    // 粗过开关周期时（例如 20 ms/格 → 10 µs 步长对 50 kHz 的变换器）整个开关
+    // 过程会被跨过去，仿真结果直接是 0 V，看起来就是「没有波形」。
+    // 这里改成：宁可少采点（靠抽稀显示），也不让步长跨过电路本身的动态。
+    const double floorStep = m_liveWindow / 20000.0;
+    step = std::max({step, suggested > 0.0 ? std::min(floorStep, suggested) : floorStep, 1e-12});
     QString error;
     if (!m_live->start(m_liveCircuit, step, &error)) {
         m_live.reset();
@@ -1108,7 +1112,9 @@ void WaveformWindow::liveTick()
     dt = std::min(dt, 0.1);
     const double h = m_live->step();
     int steps = int(std::lround(dt * m_liveSpeed / std::max(h, 1e-12)));
-    steps = std::max(1, std::min(steps, 200));
+    // 上限按时间预算取：细步长（开关电路 0.2 µs 量级）时也要能推进，
+    // 否则大时基下每秒只能走几十微秒，看着像「没波形」
+    steps = std::max(1, std::min(steps, 4000));
 
     QString error;
     const QStringList names = m_live->signalNames();

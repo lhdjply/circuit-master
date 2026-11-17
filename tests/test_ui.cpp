@@ -18,6 +18,7 @@
 #include <QAbstractAxis>
 #include <QChart>
 #include <QChartView>
+#include <QLineSeries>
 #include <QComboBox>
 #include <QDialog>
 #include <QPlainTextEdit>
@@ -35,6 +36,7 @@
 #include <QAbstractAxis>
 #include <QChart>
 #include <QChartView>
+#include <QLineSeries>
 #include <QComboBox>
 #include <QDialog>
 #include <QPlainTextEdit>
@@ -308,6 +310,186 @@ private slots:
         QVERIFY2(joined.contains(QStringLiteral("复制")), qPrintable(joined));
         QVERIFY2(joined.contains(QStringLiteral("粘贴")), qPrintable(joined));
         QVERIFY2(!joined.contains(QStringLiteral("Copy")), qPrintable(joined));
+    }
+
+    void transformerHasFourPinsAndPanel()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        ComponentItem* t = scene->placeComponent(ComponentType::Transformer, QPointF(300, 300));
+        QVERIFY(t);
+        QCOMPARE(t->pinScenePositions().size(), 4);
+        QCOMPARE(t->component().refdes.left(1), QStringLiteral("T"));
+        // 默认 1:2、初级 1 H
+        QCOMPARE(t->component().value, 2.0);
+        QCOMPARE(t->component().lpri, 1.0);
+
+        scene->clearSelection();
+        t->setSelected(true);
+        settle();
+
+        // 属性面板里应当有「初级电感 L1」
+        bool found = false;
+        for (QLabel* label : window.findChildren<QLabel*>())
+            if (label->isVisible() && label->text().contains(QStringLiteral("初级电感")))
+                found = true;
+        QVERIFY2(found, "属性面板应当显示初级电感");
+    }
+
+    void transformerWindingKindSwitchable()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        ComponentItem* t = scene->placeComponent(ComponentType::Transformer, QPointF(300, 300));
+        QVERIFY(t);
+        QCOMPARE(t->pinScenePositions().size(), 4);
+        QCOMPARE(t->component().transformerKind, TransformerKind::Single);
+
+        // 属性面板里把绕组形式换成「初级 + 辅助绕组 + 次级」→ 引脚变成 6 个
+        QComboBox* windings = nullptr;
+        for (QComboBox* combo : window.findChildren<QComboBox*>())
+            if (combo->count() == 2
+                && combo->itemText(1).contains(QStringLiteral("辅助绕组")))
+                windings = combo;
+        QVERIFY2(windings, "属性面板应当有「绕组形式」下拉框");
+
+        scene->clearSelection();
+        t->setSelected(true);
+        settle();
+        windings->setCurrentIndex(1);
+        settle();
+
+        QCOMPARE(t->component().transformerKind, TransformerKind::PrimaryAuxSecondary);
+        QCOMPARE(t->pinScenePositions().size(), 6);
+
+        // 匝数比一行写完 N1:N2:N3
+        QLineEdit* ratioEdit = nullptr;
+        for (QLineEdit* edit : window.findChildren<QLineEdit*>())
+            if (edit->isVisible() && edit->text().contains(QLatin1Char(':')))
+                ratioEdit = edit;
+        QVERIFY2(ratioEdit, "应当有「匝数比 N1:N2:N3」输入框");
+        QCOMPARE(ratioEdit->text(), QStringLiteral("1:1:2"));
+
+        ratioEdit->setText(QStringLiteral("1:1:3"));
+        emit ratioEdit->editingFinished();
+        settle();
+        QCOMPARE(t->component().value, 3.0);
+        QCOMPARE(t->component().auxRatio, 1.0);
+
+        ratioEdit->setText(QStringLiteral("2:1:4"));
+        emit ratioEdit->editingFinished();
+        settle();
+        QCOMPARE(t->component().value, 2.0);    // 4/2
+        QCOMPARE(t->component().auxRatio, 0.5); // 1/2
+    }
+
+    void liveScopeKeepsSwitchingAtLargeTimeBase()
+    {
+        // 20 ms/格 时窗口 200 ms，若步长被放大到 10 µs，50 kHz 的开关过程会被整个跨过去，
+        // 仿真结果直接是 0 V —— 看起来就是「大时基下没有波形」
+        QFile file(QStringLiteral(CSM_SOURCE_DIR "/resources/examples/08_ac_dc_supply.csm"));
+        QVERIFY2(file.open(QIODevice::ReadOnly), "示例文件缺失");
+        QString error;
+        const Circuit circuit = Circuit::fromJson(QJsonDocument::fromJson(file.readAll()).object(),
+                                                  &error);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        const Netlist net = circuit.buildNetlist();
+
+        int probeId = -1;
+        for (const Component& comp : circuit.components)
+            if (comp.refdes == QStringLiteral("TP1"))
+                probeId = comp.id;
+        QVERIFY(probeId > 0);
+
+        WaveformWindow live;
+        live.resize(1000, 600);
+        live.show();
+        live.setLiveScalePreferences(0.02, 10.0, 0.001); // 20 ms/格
+        settle();
+        live.startLive(circuit, {{QStringLiteral("TP1"),
+                                  QStringLiteral("V(%1)").arg(net.nodeOf(probeId, 0))}});
+        QVERIFY(live.isLive());
+
+        // 推进到至少 10 ms 仿真时间
+        QTRY_VERIFY_WITH_TIMEOUT(live.liveTime() > 0.01, 30000);
+
+        auto* view = live.findChild<QChartView*>();
+        QVERIFY(view && view->chart());
+        double last = 0.0;
+        for (QAbstractSeries* series : view->chart()->series())
+            if (auto* line = qobject_cast<QLineSeries*>(series))
+                if (!line->points().isEmpty())
+                    last = line->points().last().y();
+        QVERIFY2(last > 5.0, qPrintable(QStringLiteral("输出 %1 V").arg(last)));
+    }
+
+    void liveScopeWorksWithReferenceGround()
+    {
+        // 测试点以 AGND 为参考时，实时示波器也要有波形（信号名是 V(a,b)）
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 300));
+        source->setRotationAngle(90);
+        Component src = source->component();
+        src.dcValue = 5.0;
+        source->setComponent(src);
+        auto* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(250, 200));
+        Component r = resistor->component();
+        r.value = 1000.0;
+        resistor->setComponent(r);
+        auto* probe = scene->placeComponent(ComponentType::Probe, QPointF(400, 200));
+        QVERIFY(probe);
+        Component p = probe->component();
+        p.groundKind = GroundKind::Agnd;
+        probe->setComponent(p);
+        scene->placeComponent(ComponentType::Ground, QPointF(100, 400));
+        auto* agnd = scene->placeComponent(ComponentType::Ground, QPointF(400, 400));
+        Component g = agnd->component();
+        g.groundKind = GroundKind::Agnd;
+        agnd->setComponent(g);
+
+        scene->addWire({QPointF(100, 270), QPointF(100, 200), QPointF(220, 200)});
+        scene->addWire({QPointF(280, 200), QPointF(400, 200), QPointF(400, 300)});
+        scene->addWire({QPointF(100, 330), QPointF(100, 400)});
+        scene->addWire({QPointF(400, 300), QPointF(400, 400)});
+        settle();
+
+        QAction* run = window.findChild<QAction*>(QStringLiteral("actRun"));
+        QVERIFY(run);
+        run->trigger();
+        settle();
+
+        auto* live = livePanel(window);
+        QVERIFY(live);
+        QVERIFY(live->isLive());
+        QTRY_VERIFY_WITH_TIMEOUT(live->liveTime() > 0.005, 20000);
+
+        auto* view = live->findChild<QChartView*>();
+        QVERIFY(view && view->chart());
+        int points = 0;
+        for (QAbstractSeries* series : view->chart()->series())
+            if (auto* line = qobject_cast<QLineSeries*>(series))
+                points = std::max(points, int(line->count()));
+        QVERIFY2(points > 5, qPrintable(QStringLiteral("点数=%1").arg(points)));
+
+        run->trigger();
+        settle();
     }
 
     void groundCanBeRotated()
@@ -1401,9 +1583,9 @@ private slots:
                      qPrintable(QStringLiteral("分类为空: ") + category->currentText()));
         }
 
-        QCOMPARE(counts.value(QStringLiteral("基础")), 3);
+        QCOMPARE(counts.value(QStringLiteral("基础")), 4); // 含变压器
         QCOMPARE(counts.value(QStringLiteral("电源")), 2);
-        QCOMPARE(counts.value(QStringLiteral("半导体")), 10); // 含光耦与 TL431
+        QCOMPARE(counts.value(QStringLiteral("半导体")), 11); // 含光耦、TL431 与 OB2362
 
         int sum = 0;
         for (int n : counts)

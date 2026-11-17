@@ -161,6 +161,14 @@ ComponentItem* SchematicScene::placeComponent(ComponentType type, const QPointF&
     case ComponentType::Tl431:
         comp.value = 2.495; // 基准电压
         break;
+    case ComponentType::Ob2362:
+        comp.frequency = 65000.0; // 内部振荡器 65 kHz
+        comp.value = 0.8;         // CS 限流阈值 0.8 V
+        break;
+    case ComponentType::Transformer:
+        comp.value = 2.0;  // 匝数比 1:2
+        comp.lpri = 1.0;   // 初级电感 1 H
+        break;
     case ComponentType::Optocoupler:
         // 默认按 LTV-817S-TA1-C：Vf 典型 1.2 V，CTR 档位 C 为 200~400%（取 300%）
         comp.vf = 1.2;

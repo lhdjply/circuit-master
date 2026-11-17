@@ -25,6 +25,8 @@ QString typeToTag(ComponentType type)
     case ComponentType::Led:           return QStringLiteral("LED");
     case ComponentType::Optocoupler:   return QStringLiteral("OPTO");
     case ComponentType::Tl431:         return QStringLiteral("TL431");
+    case ComponentType::Transformer:   return QStringLiteral("TRANS");
+    case ComponentType::Ob2362:        return QStringLiteral("OB2362");
     case ComponentType::Npn:           return QStringLiteral("Q");
     case ComponentType::Pnp:           return QStringLiteral("QP");
     case ComponentType::Nmos:          return QStringLiteral("M");
@@ -49,6 +51,8 @@ ComponentType tagToType(const QString& tag)
     if (tag == QLatin1String("LED")) return ComponentType::Led;
     if (tag == QLatin1String("OPTO")) return ComponentType::Optocoupler;
     if (tag == QLatin1String("TL431")) return ComponentType::Tl431;
+    if (tag == QLatin1String("TRANS")) return ComponentType::Transformer;
+    if (tag == QLatin1String("OB2362")) return ComponentType::Ob2362;
     if (tag == QLatin1String("Q")) return ComponentType::Npn;
     if (tag == QLatin1String("QP")) return ComponentType::Pnp;
     if (tag == QLatin1String("MP")) return ComponentType::Pmos;
@@ -195,6 +199,25 @@ QString Circuit::toSpiceNetlist() const
             hasLed = true;
             ledVf = comp.vf;
             lines << QStringLiteral("%1 %2 %3 DLED").arg(comp.refdes).arg(nodes.at(0)).arg(nodes.at(1));
+            continue;
+        }
+        if (comp.type == ComponentType::Ob2362) {
+            // SPICE 里没有对应模型：按「GATE 由外部 PWM 驱动」处理，这里只留注释
+            lines << QStringLiteral("* %1: OB2362 控制器（VDD/GND/FB/CS/GATE），"
+                                    "SPICE 导出时未建模")
+                         .arg(comp.refdes);
+            continue;
+        }
+        if (comp.type == ComponentType::Transformer) {
+            // SPICE 里变压器用两个电感加 K 卡（耦合系数 1）
+            const double n = comp.value > 0.01 ? comp.value : 1.0;
+            const double l1 = std::max(comp.lpri, 1e-9);
+            lines << QStringLiteral("* %1: 变压器 1:%2").arg(comp.refdes).arg(spiceNumber(n));
+            lines << QStringLiteral("L%1a %2 %3 %4").arg(comp.refdes)
+                         .arg(nodes.at(0)).arg(nodes.at(1)).arg(spiceNumber(l1));
+            lines << QStringLiteral("L%1b %2 %3 %4").arg(comp.refdes)
+                         .arg(nodes.at(2)).arg(nodes.at(3)).arg(spiceNumber(l1 * n * n));
+            lines << QStringLiteral("K%1 L%1a L%1b 1.0").arg(comp.refdes);
             continue;
         }
         if (comp.type == ComponentType::Tl431) {
@@ -382,6 +405,14 @@ QJsonObject Circuit::toJson() const
         o.insert(QStringLiteral("vf"), c.vf);
         o.insert(QStringLiteral("ctr"), c.ctr);
         o.insert(QStringLiteral("vceSat"), c.vceSat);
+        o.insert(QStringLiteral("lpri"), c.lpri);
+        o.insert(QStringLiteral("secondaryInverted"), c.secondaryInverted);
+        o.insert(QStringLiteral("auxRatio"), c.auxRatio);
+        o.insert(QStringLiteral("groundKind"), int(c.groundKind));
+        o.insert(QStringLiteral("transformerKind"),
+                 c.transformerKind == TransformerKind::PrimaryAuxSecondary
+                     ? QStringLiteral("primary-aux-secondary")
+                     : QStringLiteral("single"));
         compArray.append(o);
     }
 
@@ -448,6 +479,14 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
         c.vf = o.value(QStringLiteral("vf")).toDouble(0.7);
         c.ctr = o.value(QStringLiteral("ctr")).toDouble(3.0);
         c.vceSat = o.value(QStringLiteral("vceSat")).toDouble(0.2);
+        c.lpri = o.value(QStringLiteral("lpri")).toDouble(1.0);
+        c.secondaryInverted = o.value(QStringLiteral("secondaryInverted")).toBool(false);
+        c.auxRatio = o.value(QStringLiteral("auxRatio")).toDouble(1.0);
+        c.groundKind = static_cast<GroundKind>(o.value(QStringLiteral("groundKind")).toInt(0));
+        c.transformerKind =
+            o.value(QStringLiteral("transformerKind")).toString() == QLatin1String("primary-aux-secondary")
+                ? TransformerKind::PrimaryAuxSecondary
+                : TransformerKind::Single;
         if (c.id <= 0)
             continue;
         circuit.components.append(c);

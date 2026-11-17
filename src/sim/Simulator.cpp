@@ -84,7 +84,8 @@ struct MosOp {
 
 struct ElementState {
     QHash<int, double> capV;    // 上一步电容电压
-    QHash<int, double> indI;    // 上一步电感电流
+    QHash<int, double> indI;    // 上一步电感电流（变压器：初级）
+    QHash<int, QVector<double>> windingI;  // 变压器：各绕组上一步电流
     QHash<int, double> diodeV;  // 上一次牛顿迭代的二极管电压
     QHash<int, double> bjtVbe;  // 三极管：上一次迭代的 vbe
     QHash<int, double> bjtVbc;  // 三极管：上一次迭代的 vbc
@@ -92,7 +93,38 @@ struct ElementState {
     QHash<int, double> mosVds;  // MOSFET / IGBT：上一次迭代的 vds(或 vce)
     QHash<int, double> optoVce; // 光耦输出侧：上一次迭代的 Vce
     QHash<int, double> tlVref;  // TL431：上一次迭代的参考端电压（相对阳极）
+    QHash<int, double> obFb;    // OB2362：上一步的 FB 电压
+    QHash<int, double> obCs;    // OB2362：上一步的 CS 电压
 };
+
+/// 变压器的绕组：每个绕组是一对引脚（按局部引脚编号）
+QVector<QPair<int, int>> transformerWindings(const Component& comp)
+{
+    if (comp.transformerKind == TransformerKind::PrimaryAuxSecondary) {
+        return {{0, 1}, {2, 3}, {4, 5}}; // 初级1、初级2、次级
+    }
+    return {{0, 1}, {2, 3}}; // 初级、次级
+}
+
+/// 各绕组的同名端极性：+1 同名端在上，−1 同名端在下（次级反相）
+QVector<double> transformerPolarities(const Component& comp)
+{
+    const double secondary = comp.secondaryInverted ? -1.0 : 1.0;
+    if (comp.transformerKind == TransformerKind::PrimaryAuxSecondary)
+        return {1.0, 1.0, secondary};
+    return {1.0, secondary};
+}
+
+/// 各绕组的电感：L_i = L1 · (N_i/N1)²，初级 N1、辅助绕组 N2、次级 N3
+QVector<double> transformerInductances(const Component& comp)
+{
+    const double n = comp.value > 0.01 ? comp.value : 1.0;
+    const double aux = comp.auxRatio > 0.01 ? comp.auxRatio : 1.0;
+    const double l1 = std::max(comp.lpri, 1e-9);
+    if (comp.transformerKind == TransformerKind::PrimaryAuxSecondary)
+        return {l1, l1 * aux * aux, l1 * n * n};
+    return {l1, l1 * n * n};
+}
 
 struct Problem {
     const Circuit* circuit = nullptr;
@@ -100,6 +132,8 @@ struct Problem {
     int nNodes = 0;
     int nBranches = 0;
     QHash<int, int> branchOf;
+    QHash<int, QVector<int>> windingBranches;  // 变压器：各绕组的支路编号
+    QHash<int, int> referenceNode;             // GroundKind → 该地网络的节点号
     QVector<QPair<int, int>> branchNodes;
     QVector<const Component*> elements; // 除接地符号外的所有元件
 
@@ -277,18 +311,50 @@ Problem buildProblem(const Circuit& circuit, const Netlist& net)
     p.nNodes = net.nodeCount;
 
     for (const Component& comp : circuit.components) {
-        if (comp.type == ComponentType::Ground || comp.type == ComponentType::Probe)
+        if (comp.type == ComponentType::Ground) {
+            // 记录每种地的节点号，供测试点选参考地；接地符号本身也要参与装配，
+            // 非主地在单点处串一个隔离电阻连到主地
+            p.referenceNode.insert(int(comp.groundKind), net.nodeOf(comp.id, 0));
+            p.elements.append(&comp);
             continue;
+        }
+        if (comp.type == ComponentType::Probe) {
+            p.elements.append(&comp);
+            continue;
+        }
         p.elements.append(&comp);
+        if (comp.type == ComponentType::Transformer) {
+            // 每个绕组一个支路未知量
+            QVector<int> branches;
+            bool ok = true;
+            for (const auto& pair : transformerWindings(comp)) {
+                const int a = net.nodeOf(comp.id, pair.first);
+                const int b = net.nodeOf(comp.id, pair.second);
+                if (a < 0 || b < 0) {
+                    ok = false;
+                    break;
+                }
+                branches.append(p.nBranches);
+                p.branchNodes.append(qMakePair(a, b));
+                ++p.nBranches;
+            }
+            if (ok)
+                p.windingBranches.insert(comp.id, branches);
+            continue;
+        }
         const bool needsBranch = comp.type == ComponentType::VoltageSource
             || comp.type == ComponentType::Inductor || comp.type == ComponentType::OpAmp
-            || comp.type == ComponentType::CurrentProbe;
+            || comp.type == ComponentType::CurrentProbe
+            || comp.type == ComponentType::Ob2362; // GATE 输出当作电压源
         if (needsBranch) {
             int n1 = -1;
             int n2 = 0;
             if (comp.type == ComponentType::OpAmp) {
                 n1 = net.nodeOf(comp.id, 2); // 输出端
                 n2 = 0;                      // 参考地
+            } else if (comp.type == ComponentType::Ob2362) {
+                n1 = net.nodeOf(comp.id, 5); // GATE
+                n2 = 0;                      // 以主地为参考
             } else {
                 n1 = net.nodeOf(comp.id, 0);
                 n2 = net.nodeOf(comp.id, 1);
@@ -335,6 +401,54 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
             addBranch(a, b, p, comp.id, r, v);
             break;
         }
+        case ComponentType::Transformer: {
+            // 耦合电感模型（耦合系数取 1）：每个绕组一条支路，任意两个绕组之间
+            //   M_ij = √(L_i·L_j)
+            // 后向欧拉离散后，第 i 条支路方程是
+            //   V(a_i) − V(b_i) − Σ_j (L_ij/h)·i_j = −Σ_j (L_ij/h)·i_j^prev
+            // 直流稳态下所有绕组都是短路，次级输出 0 V —— 和真实变压器一致。
+            const QVector<int> branches = p.windingBranches.value(comp.id);
+            const QVector<double> inds = transformerInductances(comp);
+            if (branches.size() != inds.size())
+                break;
+            const QVector<double> prev = st.windingI.value(comp.id);
+            const QVector<double> polarities = transformerPolarities(comp);
+            const int count = inds.size();
+
+            // 绕组电阻：理想电感在直流下是短路，直接并在理想电压源上会让矩阵奇异
+            for (int i = 0; i < count; ++i) {
+                const int row = p.nNodes + branches.at(i);
+                const int a1 = p.branchNodes.at(branches.at(i)).first;
+                const int a2 = p.branchNodes.at(branches.at(i)).second;
+
+                // KCL：本绕组电流流进 a1、流出 a2
+                if (a1 > 0)
+                    a(a1 - 1, row) += 1.0;
+                if (a2 > 0)
+                    a(a2 - 1, row) -= 1.0;
+
+                // 支路方程：V(a1) − V(a2) − Σ_j (L_ij/h)·i_j = −Σ_j (L_ij/h)·i_j^prev
+                if (a1 > 0)
+                    a(row, a1 - 1) += 1.0;
+                if (a2 > 0)
+                    a(row, a2 - 1) -= 1.0;
+
+                double rhs = 0.0;
+                for (int j = 0; j < count; ++j) {
+                    const double mij = polarities.at(i) * polarities.at(j)
+                        * std::sqrt(inds.at(i) * inds.at(j));
+                    const double coef = transient ? mij / h : 0.0;
+                    a(row, p.nNodes + branches.at(j)) -= coef;
+                    if (transient)
+                        rhs -= coef * prev.value(j, 0.0);
+                }
+                const double rs = 0.1 * inds.at(i) / inds.first();
+                a(row, row) -= rs;
+                b[size_t(row)] = rhs;
+            }
+            break;
+        }
+
         case ComponentType::VoltageSource:
             addBranch(a, b, p, comp.id, 0.0, comp.sourceValueAt(t));
             break;
@@ -492,6 +606,31 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
             break;
         }
 
+        case ComponentType::Ob2362: {
+            // 简化模型：内部 65 kHz 振荡器 + 峰值电流模式
+            //   GATE 在每周期开始拉高，满足下面任一条件就拉低：
+            //     · 占空比达到由 FB 决定的指令值
+            //     · CS 电压达到限流阈值（逐周期限流）
+            // 只依赖「上一步」的 FB/CS，不引入迭代内状态，数值上稳定。
+            const int br = p.branchOf.value(comp.id, -1);
+            if (br < 0)
+                break;
+            const double fsw = comp.frequency > 1.0 ? comp.frequency : 65000.0;
+            const double period = 1.0 / fsw;
+            const double phase = period > 0.0 ? std::fmod(t, period) / period : 0.0;
+            const double vfb = st.obFb.value(comp.id, 0.0);
+            const double vcs = st.obCs.value(comp.id, 0.0);
+            // 数据手册：CS 限流阈值 0.45 V（零占空比）、钳位 0.72 V；FB 与 CS 之间
+            // 的增益约 3.5，即 Vcs_target ≈ (VFB − 0.5)/3.5；GATE 输出钳位约 11 V
+            const double vlimit = comp.value > 0.01 ? comp.value : 0.72;
+            const double vcc = st.obFb.value(-comp.id, 0.0); // 复用：VCC 存在负键里
+            const double vcsTarget = std::clamp((vfb - 0.5) / 3.5, 0.0, vlimit);
+            const double duty = 0.8;
+            const bool uvlo = vcc > 0.0 && vcc < 7.3; // VCC 欠压关断
+            const double gate = (!uvlo && phase < duty && vcs < vcsTarget) ? 11.0 : 0.0;
+            addBranch(a, b, p, comp.id, 0.0, gate);
+            break;
+        }
         case ComponentType::OpAmp: {
             // 三端理想运放：v_out - Rout·i_out = A·(v+ - v-)
             const int br = p.branchOf.value(comp.id, -1);
@@ -513,8 +652,16 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
             addG(a, n1, n2, 1.0 / r);
             break;
         }
+        case ComponentType::Ground: {
+            // 各种地之间默认是**隔离**的：GND 是参考节点，AGND/DGND/PGND/EARTH
+            // 各自成网，只通过 1 MΩ 漏电阻接到主地（数值上保证矩阵不奇异，
+            // 物理上相当于断路：300 V 下漏电也只有 0.3 mA）。
+            // 需要把它们连起来时，直接在画布上拉一根线即可。
+            if (comp.groundKind != GroundKind::Gnd)
+                addG(a, n1, 0, 1e-6);
+            break;
+        }
         case ComponentType::Probe:
-        case ComponentType::Ground:
             break;
         }
     }
@@ -662,8 +809,12 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
             const double vdsOld = st.mosVds.value(cp->id, 0.0);
             const double vgsNew = sign * (p.voltage(x, ng) - p.voltage(x, n2));
             const double vdsNew = sign * (p.voltage(x, n1) - p.voltage(x, n2));
-            const double vgs = vgsOld + std::max(-0.5, std::min(vgsNew - vgsOld, 0.5));
-            const double vds = vdsOld + std::max(-0.5, std::min(vdsNew - vdsOld, 0.5));
+            // 步长按电压量级放大：高压开关电路里漏源电压一步要跳几百伏，
+            // 固定 0.5 V 的限幅会让迭代爬几百次都到不了解（150 次上限直接失败）
+            const double vgsStep = std::max(0.5, 0.25 * std::abs(vgsOld));
+            const double vdsStep = std::max(0.5, 0.25 * std::abs(vdsOld));
+            const double vgs = vgsOld + std::max(-vgsStep, std::min(vgsNew - vgsOld, vgsStep));
+            const double vds = vdsOld + std::max(-vdsStep, std::min(vdsNew - vdsOld, vdsStep));
             diodeDelta = std::max({diodeDelta, std::abs(vgs - vgsOld), std::abs(vds - vdsOld)});
             st.mosVgs.insert(cp->id, vgs);
             st.mosVds.insert(cp->id, vds);
@@ -713,6 +864,8 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
                     * (v - st.capV.value(comp.id, 0.0));
             break;
         case ComponentType::Inductor:
+        case ComponentType::Transformer:
+        case ComponentType::Ob2362:
         case ComponentType::VoltageSource:
         case ComponentType::OpAmp:
         case ComponentType::CurrentProbe: {
@@ -776,10 +929,19 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
             break;
         }
         case ComponentType::Probe:
-        case ComponentType::Ground:
             break;
         }
         out.append(current);
+    }
+
+    // 与 makeSignals 的顺序保持一致：带参考地的测试点补一条差分值
+    for (const Component* cp : p.elements) {
+        if (cp->type != ComponentType::Probe || cp->groundKind == GroundKind::Gnd)
+            continue;
+        const int a = p.nodeOf(cp->id, 0);
+        const int b = p.referenceNode.value(int(cp->groundKind), 0);
+        if (a > 0)
+            out.append(p.voltage(x, a) - p.voltage(x, b));
     }
 }
 
@@ -791,6 +953,17 @@ QVector<Signal> makeSignals(const Problem& p)
         list.append(Signal{QStringLiteral("V(%1)").arg(i), QStringLiteral("V"), {}, {}});
     for (const Component* cp : p.elements)
         list.append(Signal{QStringLiteral("I(%1)").arg(cp->refdes), QStringLiteral("A"), {}, {}});
+
+    // 测试点可以指定参考地：非 GND 时补一条 V(a,b) 的差分信号
+    for (const Component* cp : p.elements) {
+        if (cp->type != ComponentType::Probe || cp->groundKind == GroundKind::Gnd)
+            continue;
+        const int a = p.nodeOf(cp->id, 0);
+        const int b = p.referenceNode.value(int(cp->groundKind), 0);
+        if (a > 0)
+            list.append(Signal{QStringLiteral("V(%1,%2)").arg(a).arg(b), QStringLiteral("V"),
+                               {}, {}});
+    }
     return list;
 }
 
@@ -806,6 +979,15 @@ void updateState(const Problem& p, ElementState& st, const std::vector<double>& 
             const int br = p.branchOf.value(cp->id, -1);
             if (br >= 0)
                 st.indI.insert(cp->id, x[size_t(p.nNodes + br)]);
+        } else if (cp->type == ComponentType::Ob2362) {
+            st.obFb.insert(cp->id, p.voltage(x, p.nodeOf(cp->id, 1)));        // FB
+            st.obCs.insert(cp->id, p.voltage(x, p.nodeOf(cp->id, 3)));        // CS
+            st.obFb.insert(-cp->id, p.voltage(x, p.nodeOf(cp->id, 4)));       // VCC（负键复用）
+        } else if (cp->type == ComponentType::Transformer) {
+            QVector<double> currents;
+            for (int br : p.windingBranches.value(cp->id))
+                currents.append(x[size_t(p.nNodes + br)]);
+            st.windingI.insert(cp->id, currents);
         }
     }
 }
@@ -875,6 +1057,33 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
             break;
         case ComponentType::Inductor:
             addBranch(a, b, p, comp.id, Cx(0.0, omega * std::max(comp.value, 1e-12)), Cx(0.0, 0.0));
+            break;
+        case ComponentType::Transformer: {
+            const QVector<int> branches = p.windingBranches.value(comp.id);
+            const QVector<double> inds = transformerInductances(comp);
+            if (branches.size() != inds.size())
+                break;
+            const QVector<double> polarities = transformerPolarities(comp);
+            const int count = inds.size();
+            for (int i = 0; i < count; ++i) {
+                const int row = p.nNodes + branches.at(i);
+                const int a1 = p.branchNodes.at(branches.at(i)).first;
+                const int a2 = p.branchNodes.at(branches.at(i)).second;
+                if (a1 > 0) a(a1 - 1, row) += Cx(1.0, 0.0);
+                if (a2 > 0) a(a2 - 1, row) -= Cx(1.0, 0.0);
+                if (a1 > 0) a(row, a1 - 1) += Cx(1.0, 0.0);
+                if (a2 > 0) a(row, a2 - 1) -= Cx(1.0, 0.0);
+                for (int j = 0; j < count; ++j) {
+                    const double mij = polarities.at(i) * polarities.at(j)
+                        * std::sqrt(inds.at(i) * inds.at(j));
+                    a(row, p.nNodes + branches.at(j)) -= Cx(0.0, omega * mij);
+                }
+                a(row, row) -= Cx(0.1 * inds.at(i) / inds.first(), 0.0);
+            }
+            break;
+        }
+        case ComponentType::Ob2362:
+            addBranch(a, b, p, comp.id, Cx(0.0, 0.0), Cx(0.0, 0.0));
             break;
         case ComponentType::VoltageSource:
             addBranch(a, b, p, comp.id, Cx(0.0, 0.0), Cx(1.0, 0.0));
@@ -992,8 +1201,13 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
         case ComponentType::Switch:
             addG(a, n1, n2, Cx(1.0 / (comp.closed ? 1e-3 : 1e9), 0.0));
             break;
+        case ComponentType::Ground: {
+            // 非主地只通过 1 MΩ 漏电阻接主地（相当于隔离）
+            if (comp.groundKind != GroundKind::Gnd)
+                addG(a, n1, 0, Cx(1e-6, 0.0));
+            break;
+        }
         case ComponentType::Probe:
-        case ComponentType::Ground:
             break;
         }
     }
@@ -1059,6 +1273,15 @@ bool LiveTransient::start(const Circuit& circuit, double step, QString* error)
         d.names << QStringLiteral("V(%1)").arg(i);
     for (const Component* comp : d.problem.elements)
         d.names << QStringLiteral("I(%1)").arg(comp->refdes);
+    // 带参考地的测试点：与 sample()/makeSignals() 一致，补一条差分信号
+    for (const Component* comp : d.problem.elements) {
+        if (comp->type != ComponentType::Probe || comp->groundKind == GroundKind::Gnd)
+            continue;
+        const int a = d.problem.nodeOf(comp->id, 0);
+        const int b = d.problem.referenceNode.value(int(comp->groundKind), 0);
+        if (a > 0)
+            d.names << QStringLiteral("V(%1,%2)").arg(a).arg(b);
+    }
 
     d.started = true;
     return true;
@@ -1114,6 +1337,15 @@ bool LiveTransient::updateCircuit(const Circuit& circuit, QString* error)
         d.names << QStringLiteral("V(%1)").arg(i);
     for (const Component* comp : d.problem.elements)
         d.names << QStringLiteral("I(%1)").arg(comp->refdes);
+    // 带参考地的测试点：与 sample()/makeSignals() 一致，补一条差分信号
+    for (const Component* comp : d.problem.elements) {
+        if (comp->type != ComponentType::Probe || comp->groundKind == GroundKind::Gnd)
+            continue;
+        const int a = d.problem.nodeOf(comp->id, 0);
+        const int b = d.problem.referenceNode.value(int(comp->groundKind), 0);
+        if (a > 0)
+            d.names << QStringLiteral("V(%1,%2)").arg(a).arg(b);
+    }
     return true;
 }
 

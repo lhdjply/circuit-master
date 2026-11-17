@@ -19,6 +19,8 @@ enum class ComponentType {
     Igbt,
     Optocoupler,
     Tl431,
+    Transformer,
+    Ob2362,      ///< OB2362 电流模式 PWM 控制器（反激常用）
     OpAmp,
     Switch,
     VoltageSource,
@@ -26,6 +28,21 @@ enum class ComponentType {
     Probe,
     CurrentProbe,
     Ground,
+};
+
+/// 接地的种类：不同符号代表不同的参考网络，在单点处连到一起
+enum class GroundKind {
+    Gnd,     ///< 主参考地（节点 0）
+    Agnd,    ///< 模拟地
+    Dgnd,    ///< 数字地
+    Pgnd,    ///< 功率地
+    Earth,   ///< 保护地 / 大地
+};
+
+/// 变压器的绕组形式
+enum class TransformerKind {
+    Single,        ///< 一个初级 + 一个次级（4 引脚）
+    PrimaryAuxSecondary, ///< 初级 + 辅助绕组 + 次级（6 引脚）
 };
 
 enum class SourceFunction {
@@ -36,10 +53,15 @@ enum class SourceFunction {
 
 /// 元件在“局部坐标”下的引脚位置（未旋转、未平移）。
 /// 两端元件在 x 轴 ±30 处；运放为三引脚（同相、反相、输出）；接地只有一个原点引脚。
+/// 变压器这类「同一类型、不同引脚数」的元件请用下面按实例取的重载。
 QVector<QPointF> pinOffsets(ComponentType type);
 int pinCount(ComponentType type);
+QVector<QPointF> pinOffsets(const struct Component& comp);
+int pinCount(const struct Component& comp);
 
 QString typeName(ComponentType type);      // 中文显示名
+/// 接地种类的显示名（GND / AGND / DGND / PGND / EARTH）
+QString groundKindName(GroundKind kind);
 QString typeSymbol(ComponentType type);    // R / C / L / D / S / V / I / GND
 QString refPrefix(ComponentType type);     // 参考编号前缀
 bool isTwoTerminal(ComponentType type);
@@ -76,6 +98,16 @@ struct Component {
     double ctr = 3.0;
     /// 光耦输出侧饱和压降：Vce 低于此值时输出按电阻性收窄（LTV-817 max 0.2 V）
     double vceSat = 0.2;
+    /// 变压器初级电感（H）；次级电感 = lpri · n²，耦合系数按理想 1 处理
+    double lpri = 1.0;
+    /// 接地符号的种类（Ground）；测试点的参考地也用它（Probe）
+    GroundKind groundKind = GroundKind::Gnd;
+    /// 变压器的绕组形式（单绕组 / 初级 + 辅助 + 次级）
+    TransformerKind transformerKind = TransformerKind::Single;
+    /// 次级同名端画在下方（反相）：耦合系数取负，次级电压反 180°
+    bool secondaryInverted = false;
+    /// 辅助绕组的匝数比（相对初级）；三绕组变压器才有意义
+    double auxRatio = 1.0;
 
     // 独立源参数
     SourceFunction function = SourceFunction::Constant;

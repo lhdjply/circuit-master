@@ -106,7 +106,10 @@ protected:
             return nullptr;
         auto* mime = new QMimeData;
         mime->setData(QLatin1String(kComponentMimeType),
-                      QByteArray::number(items.first()->data(Qt::UserRole).toInt()));
+                      QStringLiteral("%1:%2")
+                          .arg(items.first()->data(Qt::UserRole).toInt())
+                          .arg(items.first()->data(Qt::UserRole + 1).toInt())
+                          .toUtf8());
         return mime;
     }
 
@@ -121,7 +124,10 @@ protected:
 
         auto* mime = new QMimeData;
         mime->setData(QLatin1String(kComponentMimeType),
-                      QByteArray::number(item->data(Qt::UserRole).toInt()));
+                      QStringLiteral("%1:%2")
+                          .arg(item->data(Qt::UserRole).toInt())
+                          .arg(item->data(Qt::UserRole + 1).toInt())
+                          .toUtf8());
 
         const qreal ratio = devicePixelRatioF();
         const QSize logical(72, 48);
@@ -206,6 +212,16 @@ SimulationOptions optionsFromJson(const QJsonObject& analysis)
 }
 
 /// 收集测试点与对应信号名（显示名, 信号名）。
+/// 某类接地的节点号（没有该类地时返回 0，即主地）
+int referenceNodeFor(const Circuit& circuit, const Netlist& net, GroundKind kind)
+{
+    for (const Component& comp : circuit.components) {
+        if (comp.type == ComponentType::Ground && comp.groundKind == kind)
+            return net.nodeOf(comp.id, 0);
+    }
+    return 0;
+}
+
 QVector<QPair<QString, QString>> probeSpecs(const Circuit& circuit, const Netlist& net)
 {
     QVector<QPair<QString, QString>> probes;
@@ -216,8 +232,15 @@ QVector<QPair<QString, QString>> probeSpecs(const Circuit& circuit, const Netlis
             if (node <= 0 || seenNodes.contains(node))
                 continue;
             seenNodes.insert(node);
-            probes.append({QStringLiteral("%1 (V(%2))").arg(comp.refdes).arg(node),
-                           QStringLiteral("V(%1)").arg(node)});
+            // 测试点可以选参考地：非 GND 时取 V(a,b) 的差分信号
+            QString signal = QStringLiteral("V(%1)").arg(node);
+            QString label = QStringLiteral("%1 (V(%2))").arg(comp.refdes).arg(node);
+            if (comp.groundKind != GroundKind::Gnd) {
+                const int ref = referenceNodeFor(circuit, net, comp.groundKind);
+                signal = QStringLiteral("V(%1,%2)").arg(node).arg(ref);
+                label = QStringLiteral("%1 (V(%2,%3))").arg(comp.refdes).arg(node).arg(ref);
+            }
+            probes.append({label, signal});
         } else if (comp.type == ComponentType::CurrentProbe) {
             probes.append({QStringLiteral("%1 (I)").arg(comp.refdes),
                            QStringLiteral("I(%1)").arg(comp.refdes)});
@@ -243,8 +266,14 @@ bool applyProbeSignals(const Circuit& circuit, const Netlist& net, SimulationRes
             if (node <= 0 || seenNodes.contains(node))
                 continue;
             seenNodes.insert(node);
-            probes.append({QStringLiteral("V(%1)").arg(node),
-                           QStringLiteral("%1 (V(%2))").arg(comp.refdes).arg(node)});
+            if (comp.groundKind != GroundKind::Gnd) {
+                const int ref = referenceNodeFor(circuit, net, comp.groundKind);
+                probes.append({QStringLiteral("V(%1,%2)").arg(node).arg(ref),
+                               QStringLiteral("%1 (V(%2,%3))").arg(comp.refdes).arg(node).arg(ref)});
+            } else {
+                probes.append({QStringLiteral("V(%1)").arg(node),
+                               QStringLiteral("%1 (V(%2))").arg(comp.refdes).arg(node)});
+            }
         } else if (comp.type == ComponentType::CurrentProbe) {
             probes.append({QStringLiteral("I(%1)").arg(comp.refdes),
                            QStringLiteral("%1 (I)").arg(comp.refdes)});
@@ -660,6 +689,7 @@ void MainWindow::buildLibrary()
         ComponentType type;
         QString text;
         QString category;
+        GroundKind groundKind = GroundKind::Gnd; // 接地符号的种类
     };
     const QVector<Entry> entries = {
         {ComponentType::Resistor, QStringLiteral("电阻  R"), QStringLiteral("基础")},
@@ -674,11 +704,14 @@ void MainWindow::buildLibrary()
         {ComponentType::Igbt, QStringLiteral("IGBT  Z"), QStringLiteral("半导体")},
         {ComponentType::Optocoupler, QStringLiteral("光耦  OC"), QStringLiteral("半导体")},
         {ComponentType::Tl431, QStringLiteral("TL431 基准  VR"), QStringLiteral("半导体")},
+        {ComponentType::Transformer, QStringLiteral("变压器  T"), QStringLiteral("基础")},
+        {ComponentType::Ob2362, QStringLiteral("OB2362 控制器  U"), QStringLiteral("半导体")},
         {ComponentType::OpAmp, QStringLiteral("运算放大器  U"), QStringLiteral("半导体")},
         {ComponentType::VoltageSource, QStringLiteral("电压源  V"), QStringLiteral("电源")},
         {ComponentType::CurrentSource, QStringLiteral("电流源  I"), QStringLiteral("电源")},
         {ComponentType::Switch, QStringLiteral("开关  S"), QStringLiteral("开关与接地")},
-        {ComponentType::Ground, QStringLiteral("接地  GND"), QStringLiteral("开关与接地")},
+        {ComponentType::Ground, QStringLiteral("接地  GND"), QStringLiteral("开关与接地"),
+         GroundKind::Gnd},
         {ComponentType::Probe, QStringLiteral("电压测试点  TP"), QStringLiteral("测试点")},
         {ComponentType::CurrentProbe, QStringLiteral("电流测试点  IP"), QStringLiteral("测试点")},
     };
@@ -693,6 +726,7 @@ void MainWindow::buildLibrary()
             continue;
         auto* item = new QListWidgetItem(componentIcon(entry.type), entry.text, m_library);
         item->setData(Qt::UserRole, int(entry.type));
+        item->setData(Qt::UserRole + 1, int(entry.groundKind));
         item->setSizeHint(QSize(0, 46));
     }
 }

@@ -31,6 +31,11 @@ QRectF ComponentItem::boundingRect() const
     if (m_comp.type == ComponentType::Ground)
         return QRectF(-60.0, -60.0, 120.0, 120.0); // 四个方向都要放得下符号与文字
 
+    // 三绕组变压器更高（绕组 y −40…40，标签在 −62 与 +50），单独给一个包围盒
+    if (m_comp.type == ComponentType::Transformer
+        && m_comp.transformerKind == TransformerKind::PrimaryAuxSecondary)
+        return QRectF(-90.0, -70.0, 180.0, 130.0);
+
     const int rot = ((m_comp.rotation % 360) + 360) % 360;
     const QRectF base = (rot == 90 || rot == 270) ? QRectF(-168.0, -42.0, 336.0, 84.0)
                                                   : QRectF(-86.0, -48.0, 172.0, 96.0);
@@ -179,8 +184,8 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
         painter->save();
         painter->translate(at);
         painter->rotate(textRotation);
-        painter->drawText(QRectF(-30.0, -8.0, 60.0, 16.0), Qt::AlignCenter,
-                          QStringLiteral("GND"));
+        painter->drawText(QRectF(-34.0, -8.0, 68.0, 16.0), Qt::AlignCenter,
+                          groundKindName(m_comp.groundKind));
         painter->restore();
         return;
     }
@@ -269,10 +274,12 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
         refAlign = Qt::AlignLeft | Qt::AlignVCenter;
         valueAlign = Qt::AlignRight | Qt::AlignVCenter;
     } else {
-        // 运放三角形较高，标签再向外让一点
+        // 运放三角形较高，标签再向外让一点；三绕组变压器更高，再往下让
         const bool opamp = m_comp.type == ComponentType::OpAmp;
-        refRect = QRectF(-75.0, opamp ? -51.0 : -43.0, 150.0, 18.0);
-        valueRect = QRectF(-80.0, opamp ? 33.0 : 25.0, 160.0, 18.0);
+        const bool tallTransformer = m_comp.type == ComponentType::Transformer
+            && m_comp.transformerKind == TransformerKind::PrimaryAuxSecondary;
+        refRect = QRectF(-75.0, opamp ? -51.0 : (tallTransformer ? -62.0 : -43.0), 150.0, 18.0);
+        valueRect = QRectF(-80.0, opamp ? 33.0 : (tallTransformer ? 50.0 : 25.0), 160.0, 18.0);
     }
 
     painter->drawText(refRect, refAlign, m_comp.refdes);

@@ -526,6 +526,582 @@ private slots:
                  qPrintable(QString::number(vc->y.last())));
     }
 
+    void transformerStepsVoltageByTurnsRatio()
+    {
+        // 1 kHz、10 V 正弦驱动初级，次级接 1 kΩ；匝数比 1:n → 次级约为 n·10 V
+        auto build = [](double ratio) {
+            Circuit c;
+            Component v;
+            v.id = 1;
+            v.type = ComponentType::VoltageSource;
+            v.pos = QPointF(100, 300);
+            v.rotation = 90;
+            v.refdes = QStringLiteral("V1");
+            v.function = SourceFunction::Sine;
+            v.amplitude = 10.0;
+            v.frequency = 1000.0;
+            c.components.append(v);
+
+            Component t;
+            t.id = 2;
+            t.type = ComponentType::Transformer;
+            t.pos = QPointF(300, 300);
+            t.refdes = QStringLiteral("T1");
+            t.value = ratio;
+            t.lpri = 1.0;
+            c.components.append(t);
+
+            Component r;
+            r.id = 3;
+            r.type = ComponentType::Resistor;
+            r.pos = QPointF(450, 300);
+            r.rotation = 90;
+            r.refdes = QStringLiteral("RL");
+            r.value = 1000.0;
+            c.components.append(r);
+
+            Component g;
+            g.id = 4;
+            g.type = ComponentType::Ground;
+            g.pos = QPointF(100, 400);
+            g.refdes = QStringLiteral("GND");
+            c.components.append(g);
+            for (const QPointF& pos : {QPointF(270, 400), QPointF(330, 400), QPointF(450, 400)}) {
+                Component gg = g;
+                gg.id = 5 + static_cast<int>(c.components.size());
+                gg.pos = pos;
+                c.components.append(gg);
+            }
+
+            // 初级：V+ → T1 初级+；初级− → 地；V− → 地
+            c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(270, 200),
+                                 QPointF(270, 290)}});
+            c.wires.append(Wire{{QPointF(270, 310), QPointF(270, 400)}});
+            c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
+            // 次级：次级+ → RL → 地；次级− → 地
+            c.wires.append(Wire{{QPointF(330, 290), QPointF(450, 290), QPointF(450, 270)}});
+            c.wires.append(Wire{{QPointF(450, 330), QPointF(450, 400)}});
+            c.wires.append(Wire{{QPointF(330, 310), QPointF(330, 400)}});
+            return c;
+        };
+
+        auto run = [](const Circuit& c) {
+            const Netlist net = c.buildNetlist();
+            SimulationOptions tr;
+            tr.kind = AnalysisKind::Transient;
+            tr.tStop = 0.004;
+            tr.tStep = 1e-5;
+            const SimulationResult r = Simulator::run(c, tr);
+            return qMakePair(net, r);
+        };
+
+        const QPair<Netlist, SimulationResult> up = run(build(2.0));
+        QVERIFY2(up.second.ok, qPrintable(up.second.error));
+        auto peak = [&up](int node) {
+            const Signal* s = up.second.signal(QStringLiteral("V(%1)").arg(node));
+            if (!s)
+                return -1.0;
+            double m = 0.0;
+            for (double y : s->y)
+                m = std::max(m, std::abs(y));
+            return m;
+        };
+        const double primary = peak(up.first.nodeOf(2, 0));
+        const double secondary = peak(up.first.nodeOf(2, 2));
+        QVERIFY2(primary > 9.5 && primary < 10.5, qPrintable(QString::number(primary)));
+        QVERIFY2(secondary > 18.5 && secondary < 21.5,
+                 qPrintable(QStringLiteral("1:2 次级 %1 V").arg(secondary)));
+
+        // 降压：1:0.5 → 次级约 5 V
+        const QPair<Netlist, SimulationResult> down = run(build(0.5));
+        QVERIFY2(down.second.ok, qPrintable(down.second.error));
+        const Signal* s = down.second.signal(
+            QStringLiteral("V(%1)").arg(down.first.nodeOf(2, 2)));
+        QVERIFY(s);
+        double m = 0.0;
+        for (double y : s->y)
+            m = std::max(m, std::abs(y));
+        QVERIFY2(m > 4.3 && m < 5.6, qPrintable(QStringLiteral("1:0.5 次级 %1 V").arg(m)));
+    }
+
+    void primaryAuxTransformerWindings()
+    {
+        // 初级 + 辅助绕组串联（等效 2N 匝）接 10 V，次级是 N 匝 → 约 5 V
+        Circuit c;
+        Component v;
+        v.id = 1;
+        v.type = ComponentType::VoltageSource;
+        v.pos = QPointF(100, 300);
+        v.rotation = 90;
+        v.refdes = QStringLiteral("V1");
+        v.function = SourceFunction::Sine;
+        v.amplitude = 10.0;
+        v.frequency = 1000.0;
+        c.components.append(v);
+
+        Component t;
+        t.id = 2;
+        t.type = ComponentType::Transformer;
+        t.pos = QPointF(300, 300);
+        t.refdes = QStringLiteral("T1");
+        t.value = 1.0;
+        t.lpri = 1.0;
+        t.transformerKind = TransformerKind::PrimaryAuxSecondary;
+        c.components.append(t);
+
+        Component r;
+        r.id = 3;
+        r.type = ComponentType::Resistor;
+        r.pos = QPointF(450, 300);
+        r.rotation = 90;
+        r.refdes = QStringLiteral("RL");
+        r.value = 1000.0;
+        c.components.append(r);
+
+        Component g;
+        g.id = 4;
+        g.type = ComponentType::Ground;
+        g.pos = QPointF(100, 400);
+        g.refdes = QStringLiteral("GND");
+        c.components.append(g);
+        for (const QPointF& pos : {QPointF(270, 400), QPointF(330, 400), QPointF(450, 400)}) {
+            Component gg = g;
+            gg.id = 5 + static_cast<int>(c.components.size());
+            gg.pos = pos;
+            c.components.append(gg);
+        }
+
+        // 三绕组引脚：0/1 = 初级，2/3 = 辅助绕组，4/5 = 次级（y 坐标 ±40 / ±15）
+        // 初级与辅助绕组串联：V+ → 初级+，初级− → 辅助+，辅助− → 地
+        c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(270, 200),
+                             QPointF(270, 260)}});
+        c.wires.append(Wire{{QPointF(270, 285), QPointF(270, 315)}});
+        c.wires.append(Wire{{QPointF(270, 340), QPointF(270, 400)}});
+        c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
+        // 次级：+ → RL → 地；− → 地
+        c.wires.append(Wire{{QPointF(330, 260), QPointF(450, 260), QPointF(450, 270)}});
+        c.wires.append(Wire{{QPointF(450, 330), QPointF(450, 400)}});
+        c.wires.append(Wire{{QPointF(330, 340), QPointF(330, 400)}});
+
+        const Netlist net = c.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        QCOMPARE(net.compPins.value(2).size(), 6);
+
+        SimulationOptions tr;
+        tr.kind = AnalysisKind::Transient;
+        tr.tStop = 0.004;
+        tr.tStep = 1e-5;
+        const SimulationResult result = Simulator::run(c, tr);
+        QVERIFY2(result.ok, qPrintable(result.error));
+
+        const Signal* s = result.signal(QStringLiteral("V(%1)").arg(net.nodeOf(2, 4)));
+        QVERIFY(s);
+        double peak = 0.0;
+        for (double y : s->y)
+            peak = std::max(peak, std::abs(y));
+        QVERIFY2(peak > 4.3 && peak < 5.6,
+                 qPrintable(QStringLiteral("次级峰值 %1 V").arg(peak)));
+    }
+
+    void transformerThreeWindingsHaveOwnRatios()
+    {
+        // 初级 10 V，辅助 1:1、次级 1:2 → 辅助约 10 V、次级约 20 V
+        Circuit c;
+        Component v;
+        v.id = 1;
+        v.type = ComponentType::VoltageSource;
+        v.pos = QPointF(100, 300);
+        v.rotation = 90;
+        v.refdes = QStringLiteral("V1");
+        v.function = SourceFunction::Sine;
+        v.amplitude = 10.0;
+        v.frequency = 1000.0;
+        c.components.append(v);
+
+        Component t;
+        t.id = 2;
+        t.type = ComponentType::Transformer;
+        t.pos = QPointF(300, 300);
+        t.refdes = QStringLiteral("T1");
+        t.value = 2.0;      // 次级 2:1
+        t.auxRatio = 1.0;   // 辅助 1:1
+        t.lpri = 1.0;
+        t.transformerKind = TransformerKind::PrimaryAuxSecondary;
+        c.components.append(t);
+
+        Component ra;
+        ra.id = 3;
+        ra.type = ComponentType::Resistor;
+        ra.pos = QPointF(430, 315);
+        ra.refdes = QStringLiteral("RA");
+        ra.value = 1000.0;
+        c.components.append(ra);
+
+        Component rs;
+        rs.id = 4;
+        rs.type = ComponentType::Resistor;
+        rs.pos = QPointF(520, 260);
+        rs.refdes = QStringLiteral("RS");
+        rs.value = 1000.0;
+        c.components.append(rs);
+
+        Component g;
+        g.id = 5;
+        g.type = ComponentType::Ground;
+        g.pos = QPointF(100, 400);
+        g.refdes = QStringLiteral("GND");
+        c.components.append(g);
+        for (const QPointF& pos : {QPointF(240, 400), QPointF(270, 400), QPointF(330, 400),
+                                   QPointF(460, 400), QPointF(550, 400)}) {
+            Component gg = g;
+            gg.id = 6 + static_cast<int>(c.components.size());
+            gg.pos = pos;
+            c.components.append(gg);
+        }
+
+        // 初级：V+ → 初级+，初级− → 地
+        c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(270, 200),
+                             QPointF(270, 260)}});
+        // 初级− 往左绕下去接地：直接走 x=270 会穿过辅助绕组的两个引脚
+        c.wires.append(Wire{{QPointF(270, 285), QPointF(240, 285), QPointF(240, 400)}});
+        c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
+        // 辅助绕组：辅助+ → RA → 地，辅助− → 地
+        c.wires.append(Wire{{QPointF(270, 315), QPointF(400, 315)}});
+        c.wires.append(Wire{{QPointF(460, 315), QPointF(460, 400)}});
+        c.wires.append(Wire{{QPointF(270, 340), QPointF(270, 400)}});
+        // 次级：次级+ → RS → 地，次级− → 地
+        c.wires.append(Wire{{QPointF(330, 260), QPointF(490, 260)}});
+        c.wires.append(Wire{{QPointF(550, 260), QPointF(550, 400)}});
+        c.wires.append(Wire{{QPointF(330, 340), QPointF(330, 400)}});
+
+        const Netlist net = c.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+
+        SimulationOptions tr;
+        tr.kind = AnalysisKind::Transient;
+        tr.tStop = 0.004;
+        tr.tStep = 1e-5;
+        const SimulationResult result = Simulator::run(c, tr);
+        QVERIFY2(result.ok, qPrintable(result.error));
+
+        auto peak = [&result](int node) {
+            const Signal* s = result.signal(QStringLiteral("V(%1)").arg(node));
+            if (!s)
+                return -1.0;
+            double m = 0.0;
+            for (double y : s->y)
+                m = std::max(m, std::abs(y));
+            return m;
+        };
+
+        const double aux = peak(net.nodeOf(2, 2));
+        const double sec = peak(net.nodeOf(2, 4));
+        QVERIFY2(aux > 8.5 && aux < 11.5, qPrintable(QStringLiteral("辅助 %1 V").arg(aux)));
+        QVERIFY2(sec > 17.0 && sec < 22.5, qPrintable(QStringLiteral("次级 %1 V").arg(sec)));
+    }
+
+    void transformerPolarityFlipsPhase()
+    {
+        // 次级同名端反过来时，次级电压应当反相 180°
+        auto build = [](bool inverted) {
+            Circuit c;
+            Component v;
+            v.id = 1;
+            v.type = ComponentType::VoltageSource;
+            v.pos = QPointF(100, 300);
+            v.rotation = 90;
+            v.refdes = QStringLiteral("V1");
+            v.function = SourceFunction::Sine;
+            v.amplitude = 10.0;
+            v.frequency = 1000.0;
+            c.components.append(v);
+
+            Component t;
+            t.id = 2;
+            t.type = ComponentType::Transformer;
+            t.pos = QPointF(300, 300);
+            t.refdes = QStringLiteral("T1");
+            t.value = 2.0;
+            t.lpri = 1.0;
+            t.secondaryInverted = inverted;
+            c.components.append(t);
+
+            Component r;
+            r.id = 3;
+            r.type = ComponentType::Resistor;
+            r.pos = QPointF(450, 300);
+            r.rotation = 90;
+            r.refdes = QStringLiteral("RL");
+            r.value = 1000.0;
+            c.components.append(r);
+
+            Component g;
+            g.id = 4;
+            g.type = ComponentType::Ground;
+            g.pos = QPointF(100, 400);
+            g.refdes = QStringLiteral("GND");
+            c.components.append(g);
+            for (const QPointF& pos : {QPointF(270, 400), QPointF(330, 400), QPointF(450, 400)}) {
+                Component gg = g;
+                gg.id = 5 + static_cast<int>(c.components.size());
+                gg.pos = pos;
+                c.components.append(gg);
+            }
+
+            c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(270, 200),
+                                 QPointF(270, 290)}});
+            c.wires.append(Wire{{QPointF(270, 310), QPointF(270, 400)}});
+            c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
+            c.wires.append(Wire{{QPointF(330, 290), QPointF(450, 290), QPointF(450, 270)}});
+            c.wires.append(Wire{{QPointF(450, 330), QPointF(450, 400)}});
+            c.wires.append(Wire{{QPointF(330, 310), QPointF(330, 400)}});
+            return c;
+        };
+
+        auto sample = [](const Circuit& c, int pin) {
+            const Netlist net = c.buildNetlist();
+            SimulationOptions tr;
+            tr.kind = AnalysisKind::Transient;
+            tr.tStop = 0.004;
+            tr.tStep = 1e-5;
+            const SimulationResult r = Simulator::run(c, tr);
+            QVector<double> out;
+            const Signal* s = r.signal(QStringLiteral("V(%1)").arg(net.nodeOf(2, pin)));
+            return s ? s->y : out;
+        };
+
+        const QVector<double> normal = sample(build(false), 2);
+        const QVector<double> inverted = sample(build(true), 2);
+        QVERIFY(!normal.isEmpty() && normal.size() == inverted.size());
+
+        // 找一个初级电压明显不为零的时刻，比较次级符号
+        const Circuit probe = build(false);
+        const Netlist net = probe.buildNetlist();
+        SimulationOptions tr;
+        tr.kind = AnalysisKind::Transient;
+        tr.tStop = 0.004;
+        tr.tStep = 1e-5;
+        const SimulationResult r = Simulator::run(probe, tr);
+        const Signal* primary = r.signal(QStringLiteral("V(%1)").arg(net.nodeOf(2, 0)));
+        QVERIFY(primary);
+
+        int checked = 0;
+        for (int i = 0; i < normal.size() && checked < 20; ++i) {
+            if (std::abs(primary->y.at(i)) < 2.0)
+                continue;
+            ++checked;
+            const double same = normal.at(i) * primary->y.at(i);
+            const double flip = inverted.at(i) * primary->y.at(i);
+            QVERIFY2(same * flip < 0.0, "反相后次级电压应当与正接时反号");
+        }
+        QVERIFY2(checked > 0, "应当找到初级电压不为零的时刻");
+    }
+
+    void acDcSupplyExampleRuns()
+    {
+        // 220 V 交流 → 桥式整流 → 310 V 母线 → MOSFET 斩波 → 变压器 → 输出约 12 V
+        QFile file(QStringLiteral(CSM_EXAMPLE_DIR "/08_ac_dc_supply.csm"));
+        QVERIFY2(file.open(QIODevice::ReadOnly), "示例文件缺失");
+        QString error;
+        const Circuit circuit = Circuit::fromJson(QJsonDocument::fromJson(file.readAll()).object(),
+                                                  &error);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+
+        const Netlist net = circuit.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        QVERIFY2(net.warnings.isEmpty(), qPrintable(net.warnings.join(QStringLiteral("; "))));
+
+        SimulationOptions tr;
+        tr.kind = AnalysisKind::Transient;
+        tr.tStop = 0.03;
+        tr.tStep = 1e-6;
+        const SimulationResult result = Simulator::run(circuit, tr);
+        QVERIFY2(result.ok, qPrintable(result.error));
+
+        const Component* tp = nullptr;
+        for (const Component& comp : circuit.components)
+            if (comp.type == ComponentType::Probe)
+                tp = &comp;
+        QVERIFY(tp);
+        const Signal* out = result.signal(QStringLiteral("V(%1)").arg(net.nodeOf(tp->id, 0)));
+        QVERIFY(out);
+        double peak = 0.0;
+        for (size_t i = out->y.size() / 2; i < out->y.size(); ++i)
+            peak = std::max(peak, out->y[i]);
+        QVERIFY2(peak > 10.5 && peak < 14.0,
+                 qPrintable(QStringLiteral("输出 %1 V").arg(peak)));
+    }
+
+    void groundKindsAreSeparateNets()
+    {
+        // GND 是节点 0；AGND 是独立节点，只通过 1 mΩ 单点连到主地
+        Circuit c;
+        Component v;
+        v.id = 1;
+        v.type = ComponentType::VoltageSource;
+        v.pos = QPointF(100, 300);
+        v.rotation = 90;
+        v.refdes = QStringLiteral("V1");
+        v.dcValue = 10.0;
+        c.components.append(v);
+
+        Component r1;
+        r1.id = 2;
+        r1.type = ComponentType::Resistor;
+        r1.pos = QPointF(200, 200);
+        r1.refdes = QStringLiteral("R1");
+        r1.value = 1000.0;
+        c.components.append(r1);
+
+        Component r2;
+        r2.id = 3;
+        r2.type = ComponentType::Resistor;
+        r2.pos = QPointF(400, 200);
+        r2.refdes = QStringLiteral("R2");
+        r2.value = 1000.0;
+        c.components.append(r2);
+
+        Component gnd;
+        gnd.id = 4;
+        gnd.type = ComponentType::Ground;
+        gnd.pos = QPointF(100, 400);
+        gnd.refdes = QStringLiteral("GND");
+        c.components.append(gnd);
+
+        Component agnd;
+        agnd.id = 5;
+        agnd.type = ComponentType::Ground;
+        agnd.pos = QPointF(500, 400);
+        agnd.refdes = QStringLiteral("AGND");
+        agnd.groundKind = GroundKind::Agnd;
+        c.components.append(agnd);
+
+        Component tp;
+        tp.id = 6;
+        tp.type = ComponentType::Probe;
+        tp.pos = QPointF(300, 200);
+        tp.refdes = QStringLiteral("TP1");
+        tp.groundKind = GroundKind::Agnd;
+        c.components.append(tp);
+
+        // V1 → R1 → R2 → AGND
+        c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(170, 200)}});
+        c.wires.append(Wire{{QPointF(230, 200), QPointF(300, 200), QPointF(370, 200)}});
+        c.wires.append(Wire{{QPointF(430, 200), QPointF(500, 200), QPointF(500, 400)}});
+        c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
+
+        const Netlist net = c.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        QCOMPARE(net.nodeOf(4, 0), 0);              // 主地 = 节点 0
+        QVERIFY(net.nodeOf(5, 0) > 0);              // AGND 是独立节点
+
+        SimulationOptions tr;
+        tr.kind = AnalysisKind::Transient;
+        tr.tStop = 1e-4;
+        tr.tStep = 1e-5;
+        const SimulationResult result = Simulator::run(c, tr);
+        QVERIFY2(result.ok, qPrintable(result.error));
+
+        // 测试点带参考地时会有 V(a,b) 的差分信号
+        const int nodeA = net.nodeOf(6, 0);
+        const int nodeB = net.nodeOf(5, 0);
+        const Signal* diff = result.signal(QStringLiteral("V(%1,%2)").arg(nodeA).arg(nodeB));
+        QVERIFY2(diff, "带参考地的测试点应当产生差分信号");
+        const Signal* va = result.signal(QStringLiteral("V(%1)").arg(nodeA));
+        const Signal* vb = result.signal(QStringLiteral("V(%1)").arg(nodeB));
+        QVERIFY(va && vb);
+        QVERIFY(std::abs(diff->y.last() - (va->y.last() - vb->y.last())) < 1e-9);
+    }
+
+    void ob2362DrivesGateByFeedback()
+    {
+        // OB2362 简化模型：FB 决定 CS 目标值，GATE 在每周期按占空比拉高，
+        // CS 超过目标就关断（逐周期限流）
+        Circuit c;
+        Component vcc;
+        vcc.id = 1;
+        vcc.type = ComponentType::VoltageSource;
+        vcc.pos = QPointF(300, 300);
+        vcc.rotation = 90;
+        vcc.refdes = QStringLiteral("V1");
+        vcc.dcValue = 12.0;
+        c.components.append(vcc);
+
+        Component ctl;
+        ctl.id = 2;
+        ctl.type = ComponentType::Ob2362;
+        ctl.pos = QPointF(500, 300);
+        ctl.refdes = QStringLiteral("U1");
+        ctl.frequency = 65000.0;
+        ctl.value = 0.72;
+        c.components.append(ctl);
+
+        Component fb;
+        fb.id = 3;
+        fb.type = ComponentType::VoltageSource;
+        fb.pos = QPointF(400, 360);
+        fb.rotation = 90;
+        fb.refdes = QStringLiteral("VFB");
+        fb.dcValue = 3.0; // 使 CS 目标 ≈ (3−0.5)/3.5 ≈ 0.71 V
+        c.components.append(fb);
+
+        Component rcs;
+        rcs.id = 4;
+        rcs.type = ComponentType::Resistor;
+        rcs.pos = QPointF(590, 310);
+        rcs.refdes = QStringLiteral("RCS");
+        rcs.value = 0.5;
+        c.components.append(rcs);
+
+        Component g;
+        g.id = 5;
+        g.type = ComponentType::Ground;
+        g.pos = QPointF(300, 400);
+        g.refdes = QStringLiteral("GND");
+        c.components.append(g);
+        for (const QPointF& pos : {QPointF(500, 400), QPointF(400, 420), QPointF(620, 400)}) {
+            Component gg = g;
+            gg.id = 6 + static_cast<int>(c.components.size());
+            gg.pos = pos;
+            c.components.append(gg);
+        }
+
+        // VCC 与 GND
+        c.wires.append(Wire{{QPointF(300, 270), QPointF(300, 200), QPointF(500, 200),
+                             QPointF(500, 270)}});
+        c.wires.append(Wire{{QPointF(500, 330), QPointF(500, 400)}});
+        c.wires.append(Wire{{QPointF(300, 330), QPointF(300, 400)}});
+        // FB 接 3 V
+        c.wires.append(Wire{{QPointF(470, 300), QPointF(400, 300), QPointF(400, 330)}});
+        c.wires.append(Wire{{QPointF(400, 390), QPointF(400, 420)}});
+        // CS 经 0.5 Ω 到地
+        c.wires.append(Wire{{QPointF(530, 310), QPointF(560, 310)}});
+        c.wires.append(Wire{{QPointF(620, 310), QPointF(620, 400)}});
+
+        const Netlist net = c.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        QCOMPARE(net.compPins.value(2).size(), 6);
+
+        SimulationOptions tr;
+        tr.kind = AnalysisKind::Transient;
+        tr.tStop = 5e-5;
+        tr.tStep = 1e-7;
+        const SimulationResult result = Simulator::run(c, tr);
+        QVERIFY2(result.ok, qPrintable(result.error));
+
+        const Signal* gate = result.signal(QStringLiteral("V(%1)").arg(net.nodeOf(2, 5)));
+        QVERIFY(gate);
+        double high = 0.0;
+        double low = 1e9;
+        for (double y : gate->y) {
+            high = std::max(high, y);
+            low = std::min(low, y);
+        }
+        // 每周期 GATE 拉到约 11 V，关断时回 0
+        QVERIFY2(high > 9.0 && high < 12.5, qPrintable(QStringLiteral("GATE 高 %1 V").arg(high)));
+        QVERIFY2(low < 0.5, qPrintable(QStringLiteral("GATE 低 %1 V").arg(low)));
+    }
+
     void changelogSectionsAreUnique()
     {
         // 「未发布」只能有一个：多次插条目时最容易写成两个，发布时会被漏掉

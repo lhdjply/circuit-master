@@ -20,7 +20,7 @@ QPen symbolPen(const QColor& color, qreal width = 2.0)
 
 void drawPinDots(QPainter* p, const Component& comp, bool selected)
 {
-    const QVector<QPointF> offsets = pinOffsets(comp.type);
+    const QVector<QPointF> offsets = pinOffsets(comp);
     if (offsets.isEmpty())
         return;
     const QColor color = selected ? theme::selected : theme::pin;
@@ -73,6 +73,14 @@ QPainterPath symbolShape(ComponentType type)
         tri << QPointF(-26.0, -22.0) << QPointF(-26.0, 22.0) << QPointF(24.0, 0.0);
         path.addPolygon(tri);
         path.closeSubpath();
+        return path;
+    }
+    if (type == ComponentType::Transformer) {
+        path.addRoundedRect(QRectF(-30.0, -22.0, 60.0, 44.0), 4.0, 4.0);
+        return path;
+    }
+    if (type == ComponentType::Ob2362) {
+        path.addRoundedRect(QRectF(-24.0, -26.0, 48.0, 52.0), 4.0, 4.0);
         return path;
     }
     if (type == ComponentType::Tl431) {
@@ -307,6 +315,136 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         break;
     }
 
+    case ComponentType::Transformer: {
+        // 三绕组：左边初级（1、2）与辅助绕组（4、5），右边次级（8、6）；单绕组只有一组
+        const bool dual = comp.transformerKind == TransformerKind::PrimaryAuxSecondary;
+        p->setPen(symbolPen(color, 1.4));
+
+        const auto lead = [&](const QPointF& from, const QPointF& to) {
+            p->drawLine(from, to);
+        };
+
+        if (dual) {
+            // 初级 1（y −40 … −15）
+            lead(QPointF(-30.0, -40.0), QPointF(-16.0, -40.0));
+            lead(QPointF(-16.0, -40.0), QPointF(-16.0, -15.0));
+            lead(QPointF(-16.0, -15.0), QPointF(-30.0, -15.0));
+            // 初级 2（y 15 … 40）
+            lead(QPointF(-30.0, 15.0), QPointF(-16.0, 15.0));
+            lead(QPointF(-16.0, 15.0), QPointF(-16.0, 40.0));
+            lead(QPointF(-16.0, 40.0), QPointF(-30.0, 40.0));
+            // 次级（y −40 … 40）
+            lead(QPointF(30.0, -40.0), QPointF(16.0, -40.0));
+            lead(QPointF(16.0, -40.0), QPointF(16.0, 40.0));
+            lead(QPointF(16.0, 40.0), QPointF(30.0, 40.0));
+
+            p->setPen(symbolPen(color, 2.0));
+            for (int i = 0; i < 4; ++i) {
+                p->drawArc(QRectF(-16.0, -39.0 + i * 6.0, 8.0, 6.0), 90 * 16, 180 * 16);
+                p->drawArc(QRectF(-16.0, 16.0 + i * 6.0, 8.0, 6.0), 90 * 16, 180 * 16);
+            }
+            for (int i = 0; i < 8; ++i)
+                p->drawArc(QRectF(8.0, -39.0 + i * 10.0, 8.0, 10.0), 90 * 16, 180 * 16);
+
+            // 铁芯：两组初级各一对，次级整条
+            p->setPen(symbolPen(color, 2.4));
+            for (const double top : {-40.0, 15.0}) {
+                p->drawLine(QPointF(-2.0, top), QPointF(-2.0, top + 25.0));
+                p->drawLine(QPointF(2.0, top), QPointF(2.0, top + 25.0));
+            }
+        } else {
+            p->drawLine(QPointF(-30.0, -10.0), QPointF(-16.0, -10.0));
+            p->drawLine(QPointF(-16.0, -10.0), QPointF(-16.0, 10.0));
+            p->drawLine(QPointF(-16.0, 10.0), QPointF(-30.0, 10.0));
+            p->drawLine(QPointF(30.0, -10.0), QPointF(16.0, -10.0));
+            p->drawLine(QPointF(16.0, -10.0), QPointF(16.0, 10.0));
+            p->drawLine(QPointF(16.0, 10.0), QPointF(30.0, 10.0));
+
+            p->setPen(symbolPen(color, 2.0));
+            for (int i = 0; i < 3; ++i) {
+                const double y = -9.0 + i * 6.0;
+                p->drawArc(QRectF(-16.0, y, 8.0, 6.0), 90 * 16, 180 * 16);
+                p->drawArc(QRectF(8.0, y, 8.0, 6.0), 90 * 16, 180 * 16);
+            }
+            p->setPen(symbolPen(color, 2.4));
+            p->drawLine(QPointF(-2.0, -12.0), QPointF(-2.0, 12.0));
+            p->drawLine(QPointF(2.0, -12.0), QPointF(2.0, 12.0));
+        }
+
+        // 同名端圆点 + 绕组编号（数字要抵消旋转与镜像，始终正着写）
+        // 次级同名端在下方时，圆点画到下端（文字仍放在上端，避免压住符号）
+        const bool inverted = comp.secondaryInverted;
+        QVector<QPair<QPointF, QString>> marks;
+        QVector<QPointF> dots;
+        if (dual) {
+            // 编号与属性面板的 N1 / N2 / N3 对应
+            marks = {{QPointF(-22.0, -45.0), QStringLiteral("1")},
+                     {QPointF(-22.0, 10.0), QStringLiteral("2")},
+                     {QPointF(22.0, -45.0), QStringLiteral("3")}};
+            dots = {QPointF(-22.0, -40.0), QPointF(-22.0, 15.0),
+                    inverted ? QPointF(22.0, 40.0) : QPointF(22.0, -40.0)};
+        } else {
+            marks = {{QPointF(-22.0, -21.0), QStringLiteral("1")},
+                     {QPointF(22.0, -21.0), QStringLiteral("2")}};
+            dots = {QPointF(-22.0, -10.0),
+                    inverted ? QPointF(22.0, 10.0) : QPointF(22.0, -10.0)};
+        }
+        p->setPen(Qt::NoPen);
+        p->setBrush(color);
+        for (const QPointF& dot : dots)
+            p->drawEllipse(dot, 2.4, 2.4);
+        p->setBrush(Qt::NoBrush);
+
+        QFont f = p->font();
+        f.setPointSizeF(6.0);
+        f.setBold(true);
+        p->setFont(f);
+        p->setPen(color);
+        for (const auto& mark : marks) {
+            p->save();
+            p->translate(mark.first);
+            p->rotate(-double(rotation));
+            p->scale(mirrorX ? -1.0 : 1.0, mirrorY ? -1.0 : 1.0);
+            p->drawText(QRectF(-8.0, -5.0, 16.0, 10.0), Qt::AlignCenter, mark.second);
+            p->restore();
+        }
+        break;
+    }
+
+    case ComponentType::Ob2362: {
+        // SOT23-6：上 VCC、下 GND、左 FB/PRT、右 GATE/CS
+        p->setPen(symbolPen(color, 1.5));
+        p->setBrush(Qt::NoBrush);
+        p->drawRect(QRectF(-22.0, -26.0, 44.0, 52.0));
+
+        p->setPen(pen);
+        p->drawLine(QPointF(0.0, -30.0), QPointF(0.0, -26.0));   // VCC
+        p->drawLine(QPointF(0.0, 26.0), QPointF(0.0, 30.0));     // GND
+        p->drawLine(QPointF(-30.0, 0.0), QPointF(-22.0, 0.0));   // FB
+        p->drawLine(QPointF(-30.0, 20.0), QPointF(-22.0, 20.0)); // PRT
+        p->drawLine(QPointF(22.0, -10.0), QPointF(30.0, -10.0)); // GATE
+        p->drawLine(QPointF(22.0, 10.0), QPointF(30.0, 10.0));   // CS
+
+        QFont f = p->font();
+        f.setPointSizeF(5.0);
+        f.setBold(false);
+        p->setFont(f);
+        p->setPen(color);
+        p->drawText(QRectF(-20.0, -24.0, 40.0, 8.0), Qt::AlignHCenter | Qt::AlignTop,
+                    QStringLiteral("VCC"));
+        p->drawText(QRectF(-20.0, 18.0, 40.0, 7.0), Qt::AlignHCenter | Qt::AlignBottom,
+                    QStringLiteral("GND"));
+        p->drawText(QRectF(-20.0, -6.0, 18.0, 8.0), Qt::AlignLeft | Qt::AlignVCenter,
+                    QStringLiteral("FB"));
+        p->drawText(QRectF(-20.0, 6.0, 18.0, 8.0), Qt::AlignLeft | Qt::AlignVCenter,
+                    QStringLiteral("PRT"));
+        p->drawText(QRectF(2.0, -16.0, 19.0, 8.0), Qt::AlignRight | Qt::AlignVCenter,
+                    QStringLiteral("GATE"));
+        p->drawText(QRectF(2.0, 4.0, 19.0, 8.0), Qt::AlignRight | Qt::AlignVCenter,
+                    QStringLiteral("CS"));
+        break;
+    }
+
     case ComponentType::Tl431: {
         // 可调基准：三角形（阴极朝上）+ 阴极横杠 + 左侧参考端
         p->drawLine(QPointF(-30.0, 0.0), QPointF(-14.0, 0.0)); // 参考端引线
@@ -463,10 +601,40 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
 
     case ComponentType::Ground: {
         p->drawLine(QPointF(0.0, 0.0), QPointF(0.0, 13.0));
+        if (comp.groundKind == GroundKind::Earth) {
+            // 保护地/大地：一条横杠 + 三道斜线
+            p->setPen(symbolPen(color, 2.6));
+            p->drawLine(QPointF(-11.0, 13.0), QPointF(11.0, 13.0));
+            p->setPen(symbolPen(color, 2.2));
+            for (int i = 0; i < 3; ++i) {
+                const double x = -8.0 + i * 8.0;
+                p->drawLine(QPointF(x, 15.0), QPointF(x - 3.0, 22.0));
+            }
+            break;
+        }
         p->setPen(symbolPen(color, 2.6));
         p->drawLine(QPointF(-11.0, 13.0), QPointF(11.0, 13.0));
-        p->drawLine(QPointF(-7.0, 18.0), QPointF(7.0, 18.0));
-        p->drawLine(QPointF(-3.0, 23.0), QPointF(3.0, 23.0));
+        if (comp.groundKind == GroundKind::Agnd) {
+            // 模拟地：两横杠 + 一个小三角（空心）
+            p->drawLine(QPointF(-7.0, 18.0), QPointF(7.0, 18.0));
+            QPolygonF tri;
+            tri << QPointF(-4.0, 21.0) << QPointF(4.0, 21.0) << QPointF(0.0, 26.0);
+            p->setBrush(Qt::NoBrush);
+            p->drawPolygon(tri);
+        } else if (comp.groundKind == GroundKind::Dgnd) {
+            // 数字地：三横杠，最下面一杠画成虚线状（两段）
+            p->drawLine(QPointF(-7.0, 18.0), QPointF(7.0, 18.0));
+            p->drawLine(QPointF(-5.0, 23.0), QPointF(-1.0, 23.0));
+            p->drawLine(QPointF(1.0, 23.0), QPointF(5.0, 23.0));
+        } else if (comp.groundKind == GroundKind::Pgnd) {
+            // 功率地：三横杠加粗
+            p->setPen(symbolPen(color, 3.4));
+            p->drawLine(QPointF(-7.0, 18.0), QPointF(7.0, 18.0));
+            p->drawLine(QPointF(-3.0, 23.0), QPointF(3.0, 23.0));
+        } else {
+            p->drawLine(QPointF(-7.0, 18.0), QPointF(7.0, 18.0));
+            p->drawLine(QPointF(-3.0, 23.0), QPointF(3.0, 23.0));
+        }
         break;
     }
     }

@@ -181,8 +181,11 @@ void SchematicView::dropEvent(QDropEvent* event)
     }
 
     bool ok = false;
-    const int typeValue =
-        event->mimeData()->data(QStringLiteral("application/x-csm-component")).toInt(&ok);
+    const QString payload =
+        QString::fromUtf8(event->mimeData()->data(QStringLiteral("application/x-csm-component")));
+    const QStringList parts = payload.split(QLatin1Char(':'));
+    const int typeValue = parts.value(0).toInt(&ok);
+    const int groundKind = parts.size() > 1 ? parts.at(1).toInt() : 0;
     if (!ok) {
         event->ignore();
         return;
@@ -192,6 +195,12 @@ void SchematicView::dropEvent(QDropEvent* event)
     const QPointF scenePos = m_scene->snap(mapToScene(event->position().toPoint()));
     ComponentItem* item = m_scene->placeComponent(ComponentType(typeValue), scenePos);
     if (item) {
+        if (item->component().type == ComponentType::Ground
+            && groundKind != int(GroundKind::Gnd)) {
+            Component comp = item->component();
+            comp.groundKind = static_cast<GroundKind>(groundKind);
+            item->setComponent(comp);
+        }
         m_scene->clearSelection();
         item->setSelected(true);
         setFocus();

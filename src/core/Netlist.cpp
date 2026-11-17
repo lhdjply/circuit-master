@@ -134,21 +134,27 @@ Netlist Netlist::build(const Circuit& circuit)
         }
     }
 
-    // 4. 找地节点
+    // 4. 找地节点：同一种接地符号算同一个网络（GND → 节点 0，其余各自一个节点）
     bool hasGround = false;
     QVector<int> groundRoots;
+    QHash<int, QVector<int>> kindRoots; // GroundKind → 该种类的所有根
     for (const Component& comp : circuit.components) {
         if (comp.type != ComponentType::Ground)
             continue;
-        hasGround = true;
         const int root = dsu.find(dsu.add(toKey(comp.pinPosition(0), grid)));
-        if (!groundRoots.contains(root))
-            groundRoots.append(root);
+        QVector<int>& roots = kindRoots[int(comp.groundKind)];
+        if (!roots.contains(root))
+            roots.append(root);
+        if (comp.groundKind == GroundKind::Gnd) {
+            hasGround = true;
+            if (!groundRoots.contains(root))
+                groundRoots.append(root);
+        }
     }
     if (!hasGround) {
         net.valid = false;
-        net.error = QStringLiteral("电路中没有接地符号（GND）。请放置接地符号并连接到电路，"
-                                   "否则无法确定参考节点。");
+        net.error = QStringLiteral("电路中没有主接地符号（GND）。请放置 GND 并连接到电路，"
+                                   "否则无法确定参考节点（AGND/DGND/PGND/EARTH 不算参考地）。");
         return net;
     }
 
@@ -158,6 +164,22 @@ Netlist Netlist::build(const Circuit& circuit)
         rootToNode.insert(root, 0);
 
     int nextNode = 1;
+    // 非主地（AGND/DGND/PGND/EARTH）各自合成一个节点，供测试点引用
+    QList<int> kinds = kindRoots.keys();
+    std::sort(kinds.begin(), kinds.end());
+    for (int kind : kinds) {
+        if (kind == int(GroundKind::Gnd))
+            continue;
+        int node = 0;
+        for (int root : kindRoots.value(kind)) {
+            if (node == 0) {
+                node = nextNode++;
+                rootToNode.insert(root, node);
+            } else {
+                rootToNode.insert(root, node);
+            }
+        }
+    }
     for (const Component& comp : circuit.components) {
         QVector<int> nodes;
         const QVector<QPointF> pins = comp.pinPositions();

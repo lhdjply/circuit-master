@@ -117,6 +117,28 @@ void PropertyPanel::buildUi()
     m_form->addRow(QStringLiteral("电流传输比 CTR"), m_ctr);
     m_vceSat = makeEdit(QStringLiteral("例如 0.2"));
     m_form->addRow(QStringLiteral("饱和压降 Vce(sat)"), m_vceSat);
+    m_lpri = makeEdit(QStringLiteral("例如 1"));
+    m_form->addRow(QStringLiteral("初级电感 L1"), m_lpri);
+
+    m_windings = new QComboBox(page);
+    m_windings->addItem(QStringLiteral("单绕组（1 初级 + 1 次级）"),
+                        int(TransformerKind::Single));
+    m_windings->addItem(QStringLiteral("初级 + 辅助绕组 + 次级（6 引脚）"),
+                        int(TransformerKind::PrimaryAuxSecondary));
+    m_form->addRow(QStringLiteral("绕组形式"), m_windings);
+
+    m_groundKind = new QComboBox(page);
+    m_groundKind->addItem(QStringLiteral("GND（主地）"), int(GroundKind::Gnd));
+    m_groundKind->addItem(QStringLiteral("AGND（模拟地）"), int(GroundKind::Agnd));
+    m_groundKind->addItem(QStringLiteral("DGND（数字地）"), int(GroundKind::Dgnd));
+    m_groundKind->addItem(QStringLiteral("PGND（功率地）"), int(GroundKind::Pgnd));
+    m_groundKind->addItem(QStringLiteral("EARTH（保护地）"), int(GroundKind::Earth));
+    m_form->addRow(QStringLiteral("接地种类"), m_groundKind);
+
+    m_polarity = new QComboBox(page);
+    m_polarity->addItem(QStringLiteral("同名端都在上（同相）"), 0);
+    m_polarity->addItem(QStringLiteral("次级同名端在下（反相）"), 1);
+    m_form->addRow(QStringLiteral("同名端"), m_polarity);
 
     m_function = new QComboBox(page);
     m_function->addItem(QStringLiteral("直流 (DC)"), int(SourceFunction::Constant));
@@ -185,6 +207,14 @@ void PropertyPanel::buildUi()
     connect(m_vf, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_ctr, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_vceSat, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
+    connect(m_lpri, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
+    connect(m_windings, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { applyValue(); });
+    connect(m_polarity, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { applyValue(); });
+    connect(m_groundKind, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { applyValue(); });
+
     connect(m_function, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &PropertyPanel::applyFunction);
     connect(m_closed, &QCheckBox::toggled, this, &PropertyPanel::applyClosed);
@@ -228,6 +258,16 @@ void PropertyPanel::refreshFromItem()
     case ComponentType::Pnp:
         m_value->setText(QString::number(c.beta, 'g', 6));
         break;
+    case ComponentType::Transformer: {
+        // 一行写完 N1:N2(:N3)，内部仍按「次级比 / 辅助比」存
+        const QString n1 = QString::number(1.0, 'g', 4);
+        const QString n2 = QString::number(c.auxRatio, 'g', 4);
+        const QString n3 = QString::number(c.value, 'g', 4);
+        m_value->setText(c.transformerKind == TransformerKind::PrimaryAuxSecondary
+                             ? QStringLiteral("%1:%2:%3").arg(n1, n2, n3)
+                             : QStringLiteral("%1:%2").arg(n1, n3));
+        break;
+    }
     case ComponentType::Nmos:
     case ComponentType::Pmos:
     case ComponentType::Igbt:
@@ -241,6 +281,10 @@ void PropertyPanel::refreshFromItem()
     m_vf->setText(quantityText(c.vf, UnitKind::Volt));
     m_ctr->setText(QString::number(c.ctr, 'g', 4));
     m_vceSat->setText(quantityText(c.vceSat, UnitKind::Volt));
+    m_lpri->setText(quantityText(c.lpri, UnitKind::Henry));
+    m_windings->setCurrentIndex(m_windings->findData(int(c.transformerKind)));
+    m_polarity->setCurrentIndex(m_polarity->findData(c.secondaryInverted ? 1 : 0));
+    m_groundKind->setCurrentIndex(m_groundKind->findData(int(c.groundKind)));
     m_function->setCurrentIndex(m_function->findData(int(c.function)));
 
     const UnitKind unit = sourceUnitFor(c.type);
@@ -275,7 +319,8 @@ void PropertyPanel::updateVisibility()
     const bool analog = c.type == ComponentType::Resistor || c.type == ComponentType::Capacitor
         || c.type == ComponentType::Inductor || c.type == ComponentType::OpAmp
         || c.type == ComponentType::Led || c.type == ComponentType::Optocoupler
-        || c.type == ComponentType::Tl431 || isThreeTerminalDevice(c.type);
+        || c.type == ComponentType::Tl431 || c.type == ComponentType::Transformer
+        || isThreeTerminalDevice(c.type);
 
     const bool isMos = c.type == ComponentType::Nmos || c.type == ComponentType::Pmos
         || c.type == ComponentType::Igbt;
@@ -286,6 +331,7 @@ void PropertyPanel::updateVisibility()
                                       || c.type == ComponentType::Optocoupler);
     m_form->setRowVisible(m_ctr, c.type == ComponentType::Optocoupler);
     m_form->setRowVisible(m_vceSat, c.type == ComponentType::Optocoupler);
+    m_form->setRowVisible(m_lpri, c.type == ComponentType::Transformer);
 
     if (m_valueLabel) {
         switch (c.type) {
@@ -329,6 +375,12 @@ void PropertyPanel::updateVisibility()
             m_valueLabel->setText(QStringLiteral("基准电压 Vref"));
             m_value->setPlaceholderText(QStringLiteral("例如 2.5"));
             break;
+        case ComponentType::Transformer:
+            m_valueLabel->setText(c.transformerKind == TransformerKind::PrimaryAuxSecondary
+                                      ? QStringLiteral("匝数比 N1:N2:N3")
+                                      : QStringLiteral("匝数比 N1:N2"));
+            m_value->setPlaceholderText(QStringLiteral("例如 2"));
+            break;
         default:
             m_valueLabel->setText(QStringLiteral("数值"));
             break;
@@ -350,6 +402,10 @@ void PropertyPanel::updateVisibility()
 
     m_form->setRowVisible(m_value, analog);
     m_form->setRowVisible(m_function, source);
+    m_form->setRowVisible(m_windings, c.type == ComponentType::Transformer);
+    m_form->setRowVisible(m_polarity, c.type == ComponentType::Transformer);
+    m_form->setRowVisible(m_groundKind, c.type == ComponentType::Ground
+                                           || c.type == ComponentType::Probe);
     m_form->setRowVisible(m_dc, source && c.function == SourceFunction::Constant);
     m_form->setRowVisible(m_closed, c.type == ComponentType::Switch);
 
@@ -425,6 +481,69 @@ void PropertyPanel::applyValue()
         m_item->setComponent(c);
         updateSubtitle();
         emit changed();
+        return;
+    }
+
+    if (type == ComponentType::Ground || type == ComponentType::Probe) {
+        Component c = m_item->component();
+        c.groundKind = static_cast<GroundKind>(m_groundKind->currentData().toInt());
+        m_item->setComponent(c);
+        updateSubtitle();
+        emit changed();
+        return;
+    }
+
+    if (type == ComponentType::Transformer) {
+        Component c = m_item->component();
+        QString reason;
+        bool ok = false;
+
+        // 匝数比写成 N1:N2(:N3)：第一个是初级，第二个是辅助（单绕组时是次级），
+        // 第三个是次级。内部仍然只存「次级比」和「辅助比」。
+        const QStringList parts = m_value->text().trimmed().split(QLatin1Char(':'));
+        if (parts.size() < 2 || parts.size() > 3) {
+            markInvalid(m_value, QStringLiteral("请按 N1:N2 或 N1:N2:N3 填写"));
+            return;
+        }
+        QVector<double> turns;
+        for (const QString& part : parts) {
+            const double v = parseQuantity(part, UnitKind::None, &ok, &reason);
+            if (!ok || v <= 0.0) {
+                markInvalid(m_value, QStringLiteral("匝数比必须是正数"));
+                return;
+            }
+            turns.append(v);
+        }
+        markValid(m_value);
+        const double n1 = turns.first();
+        if (turns.size() == 3) {
+            c.auxRatio = turns.at(1) / n1;
+            c.value = turns.at(2) / n1;
+        } else {
+            c.auxRatio = 1.0;
+            c.value = turns.at(1) / n1;
+        }
+
+        const double lpri = parseQuantity(m_lpri->text(), UnitKind::Henry, &ok, &reason);
+        if (!ok) {
+            markInvalid(m_lpri, reason);
+            return;
+        }
+        markValid(m_lpri);
+        c.lpri = lpri;
+
+        if (m_windings)
+            c.transformerKind = static_cast<TransformerKind>(m_windings->currentData().toInt());
+
+        if (m_polarity)
+            c.secondaryInverted = m_polarity->currentData().toInt() != 0;
+
+        m_item->setComponent(c);
+        updateSubtitle();
+        emit changed();
+        // 绕组形式变了要重新刷一遍字段（标签从 N1:N2 变成 N1:N2:N3）
+        refreshFromItem();
+        updateVisibility();
         return;
     }
 

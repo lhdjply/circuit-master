@@ -22,7 +22,7 @@
 - 折线导线绘制：端点自动吸附引脚，T 型连接与交叉点自动生成连接圆点
 - 双击元件或选中后在右侧属性面板编辑参数，数值可直接带单位：`10kΩ`、`4.7µF`、`10mH`、`5V`、`1mA`；
   不写单位时按元件默认单位（Ω/F/H/V/A）
-- 内置 7 个可直接运行的示例电路（位于 `resources/examples`，可直接编辑）
+- 内置 8 个可直接运行的示例电路（位于 `resources/examples`，可直接编辑）
 
 **仿真引擎（改进节点法 MNA）**
 
@@ -104,6 +104,33 @@
 内置示例「TL431 可调稳压（5 V）」：
 
 ![TL431 示例](docs/screenshots/tl431_example.png)
+
+OB2362 电流模式 PWM 控制器：
+
+![OB2362](docs/screenshots/ob2362.png)
+
+五种接地符号（同一个「接地」元件，属性里切换）：
+
+![接地种类](docs/screenshots/ground_kinds.png)
+
+示例「220 V 交流 → 桥式整流 → 变压器」：220 V 经桥式整流得到约 310 V 直流母线，
+再用 MOSFET 斩波送入变压器初级，次级经 470 µF 滤波后输出约 12 V（纹波约 0.5 V）：
+
+![220 V 交流转 12 V 直流](docs/screenshots/ac_dc_supply.png)
+
+变压器（左为初级「1」，右为次级「2」，圆点标同名端；旋转/翻转后数字仍正着写）：
+
+![变压器两种绕组](docs/screenshots/transformer_kinds.png)
+
+三绕组时每个绕组各有匝数比，标注形如 `1:1:2`（初级 : 辅助 : 次级）：
+
+![三绕组](docs/screenshots/transformer_three_windings.png)
+
+同名端可切换：反相时次级圆点画在下方，次级电压反 180°：
+
+![同名端](docs/screenshots/transformer_polarity.png)
+
+![变压器](docs/screenshots/transformer.png)
 
 TL431 可调基准（REF / 阳极 / 阴极）：
 
@@ -219,6 +246,9 @@ ctest --test-dir build --output-on-failure
 | 三极管 Q | NPN / PNP，Ebers-Moll 模型；参数：电流放大系数 β（默认 100） |
 | MOS 管 M | N / P 沟道增强型，level-1 平方律模型；参数：开启电压 Vth、跨导参数 K |
 | 光耦 OC | 输入侧红外 LED + 输出侧光敏三极管。默认参数按 **LTV-817S-TA1-C**：Vf = 1.2 V、CTR = 3.0（C 档 200–400%）、Vce(sat) = 0.2 V。输出特性带饱和：`Ic = CTR·If·x/(1+x)`，`x = Vce/Vce(sat)`，因此发射极不会被顶到集电极之上 |
+| 接地 GND | 元件库只有一个「接地」，在属性面板「接地种类」里切换 **GND / AGND / DGND / PGND / EARTH**。五种地**相互隔离**：同种地自动并成一个网络，非主地只通过 1 MΩ 漏电阻接主地（相当于断路），要连起来就在画布上拉一根线 |
+| OB2362 控制器 U | 昂宝 OB2362A 电流模式 PWM 控制器（SOT23-6：VCC / GND / FB / PRT / CS / GATE）。行为级模型：内部 65 kHz 振荡器，GATE 按 FB 决定的 CS 目标值逐周期关断，CS 达阈值即限流，VCC < 7.3 V 欠压关断 |
+| 变压器 T | 绕组形式可选**单绕组**（4 引脚：初级 + 次级）或**初级 + 辅助绕组 + 次级**（6 引脚）；参数为初级电感 L1、匝数比 N1:N2:N3（单绕组为 N1:N2）与次级同名端（正接 / 反相）；绕组旁标「1」「2」「3」与同名端圆点 |
 | TL431 基准 VR | 三端可调基准：REF 高于基准电压（默认 2.495 V）时阴极开始吸电流，把 Vka 稳在设定值；REF 接阴极即 2.5 V 基准，配分压电阻可做可调稳压 |
 | IGBT Z | 栅极按 MOS 模型、输出侧带导通压降 Vf；参数：Vth、K、Vf |
 | 运算放大器 U | 三端理想运放（VCVS + 50 Ω 输出电阻），开环增益默认 100 k |

@@ -13,12 +13,40 @@ namespace {
 constexpr double kPi = 3.14159265358979323846;
 }
 
+QVector<QPointF> pinOffsets(const Component& comp)
+{
+    // 变压器按绕组形式给不同的引脚布局：三绕组时左边初级 + 辅助、右边次级
+    if (comp.type == ComponentType::Transformer) {
+        if (comp.transformerKind == TransformerKind::PrimaryAuxSecondary) {
+            return {QPointF(-30.0, -40.0), QPointF(-30.0, -15.0),   // 初级 1（1、2）
+                    QPointF(-30.0, 15.0), QPointF(-30.0, 40.0),     // 初级 2（4、5）
+                    QPointF(30.0, -40.0), QPointF(30.0, 40.0)};     // 次级（8、6）
+        }
+        return {QPointF(-30.0, -10.0), QPointF(-30.0, 10.0), QPointF(30.0, -10.0),
+                QPointF(30.0, 10.0)};
+    }
+    return pinOffsets(comp.type);
+}
+
+int pinCount(const Component& comp)
+{
+    return pinOffsets(comp).size();
+}
+
 QVector<QPointF> pinOffsets(ComponentType type)
 {
     if (type == ComponentType::Ground || type == ComponentType::Probe)
         return {QPointF(0.0, 0.0)};
     if (type == ComponentType::OpAmp)
         return {QPointF(-30.0, -20.0), QPointF(-30.0, 20.0), QPointF(30.0, 0.0)};
+    // 变压器：0/1 = 初级 +/−（左），2/3 = 次级 +/−（右）
+    if (type == ComponentType::Transformer)
+        return {QPointF(-30.0, -10.0), QPointF(-30.0, 10.0), QPointF(30.0, -10.0),
+                QPointF(30.0, 10.0)};
+    // OB2362（SOT23-6）：0 = GND、1 = FB、2 = PRT、3 = CS、4 = VCC、5 = GATE
+    if (type == ComponentType::Ob2362)
+        return {QPointF(0.0, 30.0), QPointF(-30.0, 0.0), QPointF(-30.0, 20.0),
+                QPointF(30.0, 10.0), QPointF(0.0, -30.0), QPointF(30.0, -10.0)};
     // TL431：0 = 参考端 REF（左侧），1 = 阳极（下），2 = 阴极（上）
     if (type == ComponentType::Tl431)
         return {QPointF(-30.0, 0.0), QPointF(0.0, 30.0), QPointF(0.0, -30.0)};
@@ -45,8 +73,22 @@ int pinCount(ComponentType type)
     case ComponentType::Igbt:   return 3;
     case ComponentType::Optocoupler: return 4;
     case ComponentType::Tl431:  return 3;
+    case ComponentType::Transformer: return 4;
+    case ComponentType::Ob2362:  return 6;
     default:                    return 2;
     }
+}
+
+QString groundKindName(GroundKind kind)
+{
+    switch (kind) {
+    case GroundKind::Gnd:   return QStringLiteral("GND");
+    case GroundKind::Agnd:  return QStringLiteral("AGND");
+    case GroundKind::Dgnd:  return QStringLiteral("DGND");
+    case GroundKind::Pgnd:  return QStringLiteral("PGND");
+    case GroundKind::Earth: return QStringLiteral("EARTH");
+    }
+    return QStringLiteral("GND");
 }
 
 QString typeName(ComponentType type)
@@ -65,6 +107,9 @@ QString typeName(ComponentType type)
     case ComponentType::Igbt:          return QStringLiteral("IGBT");
     case ComponentType::Optocoupler:   return QStringLiteral("光耦");
     case ComponentType::Tl431:         return QStringLiteral("TL431 基准");
+    case ComponentType::Transformer:   return QStringLiteral("变压器");
+    case ComponentType::Ob2362:        return QStringLiteral("OB2362 控制器");
+
     case ComponentType::Switch:        return QStringLiteral("开关");
     case ComponentType::VoltageSource: return QStringLiteral("电压源");
     case ComponentType::CurrentSource: return QStringLiteral("电流源");
@@ -91,6 +136,9 @@ QString typeSymbol(ComponentType type)
     case ComponentType::Igbt:          return QStringLiteral("Z");
     case ComponentType::Optocoupler:   return QStringLiteral("OC");
     case ComponentType::Tl431:         return QStringLiteral("VR");
+    case ComponentType::Transformer:   return QStringLiteral("T");
+    case ComponentType::Ob2362:        return QStringLiteral("U");
+
     case ComponentType::Switch:        return QStringLiteral("S");
     case ComponentType::VoltageSource: return QStringLiteral("V");
     case ComponentType::CurrentSource: return QStringLiteral("I");
@@ -163,7 +211,7 @@ QPointF Component::toScene(const QPointF& local) const
 
 QPointF Component::pinPosition(int index) const
 {
-    const QVector<QPointF> offsets = pinOffsets(type);
+    const QVector<QPointF> offsets = pinOffsets(*this);
     if (index < 0 || index >= offsets.size())
         return pos;
     return toScene(offsets.at(index));
@@ -172,7 +220,7 @@ QPointF Component::pinPosition(int index) const
 QVector<QPointF> Component::pinPositions() const
 {
     QVector<QPointF> out;
-    const QVector<QPointF> offsets = pinOffsets(type);
+    const QVector<QPointF> offsets = pinOffsets(*this);
     out.reserve(offsets.size());
     for (const QPointF& p : offsets)
         out.append(toScene(p));
@@ -234,7 +282,8 @@ QString Component::unitName() const
     case ComponentType::Pmos:
     case ComponentType::Igbt:
     case ComponentType::Optocoupler:
-    case ComponentType::Tl431:         return QStringLiteral("V");
+    case ComponentType::Tl431:
+    case ComponentType::Transformer:   return QStringLiteral("V");
     case ComponentType::Switch:        return QStringLiteral("Ω");
     case ComponentType::Probe:
     case ComponentType::Ground:        return QString();
@@ -293,6 +342,16 @@ QString Component::displayValue() const
     case ComponentType::Tl431:
         return QStringLiteral("Vref = ") + formatEng(value, QStringLiteral("V"), 3);
 
+    case ComponentType::Ob2362:
+        return formatEng(frequency, QStringLiteral("Hz"), 3);
+
+    case ComponentType::Transformer:
+        // 匝数比用普通数字，别写成工程记数（0.5 不该显示成 500 m）
+        if (transformerKind == TransformerKind::PrimaryAuxSecondary)
+            return QStringLiteral("1:%1:%2")
+                .arg(QString::number(auxRatio, 'g', 3), QString::number(value, 'g', 3));
+        return QStringLiteral("1:") + QString::number(value, 'g', 3);
+
     case ComponentType::Switch:
         return closed ? QStringLiteral("闭合") : QStringLiteral("断开");
 
@@ -336,6 +395,7 @@ QString Component::spiceValueSpec() const
     case ComponentType::Igbt:
     case ComponentType::Optocoupler:
     case ComponentType::Tl431:
+    case ComponentType::Transformer:
         return QStringLiteral("MODEL"); // 由 Circuit::toSpiceNetlist 负责生成整行
 
     case ComponentType::VoltageSource:

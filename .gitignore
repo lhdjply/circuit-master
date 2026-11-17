@@ -21,3 +21,7 @@ compile_commands.json
 .vscode/
 .idea/
 *.swp
+.full-tree-sha
+.snap
+.dev-*
+*.csm.bak

@@ -7,5 +7,6 @@
     <file>05_rc_lowpass.csm</file>
     <file>06_opamp_inverting.csm</file>
     <file>07_tl431_regulator.csm</file>
+    <file>08_ac_dc_supply.csm</file>
   </qresource>
 </RCC>
