@@ -1205,7 +1205,7 @@ private slots:
         // 没记录通路时：先镜像，最后直链
         const QVector<QUrl> plain = UpdateChecker::downloadUrls(asset, QString());
         QVERIFY(plain.size() >= 2);
-        QVERIFY(plain.first().toString().startsWith(QStringLiteral("https://gh-proxy.org/")));
+        QVERIFY(plain.first().toString().startsWith(QStringLiteral("https://ghfast.top/")));
         QCOMPARE(plain.last().toString(), asset);
 
         // 空资产地址返回空列表

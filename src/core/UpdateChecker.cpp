@@ -121,11 +121,24 @@ UpdateChecker::~UpdateChecker()
     cancelInflight();
 }
 
+namespace {
+QStringList g_mirrorOverride;
+bool g_hasMirrorOverride = false;
+}
+
+void UpdateChecker::setBuiltinMirrors(const QStringList& mirrors)
+{
+    g_mirrorOverride = mirrors;
+    g_hasMirrorOverride = true;
+}
+
 QStringList UpdateChecker::builtinMirrors()
 {
+    if (g_hasMirrorOverride)
+        return g_mirrorOverride;
     // 三个公共的 GitHub 转发服务。它们把 `<前缀>/https://github.com/...` 原样
     // 转发到 GitHub，因此清单这种「github.com 上的文件」能直接穿过去。
-    return {QStringLiteral("https://gh-proxy.org"), QStringLiteral("https://ghfast.top"),
+    return {QStringLiteral("https://ghfast.top"), QStringLiteral("https://gh-proxy.org"),
             QStringLiteral("https://ghproxy.net")};
 }
 

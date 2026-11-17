@@ -13,7 +13,7 @@
 //   · 这个路径只在正式 Release 建好之后才存在，不会撞上「tag 已推、CI 还在
 //     编译」的占位条目。
 //
-//  地址固定按 gh-proxy.org → ghfast.top → ghproxy.net 的顺序试，三个都失败就
+//  地址固定按 ghfast.top → gh-proxy.org → ghproxy.net 的顺序试，三个都失败就
 //  报错。抖动对冲：到节点这条链路实测有部分连接会卡 2~5 秒（TCP 重传），单条
 //  请求一旦撞上就要等到超时。因此首条请求每 700ms 还没结果就并行再补一条，
 //  谁先成功用谁。正常情况（300~500ms）只发一条，不产生额外请求。
@@ -85,6 +85,9 @@ public:
 
     /// 内置的 GitHub 转发服务，按顺序尝试
     static QStringList builtinMirrors();
+    /// 覆盖内置镜像列表（测试与内网环境用）；传空列表就是「不走镜像」，
+    /// 让下载直接打原始地址，测试不必依赖外网
+    static void setBuiltinMirrors(const QStringList& mirrors);
 
     /// 镜像前缀；空列表表示直接访问清单地址（测试用，线上默认是三个内置镜像）
     void setMirrorPrefixes(const QStringList& prefixes);

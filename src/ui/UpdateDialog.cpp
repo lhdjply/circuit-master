@@ -2,6 +2,9 @@
 
 #include "csm_version.h"
 
+#include <QApplication>
+#include <QProcess>
+#include <QSettings>
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QDir>
@@ -111,7 +114,7 @@ UpdateDialog::UpdateDialog(const ReleaseInfo& release, QWidget* parent)
     actions->addStretch(1);
 
     m_laterButton = new QPushButton(QStringLiteral("稍后"), this);
-    m_downloadButton = new QPushButton(QStringLiteral("下载安装包…"), this);
+    m_downloadButton = new QPushButton(QStringLiteral("下载并安装"), this);
     m_downloadButton->setEnabled(!m_asset.name.isEmpty());
     m_downloadButton->setDefault(!m_asset.name.isEmpty());
     actions->addWidget(m_laterButton);
@@ -146,16 +149,15 @@ void UpdateDialog::chooseAndDownload()
     if (m_asset.name.isEmpty())
         return;
 
-    QString dir = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
-    if (dir.isEmpty() || !QDir(dir).exists())
-        dir = QDir::homePath();
+    // 不再问保存路径：下到临时目录，装完就删
+    QString dir = QStandardPaths::writableLocation(QStandardPaths::TempLocation);
+    if (dir.isEmpty())
+        dir = QDir::tempPath();
+    QDir().mkpath(dir);
 
-    const QString path = QFileDialog::getSaveFileName(
-        this, QStringLiteral("保存安装包"), QDir(dir).filePath(m_asset.name),
-        QStringLiteral("安装包 (*)"));
-    if (path.isEmpty())
-        return;
-    downloadTo(path);
+    m_installAfterDownload = true;
+    if (downloadTo(QDir(dir).filePath(m_asset.name)))
+        m_status->setText(QStringLiteral("正在下载 %1，完成后会自动安装…").arg(m_asset.name));
 }
 
 bool UpdateDialog::downloadTo(const QString& path)
@@ -276,11 +278,79 @@ void UpdateDialog::onFinished()
 
     m_savedPath = m_savePath;
     m_progress->setValue(m_progress->maximum());
-    m_status->setText(QStringLiteral("已保存到 %1").arg(m_savedPath));
-    m_folderButton->setVisible(true);
     m_downloadButton->setEnabled(true);
-    m_downloadButton->setText(QStringLiteral("重新下载…"));
+    m_downloadButton->setText(QStringLiteral("重新下载并安装"));
+    m_folderButton->setVisible(true);
     emit downloadFinished(m_savedPath);
+
+    if (m_installAfterDownload) {
+        m_installAfterDownload = false;
+        installDownloaded(m_savedPath);
+    } else {
+        m_status->setText(QStringLiteral("已保存到 %1").arg(m_savedPath));
+    }
+}
+
+void UpdateDialog::installDownloaded(const QString& path)
+{
+    const QFileInfo info(path);
+    const QString suffix = info.suffix().toLower();
+
+    // Windows 安装包：直接拉起，装完由下次启动清理
+    if (suffix == QLatin1String("exe")) {
+        m_status->setText(QStringLiteral("已下载，正在启动安装程序…"));
+        if (!QProcess::startDetached(path, {})) {
+            m_status->setText(QStringLiteral("无法启动安装程序：%1").arg(path));
+            return;
+        }
+        QSettings().setValue(QStringLiteral("pendingInstaller"), path);
+        m_status->setText(QStringLiteral("安装程序已启动，按提示完成后会自动清理安装包"));
+        return;
+    }
+
+    // Debian 包：走 pkexec（弹一次授权框），装完删除
+    if (suffix == QLatin1String("deb")) {
+        const QString tool = QStandardPaths::findExecutable(QStringLiteral("pkexec"));
+        if (tool.isEmpty()) {
+            m_status->setText(QStringLiteral("未找到 pkexec，无法自动安装：%1").arg(path));
+            QDesktopServices::openUrl(QUrl::fromLocalFile(info.absolutePath()));
+            return;
+        }
+        m_status->setText(QStringLiteral("正在安装，请在授权窗口里确认…"));
+        QApplication::setOverrideCursor(Qt::WaitCursor);
+        QProcess process;
+        process.start(tool, {QStringLiteral("dpkg"), QStringLiteral("-i"), path});
+        const bool finished = process.waitForFinished(120000);
+        const int code = finished ? process.exitCode() : -1;
+        QApplication::restoreOverrideCursor();
+
+        if (finished && code == 0) {
+            QFile::remove(path);
+            m_status->setText(QStringLiteral("安装完成，安装包已删除。重新启动程序即可用新版本。"));
+        } else {
+            const QString detail = QString::fromLocal8Bit(process.readAllStandardError()).trimmed();
+            m_status->setText(QStringLiteral("安装未完成（退出码 %1）。安装包保留在：%2%3")
+                                  .arg(code)
+                                  .arg(path, detail.isEmpty() ? QString()
+                                                              : QStringLiteral("\n") + detail));
+        }
+        return;
+    }
+
+    // 便携包（tar.gz / zip）：不能自动覆盖正在运行的程序，打开所在文件夹让用户自己解压
+    m_status->setText(QStringLiteral("便携包已下载到 %1，解压后覆盖原目录即可").arg(path));
+    QDesktopServices::openUrl(QUrl::fromLocalFile(info.absolutePath()));
+}
+
+void UpdateDialog::cleanupPendingInstaller()
+{
+    QSettings settings;
+    const QString pending = settings.value(QStringLiteral("pendingInstaller")).toString();
+    if (pending.isEmpty())
+        return;
+    // 安装程序可能还在跑（文件被占用），删不掉就留着下次再试
+    if (!QFile::exists(pending) || QFile::remove(pending))
+        settings.remove(QStringLiteral("pendingInstaller"));
 }
 
 void UpdateDialog::abortDownload(const QString& reason)

@@ -1,5 +1,6 @@
 #include "csm_version.h"
 #include "ui/MainWindow.h"
+#include "ui/UpdateDialog.h"
 
 #include <QApplication>
 #include <QString>
@@ -84,6 +85,9 @@ int main(int argc, char* argv[])
     QFont font = app.font();
     font.setPointSizeF(10.0);
     app.setFont(font);
+
+    // 上次更新装完后没删掉的安装包，这里补删
+    csm::UpdateDialog::cleanupPendingInstaller();
 
     csm::MainWindow window;
     window.show();

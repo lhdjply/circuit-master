@@ -25,6 +25,7 @@
 #include <QValueAxis>
 #include <QTabWidget>
 #include <QDir>
+#include <QStandardPaths>
 #include <QJsonDocument>
 #include <QTemporaryDir>
 #include <QFileInfo>
@@ -50,6 +51,7 @@
 #include <QLineEdit>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QScopeGuard>
 #include <QSet>
 #include <QSignalSpy>
 #include <QTest>
@@ -62,6 +64,12 @@ class UiTest : public QObject {
 private slots:
     void updateDialogDownloadsPackage()
     {
+        // 不依赖外网：让下载直接打原始地址（file://）
+        UpdateChecker::setBuiltinMirrors({});
+        auto restore = qScopeGuard([] { UpdateChecker::setBuiltinMirrors(
+            {QStringLiteral("https://ghfast.top"), QStringLiteral("https://gh-proxy.org"),
+             QStringLiteral("https://ghproxy.net")}); });
+
         // 造一个本地「安装包」，用 file:// 直链模拟下载
         const QString payload = QStringLiteral("fake package bytes 1234567890");
         const QString source = QDir(QCoreApplication::applicationDirPath())
@@ -315,6 +323,59 @@ private slots:
         const Netlist net = scene->toCircuit().buildNetlist();
         QVERIFY2(net.valid, qPrintable(net.error));
         QCOMPARE(net.nodeOf(ground->component().id, 0), 0);
+    }
+
+    void updateDialogDownloadsToTempAndInstalls()
+    {
+        // 不依赖外网：让下载直接打原始地址（file://）
+        UpdateChecker::setBuiltinMirrors({});
+        auto restore = qScopeGuard([] { UpdateChecker::setBuiltinMirrors(
+            {QStringLiteral("https://ghfast.top"), QStringLiteral("https://gh-proxy.org"),
+             QStringLiteral("https://ghproxy.net")}); });
+
+        // 「下载并安装」：下到临时目录，下完调用安装流程，不再弹保存对话框
+        const QString payload = QStringLiteral("fake package bytes");
+        const QString source = QDir(QCoreApplication::applicationDirPath())
+                                   .filePath(QStringLiteral("shots/fake2.bin"));
+        QDir().mkpath(QFileInfo(source).absolutePath());
+        {
+            QFile file(source);
+            QVERIFY(file.open(QIODevice::WriteOnly));
+            file.write(payload.toUtf8());
+        }
+
+        ReleaseInfo release;
+        release.version = QStringLiteral("0.2.9");
+        release.tagName = QStringLiteral("v0.2.9");
+        release.pageUrl = QUrl(QStringLiteral("https://example.invalid"));
+        const QString localUrl = QUrl::fromLocalFile(source).toString();
+        for (const QString& name : {QStringLiteral("circuit-master_0.2.9_amd64.deb"),
+                                    QStringLiteral("circuit-master-0.2.9-linux-amd64.tar.gz"),
+                                    QStringLiteral("circuit-master-0.2.9-windows-x64-setup.exe"),
+                                    QStringLiteral("circuit-master-0.2.9-windows-arm64-setup.exe"),
+                                    QStringLiteral("circuit-master-0.2.9-windows-x64.zip")}) {
+            ReleaseAsset item;
+            item.name = name;
+            item.url = localUrl;
+            item.size = payload.toUtf8().size();
+            release.assets.append(item);
+        }
+
+        UpdateDialog dialog(release);
+        QVERIFY(!dialog.asset().name.isEmpty());
+
+        // 临时目录里下载（模拟「下载并安装」的落点）
+        const QString temp = QDir(QStandardPaths::writableLocation(QStandardPaths::TempLocation))
+                                 .filePath(dialog.asset().name);
+        QFile::remove(temp);
+        QSignalSpy spy(&dialog, &UpdateDialog::downloadFinished);
+        QVERIFY(dialog.downloadTo(temp));
+        QVERIFY(spy.wait(10000));
+        QVERIFY(QFile::exists(temp));
+        QCOMPARE(dialog.savedPath(), temp);
+        QVERIFY2(temp.startsWith(QStandardPaths::writableLocation(QStandardPaths::TempLocation)),
+                 qPrintable(temp));
+        QFile::remove(temp);
     }
 
     void opensFileFromCommandLinePath()

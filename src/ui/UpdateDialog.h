@@ -3,9 +3,9 @@
 // ---------------------------------------------------------------------------
 //  更新详情对话框
 //
-//  展示新版本信息（版本号、发布日期、Release 正文），并提供「下载安装包」：
-//  按当前系统与架构从清单里挑出对应的包，让用户选保存路径后直接下载，不必
-//  再去网页上手动找。装不装仍然由用户决定 —— 程序不会自我替换。
+//  展示新版本信息（版本号、发布日期、Release 正文），并提供「下载并安装」：
+//  按当前系统与架构从清单里挑出对应的包，下到临时目录，下完直接拉起安装程序，
+//  安装完成后删掉安装包（便携包无法自动装，改为打开所在文件夹）。
 //
 //  下载走和查版本相同的思路：先连直链，失败再依次试内置的 GitHub 转发服务。
 // ---------------------------------------------------------------------------
@@ -38,12 +38,16 @@ public:
 
     /// 直接下载到指定路径（不弹文件对话框）；返回是否已启动
     bool downloadTo(const QString& path);
+    /// 启动刚下好的安装包（exe 直接拉起、deb 走 pkexec，其余打开所在文件夹）
+    void installDownloaded(const QString& path);
+    /// 清理上次遗留的安装包（安装程序跑完后删不掉，下次启动再删）
+    static void cleanupPendingInstaller();
 
 signals:
     void downloadFinished(const QString& path);
 
 private:
-    void chooseAndDownload();
+    void chooseAndDownload();   // 下到临时目录并安装
     void startAttempt();
     void onReadyRead();
     void onFinished();
@@ -60,6 +64,7 @@ private:
     QNetworkAccessManager* m_net = nullptr;
     QNetworkReply* m_reply = nullptr;
     QSaveFile* m_file = nullptr;
+    bool m_installAfterDownload = false;
 
     QLabel* m_status = nullptr;
     QProgressBar* m_progress = nullptr;
