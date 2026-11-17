@@ -593,12 +593,212 @@ jobs:
           path: dist/*-setup.exe
           if-no-files-found: error
 
+  # macOS 包：一个 .dmg，里面是 CircuitMaster.app（已用 macdeployqt 带上 Qt 框架）。
+  # hdiutil 是系统自带工具，不需要额外安装；挂载后把 .app 拖进「应用程序」即可。
+  build-macos:
+    name: Package (macOS ${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-26
+            arch: arm64
+          - os: macos-26-intel
+            arch: x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Qt
+        run: |
+          brew install qt
+          prefix="$(brew --prefix qt)"
+          echo "QT_PREFIX=$prefix" >> "$GITHUB_ENV"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Qt version
+        run: |
+          if command -v qmake >/dev/null 2>&1; then
+            version="$(qmake -query QT_VERSION)"
+          else
+            version="$(qmake6 -query QT_VERSION)"
+          fi
+          echo "Qt $version（$QT_PREFIX）"
+          major=${version%%.*}
+          rest=${version#*.}
+          minor=${rest%%.*}
+          if [ "$major" -lt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -lt 5 ]; }; then
+            echo "::error::Qt >= 6.5 is required, found $version."
+            exit 1
+          fi
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCSM_BUILD_TESTS=OFF
+          -DCMAKE_PREFIX_PATH="$QT_PREFIX"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Verify the produced bundle
+        run: |
+          set -euo pipefail
+          exe="build/CircuitMaster.app/Contents/MacOS/CircuitMaster"
+          if [ ! -x "$exe" ]; then
+            echo "::error::$exe was not produced"
+            find build -maxdepth 4 -name 'CircuitMaster*' -print
+            exit 1
+          fi
+          # 版本号来自根目录 VERSION，产物上对一下（不一致说明 CMake 没重新配置）
+          "$exe" --version
+
+          # Info.plist 里的版本号也要跟上，否则「关于」与 Finder 里显示的是旧版本
+          plist="build/CircuitMaster.app/Contents/Info.plist"
+          if [ -f "$plist" ]; then
+            /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$plist" || true
+          fi
+
+      - name: Stage the package
+        run: |
+          set -euo pipefail
+          version=$(sed 's/^[vV]//' VERSION | tr -d '[:space:]')
+          # 架构来自 matrix（macos-26 → arm64、macos-26-intel → x64），
+          # 不靠 uname 猜：两者必须一致，否则包名会与 runner 对不上
+          arch="${{ matrix.arch }}"
+          actual="$(uname -m)"
+          case "$arch:$actual" in
+            arm64:arm64|x64:x86_64) ;;
+            *)
+              echo "::error::matrix arch is $arch but the runner reports $actual"
+              exit 1
+              ;;
+          esac
+          stage="dist/circuit-master-${version}-macos-${arch}"
+          mkdir -p "$stage"
+
+          cp -R build/CircuitMaster.app "$stage/"
+          cp README.md "$stage/README.md"
+          cp CHANGELOG.md "$stage/CHANGELOG.md"
+
+          echo "STAGE=$stage" >> "$GITHUB_ENV"
+          echo "PKG_VERSION=$version" >> "$GITHUB_ENV"
+          echo "PKG_ARCH=$arch" >> "$GITHUB_ENV"
+
+      # macdeployqt 把 Qt 框架与插件拷进 .app 内部，并改好 rpath；
+      # 目标机没装 Qt 也能双击运行。--no-codesign 跳过签名（CI 没有证书），
+      # 代价是首次打开要右键「打开」，这一点写进 README 的安装说明里。
+      - name: Deploy the Qt runtime (macdeployqt)
+        run: |
+          set -euo pipefail
+          deploy=$(ls "$QT_PREFIX"/bin/macdeployqt 2>/dev/null | head -1)
+          if [ -z "$deploy" ]; then
+            deploy=$(find "$QT_PREFIX" -maxdepth 3 -name macdeployqt | head -1)
+          fi
+          if [ -z "$deploy" ]; then
+            echo "::error::macdeployqt not found under $QT_PREFIX"
+            exit 1
+          fi
+          echo "using $deploy"
+
+          "$deploy" "$STAGE/CircuitMaster.app" -no-codesign
+
+          # 翻译不靠 macdeployqt：它只搬 Qt 库与插件。中文翻译包里的
+          # qtbase_zh_CN.qm 要自己放进 Contents/translations ——
+          # 程序启动时会到那里找（见 ui/I18n.cpp）
+          qm=""
+          for candidate in \
+            "$QT_PREFIX/share/qt6/translations/qtbase_zh_CN.qm" \
+            "$QT_PREFIX/share/qt/translations/qtbase_zh_CN.qm" \
+            "$("$QT_PREFIX/bin/qmake" -query QT_INSTALL_TRANSLATIONS 2>/dev/null)/qtbase_zh_CN.qm"; do
+            if [ -f "$candidate" ]; then
+              qm="$candidate"
+              break
+            fi
+          done
+          if [ -z "$qm" ]; then
+            echo "::warning::qtbase_zh_CN.qm not found; the UI will fall back to English standard widgets"
+          else
+            echo "using $qm"
+            mkdir -p "$STAGE/CircuitMaster.app/Contents/translations"
+            cp "$qm" "$STAGE/CircuitMaster.app/Contents/translations/"
+          fi
+
+      # 部署完再查一遍：.app 里必须真的有 QtCore，否则解压到目标机就是闪退
+      - name: Verify the deployed bundle
+        run: |
+          set -euo pipefail
+          app="$STAGE/CircuitMaster.app"
+          frameworks="$app/Contents/Frameworks"
+          if [ ! -d "$frameworks" ]; then
+            echo "::error::$frameworks is missing; macdeployqt did not run"
+            exit 1
+          fi
+          for lib in QtCore QtGui QtWidgets QtCharts QtSvg QtNetwork; do
+            if ! ls "$frameworks" | grep -q "^${lib}"; then
+              echo "::error::$lib.framework is missing from the bundle"
+              ls "$frameworks"
+              exit 1
+            fi
+          done
+          echo "frameworks:"
+          ls "$frameworks"
+          echo "bundle size: $(du -sh "$app" | cut -f1)"
+
+      # 只出 .dmg：macOS 用户的习惯做法是挂载后把 .app 拖进「应用程序」。
+      # hdiutil 是系统自带的，不需要额外装工具；UDZO 是压缩的只读镜像。
+      # 不加 --internet-enable（已废弃）也不做签名 —— CI 没有证书，
+      # 代价是首次打开要右键「打开」，这一点写进 README 的安装说明。
+      - name: Pack the dmg
+        run: |
+          set -euo pipefail
+          name="circuit-master-${PKG_VERSION}-macos-${PKG_ARCH}.dmg"
+          rm -f "dist/${name}"
+
+          hdiutil create \
+            -volname "CircuitMaster ${PKG_VERSION}" \
+            -srcfolder "$STAGE" \
+            -fs HFS+ \
+            -format UDZO \
+            -ov \
+            "dist/${name}"
+
+          ls -lh "dist/${name}"
+          if [ "$(stat -f%z "dist/${name}")" -lt 5242880 ]; then
+            echo "::error::the dmg looks too small; Qt frameworks were probably not deployed"
+            exit 1
+          fi
+
+          # 挂起来再看一眼：镜像里必须真有 .app，否则发出去的是个空壳
+          mountpoint=$(mktemp -d)
+          hdiutil attach "dist/${name}" -mountpoint "$mountpoint" -nobrowse -readonly >/dev/null
+          if [ ! -d "$mountpoint/CircuitMaster.app" ]; then
+            echo "::error::CircuitMaster.app is missing from the dmg"
+            ls -la "$mountpoint"
+            hdiutil detach "$mountpoint" || true
+            exit 1
+          fi
+          echo "dmg contents:"
+          ls -1 "$mountpoint"
+          hdiutil detach "$mountpoint" >/dev/null
+
+      - name: Upload macOS dmg
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.APP_NAME }}_macos_${{ matrix.arch }}_dmg
+          path: dist/*-macos-*.dmg
+          if-no-files-found: error
+
   create-release:
     name: Publish release
     runs-on: ubuntu-26.04
-    needs: [build-deb, build-windows]
-    # PR 只验证各平台能不能打包（Linux amd64/arm64/loong64/riscv64 + Windows x64/arm64），
-    # 不建 Release
+    needs: [build-deb, build-windows, build-macos]
+    # PR 只验证各平台能不能打包（Linux amd64/arm64/loong64/riscv64 + Windows x64/arm64
+    # + macOS arm64），不建 Release
     if: github.event_name != 'pull_request'
 
     # 所有分支 / 标签的发布都会去删改同一个 continuous_build tag，
@@ -625,7 +825,7 @@ jobs:
           cd artifacts
           > hashes.sha256
           # 格式统一为「哈希 *文件名」，Linux 侧可直接 sha256sum -c 校验
-          for file in $(find . -type f \( -name "*.deb" -o -name "*.tar.gz" -o -name "*.zip" -o -name "*-setup.exe" \)); do
+          for file in $(find . -type f \( -name "*.deb" -o -name "*.tar.gz" -o -name "*.zip" -o -name "*-setup.exe" -o -name "*.dmg" \)); do
             filename=$(basename "$file")
             sha256sum "$file" | awk -v fname="$filename" '{print $1 " *" fname}' >> hashes.sha256
           done
@@ -730,7 +930,7 @@ jobs:
           assets = []
           for root, _dirs, files in os.walk("artifacts"):
               for name in sorted(files):
-                  if not name.endswith((".deb", ".tar.gz", ".zip", "-setup.exe")):
+                  if not name.endswith((".deb", ".tar.gz", ".zip", "-setup.exe", ".dmg")):
                       continue
                   if name.endswith((".sha256", ".dbgsym.deb", ".build-deps.deb")):
                       continue
@@ -768,6 +968,7 @@ jobs:
           tar_files=$(find artifacts -name "*.tar.gz" -print0 | xargs -0 echo)
           zip_files=$(find artifacts -name "*.zip" -print0 | xargs -0 echo)
           setup_files=$(find artifacts -name "*-setup.exe" -print0 | xargs -0 echo)
+          dmg_files=$(find artifacts -name "*-macos-*.dmg" -print0 | xargs -0 echo)
           hash_files=$(find artifacts -name "*.sha256" -print0 | xargs -0 echo)
 
           if [ -z "$deb_files" ]; then
@@ -827,6 +1028,17 @@ jobs:
             echo "::warning::The Windows arm64 installer (setup.exe) is missing; the portable zip is still published."
           fi
 
+          # macOS 产物缺失时与 Windows 同样的策略：正式版必须带，持续构建只警告。
+          # 一个 zip 就是整个 macOS 平台（里面是 .app），没有安装包/便携包之分。
+          if [ -z "$dmg_files" ]; then
+            if [ "${{ github.ref_type }}" == "tag" ]; then
+              echo "::error::The macOS package is missing from a tagged release; check the 'Package (macOS)' job."
+              exit 1
+            else
+              echo "::warning::The macOS package is missing; publishing the other platforms only."
+            fi
+          fi
+
           # 清单只有正式版才生成；持续构建时为空，展开成空参数不影响命令
           manifest_file=""
           if [ -f "$RUNNER_TEMP/latest.json" ]; then
@@ -848,6 +1060,7 @@ jobs:
                             $tar_files \
                             $zip_files \
                             $setup_files \
+                            $dmg_files \
                             $hash_files \
                             $manifest_file \
                             ${{ env.PRERELEASE }} \

@@ -97,6 +97,88 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  # macOS 用 Homebrew 的 qt 公式：它已经把 Base / Charts / Svg / Test 与中文翻译
+  # 一起装好，和 Linux 用发行版 Qt、Windows 用 MSYS2 的思路一致（都走包管理器，
+  # 版本跟着上游走），不必为 CI 下载 Qt 官方安装包。
+  #
+  # 用 macos-26-intel（x64）：测试只要有一个 macOS 架构跑通即可，
+  # 打包（release.yaml）那边才区分 arm64 / x64 两个架构。
+  test-macos:
+    name: Test (macOS)
+    runs-on: macos-26-intel
+
+    env:
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Qt
+        run: |
+          # brew 里 Qt 6 就叫 qt（qt@5 才是 Qt 5）
+          brew install qt
+          prefix="$(brew --prefix qt)"
+          echo "QT_PREFIX=$prefix" >> "$GITHUB_ENV"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Qt version
+        run: |
+          # 不同版本的公式装的是 qmake 或 qmake6，两个都试
+          if command -v qmake >/dev/null 2>&1; then
+            version="$(qmake -query QT_VERSION)"
+          else
+            version="$(qmake6 -query QT_VERSION)"
+          fi
+          echo "Qt $version（$QT_PREFIX）"
+
+          # CMakeLists 里要求 Qt 6.5+，太旧时在这里明确失败，
+          # 否则报出来的会是 "no member named ..."，看起来像代码写错了
+          major=${version%%.*}
+          rest=${version#*.}
+          minor=${rest%%.*}
+          if [ "$major" -lt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -lt 5 ]; }; then
+            echo "::error::Qt >= 6.5 is required, found $version."
+            exit 1
+          fi
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCSM_BUILD_TESTS=ON
+          -DCMAKE_PREFIX_PATH="$QT_PREFIX"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run tests
+        run: |
+          # 失败时用 --rerun-failed -V 重跑失败用例：QtTest 的断言位置只在
+          # 详细输出里才有，单看 "Failed" 那一行定位不到代码
+          set +e
+          ctest --test-dir build --output-on-failure 2>&1 | tee build/ctest-run.log
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo
+            echo "########## Rerunning failed tests (verbose) ##########"
+            ctest --test-dir build --rerun-failed -V 2>&1 | tee -a build/ctest-run.log || true
+            echo "########## LastTest.log ##########"
+            cat build/Testing/Temporary/LastTest.log 2>/dev/null || true
+            echo "######################################################"
+          fi
+          exit "$status"
+
+      - name: Upload test log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ctest-log-macos
+          path: build/ctest-run.log
+          if-no-files-found: ignore
+          retention-days: 7
+
   # Windows 走 MSYS2 / MinGW（UCRT64），工具链选择理由见 build.yaml 里的同名作业。
   #
   # 两个用例都是 QtTest，不碰网络、不需要 root；test_ui 会构造 QWidget 并截图，

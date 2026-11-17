@@ -252,3 +252,58 @@ jobs:
               exit 1
               ;;
           esac
+
+  # macOS 同样走包管理器（Homebrew 的 qt 公式），理由见 test.yaml 里的同名作业。
+  # 这里只验证「能不能编出来」，不做打包 —— 打包在 release.yaml 里。
+  build-macos:
+    name: Build (macOS)
+    runs-on: macos-26-intel
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Qt
+        run: |
+          brew install qt
+          prefix="$(brew --prefix qt)"
+          echo "QT_PREFIX=$prefix" >> "$GITHUB_ENV"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Qt version
+        run: |
+          if command -v qmake >/dev/null 2>&1; then
+            version="$(qmake -query QT_VERSION)"
+          else
+            version="$(qmake6 -query QT_VERSION)"
+          fi
+          echo "Qt $version（$QT_PREFIX）"
+          major=${version%%.*}
+          rest=${version#*.}
+          minor=${rest%%.*}
+          if [ "$major" -lt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -lt 5 ]; }; then
+            echo "::error::Qt >= 6.5 is required, found $version."
+            exit 1
+          fi
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCSM_BUILD_TESTS=OFF
+          -DCMAKE_PREFIX_PATH="$QT_PREFIX"
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Verify the produced executable
+        run: |
+          # MACOSX_BUNDLE 打开后产物在 .app 里，不是 build/ 下的裸可执行文件
+          exe="build/${BINARY}.app/Contents/MacOS/${BINARY}"
+          if [ ! -x "$exe" ]; then
+            echo "::error::$exe was not produced"
+            find build -maxdepth 4 -name "$BINARY*" -print
+            exit 1
+          fi
+          # 版本号来自根目录 VERSION 文件，产物上对一下
+          "$exe" --version

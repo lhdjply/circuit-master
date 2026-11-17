@@ -1906,7 +1906,9 @@ private slots:
         };
         QCOMPARE(formats(HostPlatform::Linux, InstallKind::System).size(), 2);
         QCOMPARE(formats(HostPlatform::Windows, InstallKind::System).size(), 2);
-        QVERIFY(formats(HostPlatform::MacOS, InstallKind::System).isEmpty());
+        // macOS 只有带 .app 的 dmg 一种形态
+        QCOMPARE(formats(HostPlatform::MacOS, InstallKind::System).size(), 1);
+        QCOMPARE(formats(HostPlatform::MacOS, InstallKind::Portable).size(), 1);
 
         // 便携版运行时要优先给便携包，和安装方式保持一致
         QCOMPARE(formats(HostPlatform::Linux, InstallKind::System).first(), PackageFormat::Deb);
@@ -1934,9 +1936,17 @@ private slots:
         QCOMPARE(UpdateChecker::suffixFor(HostPlatform::Windows, HostArch::Amd64,
                                           PackageFormat::PortableZip),
                  QStringLiteral("-windows-x64.zip"));
+        QCOMPARE(UpdateChecker::suffixFor(HostPlatform::MacOS, HostArch::Arm64,
+                                          PackageFormat::MacDmg),
+                 QStringLiteral("-macos-arm64.dmg"));
+        QCOMPARE(UpdateChecker::suffixFor(HostPlatform::MacOS, HostArch::Amd64,
+                                          PackageFormat::MacDmg),
+                 QStringLiteral("-macos-x64.dmg"));
         // 平台与形态不匹配时没有后缀
         QVERIFY(UpdateChecker::suffixFor(HostPlatform::Linux, HostArch::Amd64,
                                          PackageFormat::SetupExe).isEmpty());
+        QVERIFY(UpdateChecker::suffixFor(HostPlatform::Windows, HostArch::Amd64,
+                                         PackageFormat::MacDmg).isEmpty());
 
         // 同一平台两种形态都要能列出来
         const auto linuxPackages = UpdateChecker::hostPackagesFor(

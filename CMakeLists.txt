@@ -165,7 +165,24 @@ qt_add_executable(CircuitMaster
 )
 # OBJECT 库的对象文件不会自动跟着依赖传递，这里显式把两个都列上
 target_link_libraries(CircuitMaster PRIVATE csm_ui csm_core)
-set_target_properties(CircuitMaster PROPERTIES WIN32_EXECUTABLE TRUE MACOSX_BUNDLE TRUE)
+# WIN32_EXECUTABLE 在非 Windows 上无副作用，MACOSX_BUNDLE 同理。
+# macOS 的 .app 需要显式给出 bundle 版本，否则 Info.plist 里是空的，
+# Finder 的「显示简介」与「关于」都看不到版本号。
+set_target_properties(CircuitMaster PROPERTIES
+    WIN32_EXECUTABLE TRUE
+    MACOSX_BUNDLE TRUE
+    MACOSX_BUNDLE_BUNDLE_NAME "CircuitMaster"
+    MACOSX_BUNDLE_GUI_IDENTIFIER "io.github.lhdjply.circuitmaster"
+    MACOSX_BUNDLE_BUNDLE_VERSION "${CSM_VERSION_NUMBER}"
+    MACOSX_BUNDLE_SHORT_VERSION_STRING "${CSM_VERSION_NUMBER}"
+    MACOSX_BUNDLE_ICON_FILE "circuit-master.icns"
+)
+# 图标本身要作为资源进 .app，只写 Info.plist 的名字 Finder 找不到文件
+if(APPLE)
+    set_source_files_properties(resources/mac/circuit-master.icns PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources")
+    target_sources(CircuitMaster PRIVATE resources/mac/circuit-master.icns)
+endif()
 
 # Windows 的 exe 图标与版本信息来自 PE 资源段：qrc 里的图标只作用于运行期窗口，
 # 资源管理器里看到的图标要靠 .rc 编译进可执行文件。

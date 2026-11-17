@@ -25,6 +25,11 @@ void installQtTranslations(QCoreApplication* app)
     const QStringList dirs = {
         QLibraryInfo::path(QLibraryInfo::TranslationsPath),
         QCoreApplication::applicationDirPath() + QStringLiteral("/translations"),
+#ifdef Q_OS_MACOS
+        // .app 里更常见的放法是 Contents/Resources/translations，
+        // 打包脚本往那里放时也能找到
+        QCoreApplication::applicationDirPath() + QStringLiteral("/../Resources/translations"),
+#endif
     };
     for (const QString& dir : dirs) {
         auto* translator = new QTranslator(app);

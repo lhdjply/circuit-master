@@ -179,6 +179,10 @@ QVector<PackageFormat> UpdateChecker::formatsFor(HostPlatform platform, InstallK
         return kind == InstallKind::Portable
             ? QVector<PackageFormat>{PackageFormat::PortableZip, PackageFormat::SetupExe}
             : QVector<PackageFormat>{PackageFormat::SetupExe, PackageFormat::PortableZip};
+    case HostPlatform::MacOS:
+        // macOS 只有一种形态：带 .app 的 dmg。挂载后把 .app 拖进「应用程序」，
+        // 所以安装方式（系统/便携）在这里没有区别。
+        return QVector<PackageFormat>{PackageFormat::MacDmg};
     default:
         return {};
     }
@@ -228,6 +232,18 @@ QString UpdateChecker::suffixFor(HostPlatform platform, HostArch arch, PackageFo
         if (platform != HostPlatform::Windows || winArch(arch).isEmpty())
             return QString();
         return QStringLiteral("-windows-%1.zip").arg(winArch(arch));
+    case PackageFormat::MacDmg: {
+        if (platform != HostPlatform::MacOS)
+            return QString();
+        // 发布脚本里 macOS 的架构写法与 Windows 一致：arm64 / x64
+        QString name;
+        switch (arch) {
+        case HostArch::Arm64: name = QStringLiteral("arm64"); break;
+        case HostArch::Amd64: name = QStringLiteral("x64"); break;
+        default: return QString();
+        }
+        return QStringLiteral("-macos-%1.dmg").arg(name);
+    }
     }
     return QString();
 }
