@@ -1,3 +1,12 @@
+circuit-master (0.3.1) unstable; urgency=medium
+
+  * 修复下载安装包卡住：连得上却不吐数据的镜像会一直等，现在按吞吐量换地址。
+  * 镜像改成按下载速度排序，去掉常年超时的 ghproxy.net 与 axisnow。
+  * 下载界面显示当前地址、实时速度、已下载/总量与剩余时间。
+  * 修复节点名里的网络标签时有时无。
+
+ -- Circuit Master Maintainers <lhdjply@users.noreply.github.com>  Tue, 17 Nov 2026 15:50:00 +0800
+
 circuit-master (0.3.0) unstable; urgency=medium
 
   * 新增万用表 XMM：电压 / 电流 / 电阻 / 交流电压 / 交流电流五档位，
