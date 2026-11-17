@@ -1044,6 +1044,103 @@ private slots:
         QVERIFY2(props->findChild<QStackedWidget*>()->isVisible(), "选中元件后表单应当显示");
     }
 
+    void yAxisAlwaysCoversTheData()
+    {
+        // applyFixedTicks 先按范围/6 取漂亮步长、再定上下限。以前上限写成
+        // 「下限 + 步长×6」，不保证装得下数据：-891…587 mV 会得到 -1000…500 mV，
+        // 波峰超出 500 的部分被图表裁平，看起来像「幅值不对」。
+        // 现在上下限各自向外取整到刻度线，数据必须完整落在轴范围内。
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        // 方波源 + 一级 RC（τ 与半周期同量级，波形会有明显的非对称峰谷）
+        auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 300));
+        source->setRotationAngle(90);
+        Component src = source->component();
+        src.function = SourceFunction::Pulse;
+        src.pulseV1 = 0.0;
+        src.pulseV2 = 3.3;
+        src.pulsePeriod = 0.001;
+        src.pulseWidth = 0.0005;
+        source->setComponent(src);
+
+        auto* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(250, 200));
+        Component r = resistor->component();
+        r.value = 5100.0;
+        resistor->setComponent(r);
+
+        auto* cap = scene->placeComponent(ComponentType::Capacitor, QPointF(250, 350));
+        cap->setRotationAngle(270);
+        Component cc = cap->component();
+        cc.value = 10e-6;
+        cap->setComponent(cc);
+
+        auto* probe = scene->placeComponent(ComponentType::Probe, QPointF(400, 200));
+        QVERIFY(probe);
+        scene->placeComponent(ComponentType::Ground, QPointF(100, 420));
+        scene->addWire({QPointF(100, 270), QPointF(100, 200), QPointF(220, 200)});
+        scene->addWire({QPointF(280, 200), QPointF(400, 200)});
+        scene->addWire({QPointF(250, 230), QPointF(250, 320)});
+        scene->addWire({QPointF(100, 330), QPointF(100, 420)});
+        scene->addWire({QPointF(250, 380), QPointF(250, 420), QPointF(100, 420)});
+        settle();
+
+        window.runSimulation();
+        settle();
+        QAction* monitor = window.findChild<QAction*>(QStringLiteral("actMonitor"));
+        QVERIFY(monitor);
+        monitor->setChecked(true);
+        settle();
+        QTabWidget* tabs = waveTabs(window);
+        QVERIFY(tabs);
+        tabs->setCurrentIndex(0);
+        settle();
+
+        auto* plot = qobject_cast<WaveformWindow*>(tabs->widget(0));
+        QVERIFY(plot);
+        auto* view = plot->findChild<QChartView*>();
+        QChart* chart = view ? view->chart() : nullptr;
+        QVERIFY(chart);
+
+        // 数据范围（图内单位已乘工程倍率，与轴一致，可直接比较）
+        double lo = std::numeric_limits<double>::max();
+        double hi = -std::numeric_limits<double>::max();
+        const QList<QAbstractSeries*> seriesList = chart->series();
+        QVERIFY2(!seriesList.isEmpty(), "应当画出了波形");
+        for (QAbstractSeries* series : seriesList) {
+            auto* line = qobject_cast<QLineSeries*>(series);
+            if (!line)
+                continue;
+            for (int i = 0; i < line->count(); ++i) {
+                const double v = line->at(i).y();
+                lo = std::min(lo, v);
+                hi = std::max(hi, v);
+            }
+        }
+        QVERIFY2(hi > lo, "波形应当有起伏");
+
+        for (QAbstractAxis* axis : chart->axes()) {
+            auto* value = qobject_cast<QValueAxis*>(axis);
+            if (!value)
+                continue;
+            if (axis->alignment() != Qt::AlignLeft && axis->alignment() != Qt::AlignRight)
+                continue;
+            QVERIFY2(value->min() <= lo + std::abs(lo) * 1e-9,
+                     qPrintable(QStringLiteral("轴下限 %1 高于数据 %2")
+                                    .arg(value->min())
+                                    .arg(lo)));
+            QVERIFY2(value->max() >= hi - std::abs(hi) * 1e-9,
+                     qPrintable(QStringLiteral("轴上限 %1 低于数据 %2（波峰被裁掉）")
+                                    .arg(value->max())
+                                    .arg(hi)));
+        }
+    }
+
     void transformerHasFourPinsAndPanel()
     {
         MainWindow window;

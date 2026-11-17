@@ -94,9 +94,15 @@ void applyFixedTicks(QValueAxis* axis, double lo, double hi, int divisions)
         step = 5.0;
     step *= magnitude;
 
+    // 上下限分别向外取整到刻度线上。以前上限写成「下限 + step × divisions」，
+    // 除以 6 得到的漂亮步长并不保证能装下数据：例如 -891.84…586.74 mV
+    // 会得到 -1000…500 mV，波峰超过 500 的部分就被图表裁平了。
     const double min = std::floor(lo / step) * step;
-    axis->setRange(min, min + step * divisions);
-    axis->setTickCount(divisions + 1);
+    const double max = std::ceil(hi / step) * step;
+    axis->setRange(min, max);
+    // divisions 只用于挑漂亮步长，实际格数随向外取整的边界增减。
+    const int tickCount = std::max(2, int(std::lround((max - min) / step)) + 1);
+    axis->setTickCount(tickCount);
 }
 
 
