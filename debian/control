@@ -17,6 +17,7 @@ Depends:
  ${shlibs:Depends},
  ${misc:Depends},
  qt6-qpa-plugins,
+ qt6-translations-l10n,
 Description: schematic editor and circuit simulator built with Qt6
  Circuit Master is a cross-platform schematic editor and
  circuit simulator written in C++17 with Qt6.

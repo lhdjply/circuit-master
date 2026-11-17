@@ -1,8 +1,10 @@
 #include "csm_version.h"
+#include "ui/I18n.h"
 #include "ui/MainWindow.h"
 #include "ui/UpdateDialog.h"
 
 #include <QApplication>
+
 #include <QString>
 
 #include <cstdio>
@@ -66,6 +68,9 @@ int main(int argc, char* argv[])
     QApplication::setApplicationName(QStringLiteral("电路仿真大师"));
     QApplication::setApplicationVersion(QStringLiteral(CSM_VERSION_NUMBER));
     QApplication::setOrganizationName(QStringLiteral("CircuitMaster"));
+
+    // Qt 自带控件的中文（输入框右键菜单、标准按钮等）
+    csm::installQtTranslations(&app);
 
     if (QStyle* fusion = QStyleFactory::create(QStringLiteral("Fusion")))
         QApplication::setStyle(fusion);

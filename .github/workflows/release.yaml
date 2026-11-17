@@ -318,9 +318,10 @@ jobs:
           # --compiler-runtime   带上 libstdc++ / libgcc / libwinpthread：
           #                      目标机没有 MSYS2，缺一个就是双击没反应
           # --no-opengl-sw       不发 ~20MB 的软件光栅化器，纯 Widgets 用不到
-          # --no-translations    界面文案全部编在 exe 里，暂无 Qt 自带目录翻译需求
+          # --translations zh_CN 带上 Qt 自带控件的中文翻译（输入框右键菜单、
+          #                      标准按钮等），程序启动时会从 translations/ 加载
           "$deploy" --release --compiler-runtime \
-                    --no-opengl-sw --no-translations \
+                    --no-opengl-sw --translations zh_CN \
                     --dir "$STAGE" "$STAGE/CircuitMaster.exe"
 
       # 补齐后还缺的：lib* / Qt6* 只可能来自 MSYS2，缺了就是把包打漏了，

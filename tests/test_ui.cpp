@@ -1,4 +1,5 @@
 #include "csm_version.h"
+#include "ui/I18n.h"
 #include "ui/MainWindow.h"
 #include "ui/Symbols.h"
 #include "csm_platform.h"
@@ -49,6 +50,7 @@
 #include <QListWidget>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QScopeGuard>
@@ -62,6 +64,12 @@ class UiTest : public QObject {
     Q_OBJECT
 
 private slots:
+    void initTestCase()
+    {
+        // 和 main.cpp 一样装上 Qt 自带的中文翻译（输入框右键菜单等）
+        csm::installQtTranslations(qApp);
+    }
+
     void updateDialogDownloadsPackage()
     {
         // 不依赖外网：让下载直接打原始地址（file://）
@@ -69,7 +77,6 @@ private slots:
         auto restore = qScopeGuard([] { UpdateChecker::setBuiltinMirrors(
             {QStringLiteral("https://ghfast.top"), QStringLiteral("https://gh-proxy.org"),
              QStringLiteral("https://ghproxy.net")}); });
-
         // 造一个本地「安装包」，用 file:// 直链模拟下载
         const QString payload = QStringLiteral("fake package bytes 1234567890");
         const QString source = QDir(QCoreApplication::applicationDirPath())
@@ -280,6 +287,29 @@ private slots:
         QVERIFY(!live->isLive());
     }
 
+    void builtinMenusAreChinese()
+    {
+        // Qt 自带控件（输入框右键菜单）也要是中文，靠启动时装的 qtbase_zh_CN
+        QLineEdit edit;
+        edit.setText(QStringLiteral("abc"));
+        edit.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&edit) || edit.isVisible());
+        settle();
+
+        QScopedPointer<QMenu> menu(edit.createStandardContextMenu());
+        QVERIFY(menu);
+        QStringList texts;
+        for (QAction* action : menu->actions())
+            if (!action->isSeparator())
+                texts.append(action->text());
+        QVERIFY2(!texts.isEmpty(), "右键菜单应当有内容");
+
+        const QString joined = texts.join(QLatin1Char('|'));
+        QVERIFY2(joined.contains(QStringLiteral("复制")), qPrintable(joined));
+        QVERIFY2(joined.contains(QStringLiteral("粘贴")), qPrintable(joined));
+        QVERIFY2(!joined.contains(QStringLiteral("Copy")), qPrintable(joined));
+    }
+
     void groundCanBeRotated()
     {
         MainWindow window;
@@ -327,12 +357,10 @@ private slots:
 
     void updateDialogDownloadsToTempAndInstalls()
     {
-        // 不依赖外网：让下载直接打原始地址（file://）
         UpdateChecker::setBuiltinMirrors({});
         auto restore = qScopeGuard([] { UpdateChecker::setBuiltinMirrors(
             {QStringLiteral("https://ghfast.top"), QStringLiteral("https://gh-proxy.org"),
              QStringLiteral("https://ghproxy.net")}); });
-
         // 「下载并安装」：下到临时目录，下完调用安装流程，不再弹保存对话框
         const QString payload = QStringLiteral("fake package bytes");
         const QString source = QDir(QCoreApplication::applicationDirPath())

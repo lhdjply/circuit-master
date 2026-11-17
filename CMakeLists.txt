@@ -106,7 +106,10 @@ configure_file(
 include_directories("${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 # ---------------------------------------------------------------- 核心引擎
-add_library(csm_core STATIC
+# 用 OBJECT 库而不是 STATIC：源码只编译一次，对象文件直接并进最终可执行文件，
+# 构建目录里不再产出 libcsm_core.a / libcsm_ui.a 这类中间产物。
+# 测试目标同样链接这两个对象库（每个目标各拿一份对象文件）。
+add_library(csm_core OBJECT
     src/core/Units.cpp
     src/core/Component.cpp
     src/core/Netlist.cpp
@@ -120,6 +123,7 @@ target_compile_options(csm_core PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
 # ---------------------------------------------------------------- 图形界面
 set(CSM_UI_SOURCES
+    src/ui/I18n.cpp
     src/ui/Symbols.cpp
     src/ui/ComponentItem.cpp
     src/ui/WireItem.cpp
@@ -131,6 +135,7 @@ set(CSM_UI_SOURCES
     src/ui/MainWindow.cpp
 )
 set(CSM_UI_HEADERS
+    src/ui/I18n.h
     src/ui/Symbols.h
     src/ui/ComponentItem.h
     src/ui/WireItem.h
@@ -142,7 +147,7 @@ set(CSM_UI_HEADERS
     src/ui/MainWindow.h
 )
 
-add_library(csm_ui STATIC ${CSM_UI_SOURCES} ${CSM_UI_HEADERS})
+add_library(csm_ui OBJECT ${CSM_UI_SOURCES} ${CSM_UI_HEADERS})
 target_link_libraries(csm_ui PUBLIC csm_core Qt6::Widgets Qt6::Charts Qt6::Svg)
 target_compile_options(csm_ui PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
@@ -158,7 +163,8 @@ qt_add_executable(CircuitMaster
     src/main.cpp
     ${CSM_RESOURCES}
 )
-target_link_libraries(CircuitMaster PRIVATE csm_ui)
+# OBJECT 库的对象文件不会自动跟着依赖传递，这里显式把两个都列上
+target_link_libraries(CircuitMaster PRIVATE csm_ui csm_core)
 set_target_properties(CircuitMaster PROPERTIES WIN32_EXECUTABLE TRUE MACOSX_BUNDLE TRUE)
 
 # Windows 的 exe 图标与版本信息来自 PE 资源段：qrc 里的图标只作用于运行期窗口，
@@ -185,7 +191,7 @@ if (CSM_BUILD_TESTS AND TARGET Qt6::Test)
     add_executable(test_ui tests/test_ui.cpp ${CSM_RESOURCES})
     target_compile_definitions(test_ui PRIVATE
         CSM_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-    target_link_libraries(test_ui PRIVATE csm_ui Qt6::Test)
+    target_link_libraries(test_ui PRIVATE csm_ui csm_core Qt6::Test)
     add_test(NAME ui COMMAND test_ui)
     # 关掉启动时的更新检查：用例不该依赖网络
     set_tests_properties(ui PROPERTIES ENVIRONMENT
