@@ -525,7 +525,7 @@ void SchematicScene::mergeWireWithNeighbors(WireItem* wire)
     }
 
     // 点是否落在导线上（端点、顶点或某段中间）
-    const auto liesOn = [&keyOf](const QVector<QPointF>& pts, const QPointF& point) {
+    const auto liesOn = [](const QVector<QPointF>& pts, const QPointF& point) {
         for (int i = 0; i < pts.size(); ++i) {
             if (QLineF(pts.at(i), point).length() <= 0.5)
                 return true;
@@ -547,7 +547,7 @@ void SchematicScene::mergeWireWithNeighbors(WireItem* wire)
         return false;
     };
     // 点是否在这根导线的「内部」（不是它能当端点的位置）
-    const auto passesThrough = [&keyOf](const QVector<QPointF>& pts, const QPointF& point) {
+    const auto passesThrough = [](const QVector<QPointF>& pts, const QPointF& point) {
         if (pts.size() < 2)
             return false;
         if (QLineF(pts.first(), point).length() <= 0.5

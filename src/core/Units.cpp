@@ -7,8 +7,6 @@ namespace csm {
 
 namespace {
 
-constexpr double kPi = 3.14159265358979323846;
-
 struct PrefixEntry {
     const char* text;
     double factor;
