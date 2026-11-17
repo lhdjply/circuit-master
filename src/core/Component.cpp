@@ -309,6 +309,7 @@ QString Component::unitName() const
     case ComponentType::Igbt:
     case ComponentType::Optocoupler:
     case ComponentType::Tl431:
+    case ComponentType::Ob2362:
     case ComponentType::Transformer:   return QStringLiteral("V");
     case ComponentType::Switch:        return QStringLiteral("Ω");
     case ComponentType::Probe:
@@ -411,6 +412,10 @@ QString Component::spiceValueSpec() const
     case ComponentType::Diode:
         return QStringLiteral("D1N4148");
 
+    case ComponentType::Led:
+        // 与 Diode 一样是器件行，模型卡由 toSpiceNetlist 生成 .model DLED
+        return QStringLiteral("DLED");
+
     case ComponentType::OpAmp:
         return spiceNumber(value);
 
@@ -443,6 +448,10 @@ QString Component::spiceValueSpec() const
         }
         return QStringLiteral("DC 0");
     }
+
+    case ComponentType::Ob2362:
+        // SPICE 里没有对应模型，toSpiceNetlist 只留一行注释
+        return QString();
 
     case ComponentType::Probe:
     case ComponentType::CurrentProbe:

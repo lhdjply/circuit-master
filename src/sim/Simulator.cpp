@@ -887,6 +887,9 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
                 current = (std::max(comp.value, 1e-15) / h)
                     * (v - st.capV.value(comp.id, 0.0));
             break;
+        case ComponentType::Ground:
+            // 接地符号本身没有电流可采
+            break;
         case ComponentType::Inductor:
         case ComponentType::Transformer:
         case ComponentType::Ob2362:
@@ -1141,8 +1144,6 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
             const int nk = p.nodeOf(comp.id, 2);
             const double vref0 = comp.value > 0.5 ? comp.value : 2.495;
             const double vref = st.tlVref.value(comp.id, 0.0);
-            constexpr double kTlIs = 1e-6;
-            constexpr double kTlNvt = 0.05;
             constexpr double kTlGain = 100.0;
             const double g = vref > vref0 ? kTlGain : 0.0;
             addVccs(a, nk, na, nr, na, Cx(g, 0.0));

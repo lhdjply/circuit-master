@@ -926,7 +926,7 @@ private slots:
         const Signal* out = result.signal(QStringLiteral("V(%1)").arg(net.nodeOf(tp->id, 0)));
         QVERIFY(out);
         double peak = 0.0;
-        for (size_t i = out->y.size() / 2; i < out->y.size(); ++i)
+        for (qsizetype i = out->y.size() / 2; i < out->y.size(); ++i)
             peak = std::max(peak, out->y[i]);
         QVERIFY2(peak > 10.0 && peak < 14.0,
                  qPrintable(QStringLiteral("输出 %1 V").arg(peak)));
