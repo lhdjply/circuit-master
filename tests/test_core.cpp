@@ -1514,6 +1514,92 @@ private slots:
         QVERIFY2(r3.ok, qPrintable(r3.error));
     }
 
+    void netLabelsWithSameNameConnectNets()
+    {
+        // 两个互不相连的子电路，靠同名网络标签并成一个网络
+        auto build = [](bool withLabels) {
+            Circuit c;
+            Component v;
+            v.id = 1;
+            v.type = ComponentType::VoltageSource;
+            v.pos = QPointF(100, 300);
+            v.rotation = 90;
+            v.refdes = QStringLiteral("V1");
+            v.dcValue = 10.0;
+            c.components.append(v);
+            Component r1;
+            r1.id = 2;
+            r1.type = ComponentType::Resistor;
+            r1.pos = QPointF(250, 200);
+            r1.refdes = QStringLiteral("R1");
+            r1.value = 1000.0;
+            c.components.append(r1);
+            Component r2;
+            r2.id = 3;
+            r2.type = ComponentType::Resistor;
+            r2.pos = QPointF(550, 200);
+            r2.refdes = QStringLiteral("R2");
+            r2.value = 1000.0;
+            c.components.append(r2);
+            Component g;
+            g.id = 4;
+            g.type = ComponentType::Ground;
+            g.pos = QPointF(280, 400);
+            g.refdes = QStringLiteral("GND");
+            c.components.append(g);
+            if (withLabels) {
+                Component l1;
+                l1.id = 5;
+                l1.type = ComponentType::NetLabel;
+                l1.pos = QPointF(150, 200);
+                l1.netLabel = QStringLiteral("VCC");
+                c.components.append(l1);
+                Component l2;
+                l2.id = 6;
+                l2.type = ComponentType::NetLabel;
+                l2.pos = QPointF(480, 200);
+                l2.netLabel = QStringLiteral("VCC");
+                c.components.append(l2);
+            }
+            c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(220, 200)}});
+            c.wires.append(Wire{{QPointF(280, 200), QPointF(280, 400)}});
+            c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400), QPointF(280, 400)}});
+            c.wires.append(Wire{{QPointF(480, 200), QPointF(520, 200)}});
+            c.wires.append(Wire{{QPointF(580, 200), QPointF(580, 400), QPointF(280, 400)}});
+            return c;
+        };
+
+        const Netlist without = build(false).buildNetlist();
+        QVERIFY2(without.valid, qPrintable(without.error));
+        QCOMPARE(without.nodeCount, 2);
+        QVERIFY(without.nodeOf(2, 0) != without.nodeOf(3, 0)); // 两块各自独立
+
+        const Circuit merged = build(true);
+        const Netlist with = merged.buildNetlist();
+        QVERIFY2(with.valid, qPrintable(with.error));
+        QCOMPARE(with.nodeCount, 1);
+        QCOMPARE(with.nodeOf(2, 0), with.nodeOf(3, 0)); // 同名标签把它们并到一起
+        // 节点用网络名显示，报告里不出现「L1.1」这种编号
+        QCOMPARE(with.nodeNames.value(with.nodeOf(2, 0)), QStringLiteral("VCC"));
+
+        // R2 本来悬空，并过来以后两端有 10 V，电流 10 mA
+        SimulationOptions op;
+        op.kind = AnalysisKind::OperatingPoint;
+        const SimulationResult r = Simulator::run(merged, op);
+        QVERIFY2(r.ok, qPrintable(r.error));
+        QVERIFY2(near(std::abs(r.elementCurrents.value(QStringLiteral("I(R2)"))), 0.010, 1e-4),
+                 qPrintable(QString::number(r.elementCurrents.value(QStringLiteral("I(R2)")))));
+        QVERIFY2(r.report.contains(QStringLiteral("VCC")), qPrintable(r.report));
+
+        // 存盘往返：网络名不能丢
+        const QJsonObject json = merged.toJson();
+        QString error;
+        const Circuit back = Circuit::fromJson(json, &error);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        QCOMPARE(back.components.at(4).netLabel, QStringLiteral("VCC"));
+        QCOMPARE(back.components.at(4).type, ComponentType::NetLabel);
+    }
+
     void changelogSectionsAreUnique()
     {
         // 「未发布」只能有一个：多次插条目时最容易写成两个，发布时会被漏掉

@@ -30,6 +30,11 @@ QRectF ComponentItem::boundingRect() const
         return QRectF(-75.0, -60.0, 150.0, 120.0);
     if (m_comp.type == ComponentType::Ground)
         return QRectF(-60.0, -60.0, 120.0, 120.0); // 四个方向都要放得下符号与文字
+    if (m_comp.type == ComponentType::NetLabel) {
+        // 旗标可能朝四个方向伸出（0/90/180/270），按最长的名字留一个正方形
+        const qreal half = 22.0 + 9.0 * m_comp.netLabel.size();
+        return QRectF(-half, -half, 2.0 * half, 2.0 * half);
+    }
 
     // 三绕组变压器更高（绕组 y −40…40，标签在 −62 与 +50），单独给一个包围盒
     if (m_comp.type == ComponentType::Transformer
@@ -265,6 +270,10 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
         painter->drawEllipse(QPointF(0.0, capY - capR * 0.78), capR * 0.78, capR * 0.6);
         painter->restore();
     }
+
+    // 网络标签的名字画在旗标里，不再另画 refdes / 数值
+    if (m_comp.type == ComponentType::NetLabel)
+        return;
 
     // 参考编号与数值：竖直放置时放到两侧，避免压住符号
     const int rot = ((m_comp.rotation % 360) + 360) % 360;

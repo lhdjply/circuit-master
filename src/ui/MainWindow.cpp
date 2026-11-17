@@ -735,6 +735,7 @@ void MainWindow::buildLibrary()
         {ComponentType::Probe, QStringLiteral("电压测试点  TP"), QStringLiteral("测试点")},
         {ComponentType::CurrentProbe, QStringLiteral("电流测试点  IP"), QStringLiteral("测试点")},
         {ComponentType::Multimeter, QStringLiteral("万用表  XMM"), QStringLiteral("测试点")},
+        {ComponentType::NetLabel, QStringLiteral("网络标签  NET"), QStringLiteral("开关与接地")},
     };
 
     const QString category = m_libraryCategory ? m_libraryCategory->currentText() : QString();

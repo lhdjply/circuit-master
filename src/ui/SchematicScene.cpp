@@ -177,6 +177,21 @@ ComponentItem* SchematicScene::placeComponent(ComponentType type, const QPointF&
     case ComponentType::Switch:
         comp.closed = true;
         break;
+    case ComponentType::NetLabel: {
+        // 网络标签没有编号，只有网络名。默认给一个不重名的名字，
+        // 免得两个新建的标签自动并到一起
+        comp.refdes.clear();
+        QSet<QString> used;
+        for (ComponentItem* other : componentItems()) {
+            if (other->component().type == ComponentType::NetLabel)
+                used.insert(other->component().netLabel);
+        }
+        int n = 1;
+        while (used.contains(QStringLiteral("N%1").arg(n)))
+            ++n;
+        comp.netLabel = QStringLiteral("N%1").arg(n);
+        break;
+    }
     case ComponentType::Probe:
     case ComponentType::CurrentProbe:
     case ComponentType::Multimeter:

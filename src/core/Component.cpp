@@ -37,7 +37,8 @@ int pinCount(const Component& comp)
 
 QVector<QPointF> pinOffsets(ComponentType type)
 {
-    if (type == ComponentType::Ground || type == ComponentType::Probe)
+    if (type == ComponentType::Ground || type == ComponentType::Probe
+        || type == ComponentType::NetLabel)
         return {QPointF(0.0, 0.0)};
     if (type == ComponentType::OpAmp)
         return {QPointF(-30.0, -20.0), QPointF(-30.0, 20.0), QPointF(30.0, 0.0)};
@@ -67,6 +68,7 @@ int pinCount(ComponentType type)
     switch (type) {
     case ComponentType::Ground: return 1;
     case ComponentType::Probe:  return 1;
+    case ComponentType::NetLabel: return 1;
     case ComponentType::Multimeter: return 2;
     case ComponentType::OpAmp:  return 3;
     case ComponentType::Npn:
@@ -119,6 +121,7 @@ QString typeName(ComponentType type)
     case ComponentType::Probe:         return QStringLiteral("电压测试点");
     case ComponentType::CurrentProbe:  return QStringLiteral("电流测试点");
     case ComponentType::Multimeter:    return QStringLiteral("万用表");
+    case ComponentType::NetLabel:      return QStringLiteral("网络标签");
     case ComponentType::Ground:        return QStringLiteral("接地");
     }
     return QString();
@@ -149,6 +152,7 @@ QString typeSymbol(ComponentType type)
     case ComponentType::Probe:         return QStringLiteral("TP");
     case ComponentType::CurrentProbe:  return QStringLiteral("IP");
     case ComponentType::Multimeter:    return QStringLiteral("XMM");
+    case ComponentType::NetLabel:      return QStringLiteral("NET");
     case ComponentType::Ground:        return QStringLiteral("GND");
     }
     return QString();
@@ -162,6 +166,8 @@ QString refPrefix(ComponentType type)
         return QStringLiteral("TP");
     if (type == ComponentType::CurrentProbe)
         return QStringLiteral("IP");
+    if (type == ComponentType::NetLabel)
+        return QStringLiteral("L");
     return typeSymbol(type);
 }
 
@@ -319,6 +325,7 @@ QString Component::unitName() const
     case ComponentType::Ground:        return QString();
     case ComponentType::CurrentProbe:  return QStringLiteral("A");
     case ComponentType::Multimeter:    return QString(); // 万用表没有可设的数值
+    case ComponentType::NetLabel:      return QString(); // 网络标签只有名字
     }
     return QString();
 }
@@ -393,6 +400,9 @@ QString Component::displayValue() const
     case ComponentType::Multimeter:
         return multimeterModeLetter(multimeterMode);
 
+    case ComponentType::NetLabel:
+        return netLabel;
+
     case ComponentType::Ground:
         return QStringLiteral("0");
     }
@@ -401,6 +411,9 @@ QString Component::displayValue() const
 
 QString Component::displayName() const
 {
+    // 网络标签的名字就是它的「编号」，不另画 refdes
+    if (type == ComponentType::NetLabel)
+        return netLabel;
     return refdes;
 }
 
@@ -463,6 +476,7 @@ QString Component::spiceValueSpec() const
     case ComponentType::Probe:
     case ComponentType::CurrentProbe:
     case ComponentType::Multimeter:
+    case ComponentType::NetLabel:
     case ComponentType::Ground:
         return QString();
     }

@@ -37,6 +37,7 @@ QString typeToTag(ComponentType type)
     case ComponentType::CurrentSource: return QStringLiteral("I");
     case ComponentType::Probe:         return QStringLiteral("TP");
     case ComponentType::Multimeter:    return QStringLiteral("XMM");
+    case ComponentType::NetLabel:      return QStringLiteral("NET");
     case ComponentType::CurrentProbe:  return QStringLiteral("IP");
     case ComponentType::Ground:        return QStringLiteral("GND");
     }
@@ -64,6 +65,7 @@ ComponentType tagToType(const QString& tag)
     if (tag == QLatin1String("I")) return ComponentType::CurrentSource;
     if (tag == QLatin1String("TP")) return ComponentType::Probe;
     if (tag == QLatin1String("XMM")) return ComponentType::Multimeter;
+    if (tag == QLatin1String("NET")) return ComponentType::NetLabel;
     if (tag == QLatin1String("IP")) return ComponentType::CurrentProbe;
     if (tag == QLatin1String("GND")) return ComponentType::Ground;
     return ComponentType::Resistor;
@@ -181,7 +183,8 @@ QString Circuit::toSpiceNetlist() const
         }
     }
     for (const Component& comp : components) {
-        if (comp.type == ComponentType::Ground || comp.type == ComponentType::Probe)
+        if (comp.type == ComponentType::Ground || comp.type == ComponentType::Probe
+            || comp.type == ComponentType::NetLabel)
             continue;
         const QVector<int> nodes = net.compPins.value(comp.id);
         if (nodes.size() < 2)
@@ -442,6 +445,8 @@ QJsonObject Circuit::toJson() const
         o.insert(QStringLiteral("auxRatio"), c.auxRatio);
         o.insert(QStringLiteral("groundKind"), int(c.groundKind));
         o.insert(QStringLiteral("multimeterMode"), int(c.multimeterMode));
+        if (!c.netLabel.isEmpty())
+            o.insert(QStringLiteral("netLabel"), c.netLabel);
         o.insert(QStringLiteral("transformerKind"),
                  c.transformerKind == TransformerKind::PrimaryAuxSecondary
                      ? QStringLiteral("primary-aux-secondary")
@@ -525,6 +530,7 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
         c.groundKind = static_cast<GroundKind>(o.value(QStringLiteral("groundKind")).toInt(0));
         c.multimeterMode = static_cast<MultimeterMode>(
             o.value(QStringLiteral("multimeterMode")).toInt(0));
+        c.netLabel = o.value(QStringLiteral("netLabel")).toString();
         c.transformerKind =
             o.value(QStringLiteral("transformerKind")).toString() == QLatin1String("primary-aux-secondary")
                 ? TransformerKind::PrimaryAuxSecondary

@@ -67,6 +67,12 @@ QPainterPath symbolShape(ComponentType type)
         path.addRoundedRect(QRectF(-14.0, -6.0, 28.0, 34.0), 4.0, 4.0);
         return path;
     }
+    if (type == ComponentType::NetLabel) {
+        // 旗标可以朝四个方向伸，命中区按「引脚附近的方块」给，
+        // 比按名字长度算简单，也不会把远处的导线抢走
+        path.addRoundedRect(QRectF(-26.0, -26.0, 52.0, 52.0), 4.0, 4.0);
+        return path;
+    }
     if (type == ComponentType::OpAmp) {
         // 三角形本体即可，别把整块外接矩形都算成命中区，否则会把背后的导线抢走
         QPolygonF tri;
@@ -640,6 +646,47 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         };
         mark(QPointF(-21.0, -8.0), QStringLiteral("+"));
         mark(QPointF(21.0, -8.0), QStringLiteral("−"));
+        break;
+    }
+
+    case ComponentType::NetLabel: {
+        // 网络标签的旗标跟着元件转，但文字永远不倒着写：
+        //   0°   旗标向右、文字横排
+        //   90°  旗标向上、文字竖排（自下而上）
+        //   180° 旗标向左、文字仍然横排（只翻位置不翻字）
+        //   270° 旗标向下、文字竖排
+        const QString name = comp.netLabel.isEmpty() ? QStringLiteral("NET") : comp.netLabel;
+        QFont font = p->font();
+        font.setPointSizeF(7.5);
+        font.setBold(true);
+        p->setFont(font);
+        const QFontMetricsF fm(font);
+        const qreal textW = fm.horizontalAdvance(name);
+        const qreal h = 16.0;
+        const qreal x0 = 6.0;
+        const qreal w = textW + 12.0;
+
+        const int rot = ((rotation % 360) + 360) % 360;
+        const bool vertical = (rot == 90 || rot == 270);
+        // 旗标朝哪边伸：0/90 走正方向，180/270 走负方向
+        const bool positive = (rot == 0 || rot == 90);
+        const qreal bx = positive ? x0 : -(x0 + w);
+
+        p->save();
+        p->rotate(-double(rotation)); // 先回到屏幕方向
+        if (vertical)
+            p->rotate(-90.0);         // 再把旗标竖起来（文字跟着竖）
+        if (mirrorX)
+            p->scale(-1.0, 1.0);
+
+        p->drawLine(QPointF(0.0, 0.0), QPointF(positive ? x0 : -x0, 0.0));
+        p->setBrush(theme::symbolFill);
+        p->drawRoundedRect(QRectF(bx, -h / 2.0, w, h), 3.0, 3.0);
+        p->setBrush(Qt::NoBrush);
+        // 文字始终按「从左往右」排在盒子里，所以 180° 时也是正的
+        p->drawText(QRectF(bx + 6.0, -h / 2.0, textW + 1.0, h),
+                    Qt::AlignVCenter | Qt::AlignLeft, name);
+        p->restore();
         break;
     }
 

@@ -147,6 +147,13 @@ void PropertyPanel::buildUi()
                          int(MultimeterMode::AcCurrent));
     m_form->addRow(QStringLiteral("档位"), m_meterMode);
 
+    m_acFrequency = makeEdit();
+    m_acFrequency->setToolTip(
+        QStringLiteral("交流档按一个周期算有效值：窗口 = 1 / 这个频率。\n"
+                       "被测信号不是 50 Hz 时必须跟着改，否则读数会随时间跳动。"));
+    m_acFrequency->setPlaceholderText(QStringLiteral("例如 50Hz"));
+    m_form->addRow(QStringLiteral("交流频率"), m_acFrequency);
+
     m_groundKind = new QComboBox(page);
     m_groundKind->addItem(QStringLiteral("GND（主地）"), int(GroundKind::Gnd));
     m_groundKind->addItem(QStringLiteral("AGND（模拟地）"), int(GroundKind::Agnd));
@@ -194,6 +201,13 @@ void PropertyPanel::buildUi()
     m_period = makeEdit();
     m_form->addRow(QStringLiteral("周期"), m_period);
 
+    m_netLabel = makeEdit();
+    m_netLabel->setObjectName(QStringLiteral("netLabelEdit"));
+    m_netLabel->setToolTip(QStringLiteral(
+        "同名的网络标签在网表里并成一个网络 —— 不用拉线也能把两处连起来。"));
+    m_netLabel->setPlaceholderText(QStringLiteral("例如 VCC / GND_D / OUT"));
+    m_form->addRow(QStringLiteral("网络名"), m_netLabel);
+
     m_closed = new QCheckBox(QStringLiteral("开关闭合"), page);
     m_form->addRow(QString(), m_closed);
 
@@ -231,6 +245,8 @@ void PropertyPanel::buildUi()
     connect(m_lpri, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_meterMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &PropertyPanel::applyValue);
+    connect(m_acFrequency, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
+    connect(m_netLabel, &QLineEdit::editingFinished, this, &PropertyPanel::applyNetLabel);
     connect(m_windings, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int) { applyValue(); });
     connect(m_polarity, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -322,6 +338,8 @@ void PropertyPanel::refreshFromItem()
     m_lpri->setText(quantityText(c.lpri, UnitKind::Henry));
     m_windings->setCurrentIndex(m_windings->findData(int(c.transformerKind)));
     m_meterMode->setCurrentIndex(m_meterMode->findData(int(c.multimeterMode)));
+    m_netLabel->setText(c.netLabel);
+    m_acFrequency->setText(quantityText(c.acFrequency, UnitKind::Hertz));
     m_polarity->setCurrentIndex(m_polarity->findData(c.secondaryInverted ? 1 : 0));
     m_groundKind->setCurrentIndex(m_groundKind->findData(int(c.groundKind)));
     m_rotation->setText(QString::number(c.rotation));
@@ -440,8 +458,15 @@ void PropertyPanel::updateVisibility()
     for (QLineEdit* edit : {m_rise, m_fall, m_width, m_period})
         edit->setPlaceholderText(QStringLiteral("例如 1ms"));
 
+    // 网络标签只有「网络名」，没有编号，也不该有数值
+    m_form->setRowVisible(m_refdes, c.type != ComponentType::NetLabel);
     m_form->setRowVisible(m_value, analog);
     m_form->setRowVisible(m_function, source);
+    m_form->setRowVisible(m_netLabel, c.type == ComponentType::NetLabel);
+    // 交流频率只对交流档有意义
+    m_form->setRowVisible(m_acFrequency,
+                          c.type == ComponentType::Multimeter
+                              && isAcMeterMode(c.multimeterMode));
     m_form->setRowVisible(m_meterMode, c.type == ComponentType::Multimeter);
     m_form->setRowVisible(m_windings, c.type == ComponentType::Transformer);
     m_form->setRowVisible(m_polarity, c.type == ComponentType::Transformer);
@@ -482,6 +507,27 @@ void PropertyPanel::applyRefdes()
     markValid(m_refdes);
     m_item->setRefdes(ref);
     m_title->setText(QStringLiteral("%1  ·  %2").arg(typeName(m_item->component().type), ref));
+    emit changed();
+}
+
+void PropertyPanel::applyNetLabel()
+{
+    if (!m_item || m_updating)
+        return;
+    if (m_item->component().type != ComponentType::NetLabel)
+        return;
+    const QString name = m_netLabel->text().trimmed();
+    if (name.isEmpty()) {
+        markInvalid(m_netLabel, QStringLiteral("网络名不能为空"));
+        return;
+    }
+    markValid(m_netLabel);
+    Component c = m_item->component();
+    if (c.netLabel == name)
+        return;
+    c.netLabel = name;
+    m_item->setComponent(c);
+    updateSubtitle();
     emit changed();
 }
 

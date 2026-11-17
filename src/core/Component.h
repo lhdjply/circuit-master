@@ -28,6 +28,7 @@ enum class ComponentType {
     Probe,
     CurrentProbe,
     Multimeter,   ///< 万用表：两引脚仪器，按档位测电压 / 电流 / 电阻
+    NetLabel,     ///< 网络标签：单引脚，同名标签在网表里并成一个网络
     Ground,
 };
 
@@ -120,6 +121,8 @@ struct Component {
     double lpri = 1.0;
     /// 接地符号的种类（Ground）；测试点的参考地也用它（Probe）
     GroundKind groundKind = GroundKind::Gnd;
+    /// 网络标签的名字（NetLabel）：同名标签在网表里并成一个网络
+    QString netLabel;
     /// 万用表的档位（Multimeter）
     MultimeterMode multimeterMode = MultimeterMode::Voltage;
     /// 交流档算有效值用的频率（Hz）：测量窗口取一个周期。

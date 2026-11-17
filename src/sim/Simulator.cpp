@@ -6,6 +6,7 @@
 #include <QElapsedTimer>
 #include <QHash>
 #include <QPair>
+#include <QSet>
 #include <QStringList>
 
 #include <algorithm>
@@ -767,6 +768,7 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
             break;
         }
         case ComponentType::Probe:
+        case ComponentType::NetLabel:
             break;
         }
     }
@@ -969,7 +971,8 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
                     * (v - st.capV.value(comp.id, 0.0));
             break;
         case ComponentType::Ground:
-            // 接地符号本身没有电流可采
+        case ComponentType::NetLabel:
+            // 接地符号与网络标签本身没有电流可采
             break;
         case ComponentType::Inductor:
         case ComponentType::Transformer:
@@ -1170,13 +1173,24 @@ void updateState(const Problem& p, ElementState& st, const std::vector<double>& 
 QString nodeLabel(const Circuit& circuit, const Netlist& net, int node)
 {
     QStringList pins;
+    QSet<QString> seen;
     for (auto it = net.compPins.constBegin(); it != net.compPins.constEnd(); ++it) {
         const QVector<int>& nodes = it.value();
         const Component* comp = circuit.find(it.key());
-        const QString name = comp ? comp->refdes : QString::number(it.key());
+        if (!comp)
+            continue;
+        // 网络标签不是器件，它的名字就是网络名，直接写出来（不带 .1）
+        if (comp->type == ComponentType::NetLabel) {
+            const QString name = comp->displayName();
+            if (nodes.value(0) == node && !seen.contains(name) && pins.size() < 3) {
+                seen.insert(name);
+                pins << name;
+            }
+            continue;
+        }
         for (int i = 0; i < nodes.size(); ++i) {
             if (nodes.at(i) == node && pins.size() < 3)
-                pins << QStringLiteral("%1.%2").arg(name).arg(i + 1);
+                pins << QStringLiteral("%1.%2").arg(comp->refdes).arg(i + 1);
         }
     }
     if (pins.isEmpty())
@@ -1206,6 +1220,11 @@ QString buildReport(const Circuit& circuit, const Problem& p, const Netlist& net
     for (const Component* cp : p.elements) {
         if (idx >= currents.size())
             break;
+        // 网络标签不是器件，不列电流
+        if (cp->type == ComponentType::NetLabel) {
+            ++idx;
+            continue;
+        }
         lines << QStringLiteral("  %1 = %2")
                      .arg(cp->refdes.leftJustified(8, QLatin1Char(' ')),
                           formatEng(currents.at(idx), QStringLiteral("A"), 4));
@@ -1424,6 +1443,7 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
             break;
         }
         case ComponentType::Probe:
+        case ComponentType::NetLabel:
             break;
         }
     }

@@ -134,6 +134,24 @@ Netlist Netlist::build(const Circuit& circuit)
         }
     }
 
+    // 3c. 同名网络标签把各自的网络并起来（不用画线也能连）
+    {
+        QHash<QString, int> labelRoots;
+        for (const Component& comp : circuit.components) {
+            if (comp.type != ComponentType::NetLabel)
+                continue;
+            const QString name = comp.netLabel.trimmed();
+            if (name.isEmpty())
+                continue;
+            const int root = dsu.find(dsu.add(toKey(comp.pinPosition(0), grid)));
+            const auto it = labelRoots.constFind(name);
+            if (it == labelRoots.constEnd())
+                labelRoots.insert(name, root);
+            else
+                dsu.unite(it.value(), root);
+        }
+    }
+
     // 4. 找地节点：同一种接地符号算同一个网络（GND → 节点 0，其余各自一个节点）
     bool hasGround = false;
     QVector<int> groundRoots;
@@ -203,6 +221,17 @@ Netlist Netlist::build(const Circuit& circuit)
     net.nodeNames.reserve(net.nodeCount + 1);
     for (int i = 1; i <= net.nodeCount; ++i)
         net.nodeNames.append(QString::number(i));
+    // 挂了网络标签的节点用标签名代替数字，报告里更好读
+    for (const Component& comp : circuit.components) {
+        if (comp.type != ComponentType::NetLabel)
+            continue;
+        const QString name = comp.netLabel.trimmed();
+        if (name.isEmpty())
+            continue;
+        const int node = net.compPins.value(comp.id).value(0);
+        if (node > 0 && node < net.nodeNames.size())
+            net.nodeNames[node] = name;
+    }
 
     // 6. 简单检查：悬空引脚 / 自短路
     QHash<int, int> pinCountByNode;
@@ -213,7 +242,7 @@ Netlist Netlist::build(const Circuit& circuit)
     }
     for (const Component& comp : circuit.components) {
         const QVector<int> nodes = net.compPins.value(comp.id);
-        if (comp.type == ComponentType::Ground)
+        if (comp.type == ComponentType::Ground || comp.type == ComponentType::NetLabel)
             continue;
         for (int i = 0; i < nodes.size(); ++i) {
             if (nodes.at(i) != 0 && pinCountByNode.value(nodes.at(i)) <= 1) {

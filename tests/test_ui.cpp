@@ -537,6 +537,95 @@ private slots:
                                 .arg(acLeft).arg(positive)));
     }
 
+    void netLabelFromPanelAndLibrary()
+    {
+        // 元件库有入口；新建时没有编号、只有网络名；属性面板能改名
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        auto* first = scene->placeComponent(ComponentType::NetLabel, QPointF(300, 300));
+        QVERIFY(first);
+        QCOMPARE(first->component().type, ComponentType::NetLabel);
+        QVERIFY2(first->component().refdes.isEmpty(), "网络标签不该有编号");
+        QCOMPARE(first->component().netLabel, QStringLiteral("N1"));
+
+        // 再放一个，默认名字不能撞车（撞了会直接并成一个网络）
+        auto* second = scene->placeComponent(ComponentType::NetLabel, QPointF(500, 300));
+        QVERIFY(second);
+        QCOMPARE(second->component().netLabel, QStringLiteral("N2"));
+
+        // 属性面板改名
+        first->setSelected(true);
+        settle();
+        auto* labelEdit = window.findChild<QLineEdit*>(QStringLiteral("netLabelEdit"));
+        QVERIFY2(labelEdit, "属性面板里应当有「网络名」输入框");
+        QCOMPARE(labelEdit->text(), QStringLiteral("N1"));
+        labelEdit->setText(QStringLiteral("VCC"));
+        emit labelEdit->editingFinished();
+        settle();
+        QCOMPARE(first->component().netLabel, QStringLiteral("VCC"));
+    }
+
+    void netLabelFollowsRotation()
+    {
+        // 旗标跟着元件转，但文字不能倒着写；四个角度要有四种不同画法
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        // 用场景渲染出单个元件的画面，再算深色像素的包围盒
+        auto ink = [scene](ComponentItem* item) {
+            const QRectF src = item->sceneBoundingRect().adjusted(-6, -6, 6, 6);
+            const int side = 240;
+            QImage image(side, side, QImage::Format_ARGB32_Premultiplied);
+            image.fill(Qt::white);
+            QPainter painter(&image);
+            painter.setRenderHint(QPainter::Antialiasing);
+            scene->render(&painter, QRectF(0, 0, side, side), src);
+            painter.end();
+
+            int minX = side, maxX = -1, minY = side, maxY = -1;
+            for (int y = 0; y < side; ++y)
+                for (int x = 0; x < side; ++x) {
+                    const QColor c = image.pixelColor(x, y);
+                    if (c.lightness() < 170) { // 旗标与文字都是深色
+                        minX = std::min(minX, x);
+                        maxX = std::max(maxX, x);
+                        minY = std::min(minY, y);
+                        maxY = std::max(maxY, y);
+                    }
+                }
+            return QSize(maxX - minX, maxY - minY);
+        };
+
+        QVector<QSize> shapes;
+        for (int rot : {0, 90, 180, 270}) {
+            auto* item = scene->placeComponent(ComponentType::NetLabel,
+                                               QPointF(300 + rot * 2, 300));
+            QVERIFY(item);
+            Component c = item->component();
+            c.netLabel = QStringLiteral("VCC");
+            c.rotation = rot;
+            item->setComponent(c);
+            settle();
+            shapes.append(ink(item));
+        }
+
+        QVERIFY2(shapes.at(0).width() > shapes.at(0).height(), "0° 应当横着");
+        QVERIFY2(shapes.at(1).height() > shapes.at(1).width(), "90° 应当竖着");
+        QVERIFY2(shapes.at(2).width() > shapes.at(2).height(), "180° 应当横着");
+        QVERIFY2(shapes.at(3).height() > shapes.at(3).width(), "270° 应当竖着");
+    }
+
     void transformerHasFourPinsAndPanel()
     {
         MainWindow window;
