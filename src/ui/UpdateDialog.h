@@ -13,6 +13,7 @@
 #include "core/UpdateChecker.h"
 
 #include <QDialog>
+#include <QElapsedTimer>
 #include <QUrl>
 #include <QVector>
 
@@ -22,6 +23,7 @@ class QNetworkReply;
 class QProgressBar;
 class QPushButton;
 class QSaveFile;
+class QTimer;
 
 namespace csm {
 
@@ -51,6 +53,10 @@ private:
     void startAttempt();
     void onReadyRead();
     void onFinished();
+    /// 每 2 s 看一眼这次尝试的吞吐：完全没数据、或者慢得没法看，就换下一个地址
+    void onStallTick();
+    /// 刷新「当前地址 + 下载速度」
+    void updateTransferInfo();
     void abortDownload(const QString& reason);
     QVector<QUrl> downloadCandidates() const;
 
@@ -61,6 +67,15 @@ private:
     QString m_savedPath;
     QVector<QUrl> m_urls;
     int m_attempt = 0;
+    QLabel* m_transfer = nullptr; // 当前下载地址与速度
+    QElapsedTimer m_speedClock;
+    qint64 m_speedBytes = 0;      // 上一次刷新时已收到的字节
+    double m_speedBps = 0.0;      // 平滑后的速度
+    QTimer* m_stallTimer = nullptr;
+    QElapsedTimer m_attemptClock;
+    qint64 m_attemptBytes = 0; // 本次尝试已收到的字节
+    qint64 m_lastTickBytes = 0;
+    int m_idleTicks = 0;       // 连续多少拍没有新数据
     QNetworkAccessManager* m_net = nullptr;
     QNetworkReply* m_reply = nullptr;
     QSaveFile* m_file = nullptr;

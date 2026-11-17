@@ -141,14 +141,17 @@ QStringList UpdateChecker::builtinMirrors()
     //
     // gh-proxy.org 有多个边缘节点（v4 / cdn / axisnow 等），同一时刻的可用性并不
     // 一致，所以全列上、按实测最快的 v4 打头；ghfast.top 与 ghproxy.net 留作退路。
-    // 按实测中位数排序（各 5 次，VERSION 文件约 8 字节）：
-    //   v4.gh-proxy.org 0.16 s · cdn 0.29 s · ghfast.top 0.78 s · gh-proxy.org 0.89 s
-    //   axisnow 4/5 次超时，放最后当彩头
-    // ghproxy.net 5 次里 4 次超时，已从表里去掉。
-    return {QStringLiteral("https://v4.gh-proxy.org"),
-            QStringLiteral("https://cdn.gh-proxy.org"),
-            QStringLiteral("https://ghfast.top"), QStringLiteral("https://gh-proxy.org"),
-            QStringLiteral("https://axisnow.gh-proxy.org")};
+    // 按「下载安装包」的实测速度排，而不是清单的速度 —— 用户疼的是下载。
+    // 1.8 MB 的 deb 实测（同一网络、同一时段）：
+    //   v4.gh-proxy.org   1.1 s (1.7 MB/s)
+    //   ghfast.top        3.7 s (500 KB/s)
+    //   gh-proxy.org      5.4 s (340 KB/s)
+    //   cdn.gh-proxy.org  60 s 还没下完 (28 KB/s)   ← 取清单最快，下大文件却是坑
+    //   axisnow           超时
+    //   github 直连       5 KB/s
+    // cdn 取清单快是为了「查版本」用的，排第 4 只当退路；axisnow 一直不通，删掉。
+    return {QStringLiteral("https://v4.gh-proxy.org"), QStringLiteral("https://ghfast.top"),
+            QStringLiteral("https://gh-proxy.org"), QStringLiteral("https://cdn.gh-proxy.org")};
 }
 
 void UpdateChecker::setMirrorPrefixes(const QStringList& prefixes)

@@ -53,10 +53,11 @@
 **检查更新**
 
 - 菜单「帮助 → 检查更新…」手动检查，或启动 3 秒后自动检查一次（只在新版本出现时弹窗）
-- 数据来源是随 Release 上传的 `latest.json`，按实测速度依次尝试
-  v4.gh-proxy.org / cdn.gh-proxy.org / ghfast.top / gh-proxy.org /
-  axisnow.gh-proxy.org 几个镜像，
-  首条请求 700 ms 未返回就并行补发一条，避免单条连接卡住
+- 数据来源是随 Release 上传的 `latest.json`，按「下载安装包」的实测速度依次尝试
+  v4.gh-proxy.org / ghfast.top / gh-proxy.org / cdn.gh-proxy.org 几个镜像，
+  首条请求 700 ms 未返回就并行补发一条，避免单条连接卡住；
+  下载时若某个镜像 10 s 不来数据、或 8 s 还不到 200 KB，自动换下一个地址
+- **下载界面显示当前地址与实时速度**（已下载 / 总量 / 剩余时间），地址可选中复制
 - **一键下载并安装**：清单里带资产列表，包的类型自动选，下到临时目录后直接拉起安装程序：
   - 平台来自编译期枚举（Linux / Windows），架构也是（amd64 / arm64 / loong64 / riscv64）
   - 安装方式在运行时判断 —— **deb 装的给 deb，便携拆包运行就给 tar.gz**；

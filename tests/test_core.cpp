@@ -2311,16 +2311,16 @@ private slots:
         // 内置镜像表本身：按实测速度排序，v4 打头
         const QStringList mirrors = UpdateChecker::builtinMirrors();
         QCOMPARE(mirrors.first(), QStringLiteral("https://v4.gh-proxy.org"));
-        // 按实测速度排在 v4 后面的几个
+        // 整张表按「下载安装包」的实测速度排好了
         const QStringList expected{
             QStringLiteral("https://v4.gh-proxy.org"),
-            QStringLiteral("https://cdn.gh-proxy.org"),
             QStringLiteral("https://ghfast.top"),
             QStringLiteral("https://gh-proxy.org"),
-            QStringLiteral("https://axisnow.gh-proxy.org")};
+            QStringLiteral("https://cdn.gh-proxy.org")};
         QCOMPARE(mirrors, expected);
-        // 实测常年超时的那个已经去掉了
+        // 实测常年超时的两个已经去掉了
         QVERIFY(!mirrors.contains(QStringLiteral("https://ghproxy.net")));
+        QVERIFY(!mirrors.contains(QStringLiteral("https://axisnow.gh-proxy.org")));
         // 不能有重复，否则会对着同一个地址重试
         QCOMPARE(QSet<QString>(mirrors.begin(), mirrors.end()).size(), mirrors.size());
 

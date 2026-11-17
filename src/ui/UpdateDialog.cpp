@@ -5,7 +5,9 @@
 #include <QApplication>
 #include <QProcess>
 #include <QSettings>
+#include <QStringList>
 #include <QDateTime>
+#include <QTimer>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileDialog>
@@ -25,6 +27,28 @@
 
 namespace csm {
 namespace {
+
+// 下载时的「换地址」阈值：这些镜像连得上却常只吐几 KB/s，
+// 实测 1.8 MB 的 deb 有的一分钟都下不完（直连 github 更是只有 5 KB/s）。
+// 阈值可以通过环境变量调小（测试用；CSM_STALL_CHECK_MS / CSM_STALL_LIMIT_MS /
+// CSM_SLOW_GRACE_MS / CSM_SLOW_FLOOR_BYTES）
+int envMs(const char* name, int fallback)
+{
+    bool ok = false;
+    const int v = qEnvironmentVariableIntValue(name, &ok);
+    return ok && v > 0 ? v : fallback;
+}
+
+int stallCheckMs() { return envMs("CSM_STALL_CHECK_MS", 2000); }
+int stallLimitMs() { return envMs("CSM_STALL_LIMIT_MS", 10000); }
+int slowGraceMs() { return envMs("CSM_SLOW_GRACE_MS", 8000); }
+qint64 slowFloorBytes()
+{
+    bool ok = false;
+    const qlonglong v = qEnvironmentVariableIntValue("CSM_SLOW_FLOOR_BYTES", &ok);
+    return ok && v > 0 ? v : 200 * 1024;
+}
+
 
 QString humanSize(qint64 bytes)
 {
@@ -103,6 +127,14 @@ UpdateDialog::UpdateDialog(const ReleaseInfo& release, QWidget* parent)
     m_progress->setVisible(false);
     m_progress->setTextVisible(true);
     root->addWidget(m_progress);
+
+    // 下载地址与实时速度：镜像有好有坏，让人看得见当前走的哪条、跑多快
+    m_transfer = new QLabel(this);
+    m_transfer->setVisible(false);
+    m_transfer->setWordWrap(true);
+    m_transfer->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    m_transfer->setStyleSheet(QStringLiteral("color:#64748b; font-size:11px;"));
+    root->addWidget(m_transfer);
 
     auto* actions = new QHBoxLayout();
     actions->setContentsMargins(0, 0, 0, 0);
@@ -188,11 +220,11 @@ bool UpdateDialog::downloadTo(const QString& path)
     }
 
     m_progress->setVisible(true);
+    m_transfer->setVisible(true);
     m_progress->setRange(0, 0); // 大小未知时先转着
     if (m_asset.size > 0)
         m_progress->setRange(0, int(m_asset.size / 1024));
     m_downloadButton->setEnabled(false);
-    m_status->setText(QStringLiteral("正在下载 %1 …").arg(m_asset.name));
     startAttempt();
     return true;
 }
@@ -211,6 +243,28 @@ void UpdateDialog::startAttempt()
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);
 
+    // 每次尝试重新计时：有的镜像连得上但只往外滴几 KB/s，光靠「请求结束」判断
+    // 失败会让用户干等好几分钟。这里改成按吞吐量判，慢或卡住就换下一个地址。
+    m_attemptBytes = 0;
+    m_lastTickBytes = 0;
+    m_idleTicks = 0;
+    m_attemptClock.restart();
+    m_speedClock.restart();
+    m_speedBytes = 0;
+    m_speedBps = 0.0;
+
+    // 状态里写清楚这一轮走的是哪条路（镜像 host 一眼能认出来）
+    const QString host = url.host().isEmpty() ? url.toString() : url.host();
+    m_status->setText(QStringLiteral("正在从 %1 下载 %2 …").arg(host, m_asset.name));
+    m_transfer->setToolTip(url.toString());
+    updateTransferInfo();
+    if (!m_stallTimer) {
+        m_stallTimer = new QTimer(this);
+        m_stallTimer->setInterval(stallCheckMs());
+        connect(m_stallTimer, &QTimer::timeout, this, &UpdateDialog::onStallTick);
+    }
+    m_stallTimer->start();
+
     m_reply = m_net->get(request);
     connect(m_reply, &QNetworkReply::readyRead, this, &UpdateDialog::onReadyRead);
     connect(m_reply, &QNetworkReply::downloadProgress, this, [this](qint64 got, qint64 total) {
@@ -224,8 +278,86 @@ void UpdateDialog::startAttempt()
 
 void UpdateDialog::onReadyRead()
 {
-    if (m_reply && m_file)
-        m_file->write(m_reply->readAll());
+    if (!m_reply)
+        return;
+    const QByteArray chunk = m_reply->readAll();
+    m_attemptBytes += chunk.size();
+    if (m_file)
+        m_file->write(chunk);
+    updateTransferInfo();
+}
+
+void UpdateDialog::updateTransferInfo()
+{
+    const qint64 now = m_speedClock.elapsed();
+    if (now >= 300) {
+        const qint64 grew = m_attemptBytes - m_speedBytes;
+        const double instant = grew * 1000.0 / double(now);
+        // 指数平滑：单次抖动不至于让数字乱跳，卡住时又能很快掉下来
+        m_speedBps = m_speedBps <= 0.0 ? instant : m_speedBps * 0.6 + instant * 0.4;
+        m_speedBytes = m_attemptBytes;
+        m_speedClock.restart();
+    }
+
+    const auto human = [](double bytes) {
+        if (bytes >= 1024.0 * 1024.0)
+            return QStringLiteral("%1 MB").arg(bytes / (1024.0 * 1024.0), 0, 'f', 1);
+        return QStringLiteral("%1 KB").arg(bytes / 1024.0, 0, 'f', 1);
+    };
+
+    QStringList parts;
+    if (!m_urls.isEmpty() && m_attempt > 0) {
+        const QUrl current = m_urls.at(m_attempt - 1);
+        parts << QStringLiteral("地址 %1").arg(current.host().isEmpty() ? QStringLiteral("（本地）")
+                                                                       : current.host());
+    }
+    parts << QStringLiteral("速度 %1/s").arg(human(m_speedBps));
+    if (m_asset.size > 0) {
+        parts << QStringLiteral("已下载 %1 / %2").arg(human(double(m_attemptBytes)),
+                                                      human(double(m_asset.size)));
+        if (m_speedBps > 1024.0) {
+            const double left = (double(m_asset.size) - double(m_attemptBytes)) / m_speedBps;
+            if (left > 0.0)
+                parts << QStringLiteral("剩余 %1 s").arg(left, 0, 'f', left < 10.0 ? 1 : 0);
+        }
+    } else {
+        parts << QStringLiteral("已下载 %1").arg(human(double(m_attemptBytes)));
+    }
+
+    m_transfer->setText(parts.join(QStringLiteral(" · ")));
+    m_transfer->setVisible(true);
+}
+
+void UpdateDialog::onStallTick()
+{
+    if (!m_reply)
+        return;
+
+    const qint64 grew = m_attemptBytes - m_lastTickBytes;
+    m_lastTickBytes = m_attemptBytes;
+    m_idleTicks = grew > 0 ? 0 : m_idleTicks + 1;
+
+    // 还有别的地址可试才换；已经是最后一个就只能继续等
+    if (m_attempt >= m_urls.size())
+        return;
+
+    bool switchAway = false;
+    QString why;
+    if (m_idleTicks * stallCheckMs() >= stallLimitMs()) {
+        switchAway = true;
+        why = QStringLiteral("这个地址一直没有数据，换一个");
+    } else if (m_attemptClock.elapsed() >= slowGraceMs()
+               && m_attemptBytes < slowFloorBytes()) {
+        switchAway = true;
+        why = QStringLiteral("这个地址太慢，换一个");
+    }
+
+    if (!switchAway)
+        return;
+
+    m_status->setText(why);
+    // abort() 会走 finished，那里已经有「换下一条、把已写的字节丢掉」的逻辑
+    m_reply->abort();
 }
 
 void UpdateDialog::onFinished()
@@ -234,6 +366,8 @@ void UpdateDialog::onFinished()
     if (!reply)
         return;
     m_reply = nullptr;
+    if (m_stallTimer)
+        m_stallTimer->stop();
     reply->deleteLater();
 
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();

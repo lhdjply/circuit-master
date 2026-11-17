@@ -9,9 +9,14 @@
 
 ### 改进
 
-- 检查更新的镜像改成按实测速度排序：v4.gh-proxy.org → cdn.gh-proxy.org →
-  ghfast.top → gh-proxy.org → axisnow.gh-proxy.org。实测常年超时的
-  ghproxy.net 已从表里去掉。
+- 检查更新的镜像改成按**下载安装包**的实测速度排序：v4.gh-proxy.org →
+  ghfast.top → gh-proxy.org → cdn.gh-proxy.org。实测常年超时的 ghproxy.net
+  与 axisnow 已从表里去掉（cdn 取清单最快，下大文件却只有 28 KB/s，只留作退路）。
+- **修下载卡住**：以前只有「请求结束且报错」才换地址，遇到连得上却几乎不吐数据的
+  镜像会干等好几分钟（实测 1.8 MB 的 deb 一分钟都下不完）。现在按吞吐量判断：
+  10 s 没数据、或 8 s 还不到 200 KB，就自动换下一个地址。
+- 下载界面显示**当前下载地址与实时速度**（含已下载/总量、剩余时间），
+  地址文字可选中复制。
 
 ## [v0.3.0] - 2026-11-17
 

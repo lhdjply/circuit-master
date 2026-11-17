@@ -10,6 +10,8 @@
 #include "ui/ComponentItem.h"
 
 #include <QGraphicsSceneMouseEvent>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include "ui/PropertyPanel.h"
 #include "ui/MultimeterWindow.h"
 #include "core/Netlist.h"
@@ -163,6 +165,104 @@ private slots:
         QCOMPARE(QString::fromUtf8(saved.readAll()), payload);
         saved.close();
         QFile::remove(target);
+    }
+
+    void updateDownloadSkipsStalledMirror()
+    {
+        // 有镜像连得上却只吐几 KB/s / 干脆不吐数据。原来只按「请求结束且报错」
+        // 才换地址，遇到这种会干等好几分钟。这里用本地 TCP 服务模拟：
+        // 第一个镜像发完响应头就不动了，应当被判定为卡住，自动换到第二个。
+        const QStringList savedMirrors = UpdateChecker::builtinMirrors();
+        auto restore = qScopeGuard([savedMirrors] {
+            UpdateChecker::setBuiltinMirrors(savedMirrors);
+        });
+
+        const QByteArray payload(300 * 1024, 'x'); // 300 KB
+        const QByteArray header =
+            "HTTP/1.1 200 OK\r\nContent-Length: " + QByteArray::number(payload.size())
+            + "\r\nContent-Type: application/octet-stream\r\nConnection: close\r\n\r\n";
+
+        // 慢镜像：发完头再吐 1 KB 就不动了
+        QTcpServer slow;
+        QVERIFY(slow.listen(QHostAddress::LocalHost));
+        QList<QTcpSocket*> slowSockets;
+        QObject::connect(&slow, &QTcpServer::newConnection, [&] {
+            while (QTcpSocket* sock = slow.nextPendingConnection()) {
+                slowSockets.append(sock);
+                sock->write(header + QByteArray(1024, 'y'));
+                sock->flush();
+            }
+        });
+
+        // 正常镜像：把头和数据都发完
+        QTcpServer fast;
+        QVERIFY(fast.listen(QHostAddress::LocalHost));
+        QObject::connect(&fast, &QTcpServer::newConnection, [&] {
+            while (QTcpSocket* sock = fast.nextPendingConnection()) {
+                QObject::connect(sock, &QTcpSocket::disconnected, sock,
+                                 &QTcpSocket::deleteLater);
+                // 不主动断开：Content-Length 满足后 QNAM 自己收尾。
+                // 立刻 disconnectFromHost() 会在数据没发完时关连接，客户端报
+                // RemoteHostClosedError，用例会误判成下载失败。
+                sock->write(header + payload);
+                sock->flush();
+            }
+        });
+
+        const QUrl fastUrl(QStringLiteral("http://127.0.0.1:%1/pkg.bin").arg(fast.serverPort()));
+        UpdateChecker::setBuiltinMirrors(
+            {QStringLiteral("http://127.0.0.1:%1").arg(slow.serverPort()),
+             QStringLiteral("http://127.0.0.1:%1").arg(fast.serverPort())});
+
+        // 把阈值压到毫秒级，测试不必等十秒
+        qputenv("CSM_STALL_CHECK_MS", "100");
+        qputenv("CSM_STALL_LIMIT_MS", "500");
+        qputenv("CSM_SLOW_GRACE_MS", "600000"); // 关掉「太慢」那条，只测「没数据」
+        auto restoreEnv = qScopeGuard([] {
+            qunsetenv("CSM_STALL_CHECK_MS");
+            qunsetenv("CSM_STALL_LIMIT_MS");
+            qunsetenv("CSM_SLOW_GRACE_MS");
+        });
+
+        ReleaseInfo release;
+        release.version = QStringLiteral("0.9.9");
+        release.tagName = QStringLiteral("v0.9.9");
+        // 三个平台的包名都摆上，让 pickAsset 挑出宿主机对应的那个
+        for (const QString& name : {QStringLiteral("circuit-master_0.9.9_amd64.deb"),
+                                    QStringLiteral("circuit-master_0.9.9_arm64.deb"),
+                                    QStringLiteral("circuit-master-0.9.9-linux-amd64.tar.gz"),
+                                    QStringLiteral("circuit-master-0.9.9-linux-arm64.tar.gz"),
+                                    QStringLiteral("circuit-master-0.9.9-windows-x64-setup.exe"),
+                                    QStringLiteral("circuit-master-0.9.9-windows-arm64-setup.exe"),
+                                    QStringLiteral("circuit-master-0.9.9-windows-x64.zip"),
+                                    QStringLiteral("circuit-master-0.9.9-macos-arm64.dmg"),
+                                    QStringLiteral("circuit-master-0.9.9-macos-x64.dmg")}) {
+            ReleaseAsset asset;
+            asset.name = name;
+            asset.url = fastUrl.toString();
+            asset.size = payload.size();
+            release.assets.append(asset);
+        }
+
+        UpdateDialog dialog(release);
+        QVERIFY2(!dialog.asset().name.isEmpty(), "应当挑到当前平台对应的包");
+        const QString target = QDir(QCoreApplication::applicationDirPath())
+                                   .filePath(QStringLiteral("shots/stall-target.bin"));
+        QDir().mkpath(QFileInfo(target).absolutePath());
+        QFile::remove(target);
+
+        QSignalSpy spy(&dialog, &UpdateDialog::downloadFinished);
+        QVERIFY(dialog.downloadTo(target));
+        QVERIFY2(spy.wait(15000), "卡住的地址应当被跳过，换到下一个地址后下载完成");
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(dialog.savedPath(), target);
+
+        QFile saved(target);
+        QVERIFY(saved.open(QIODevice::ReadOnly));
+        QCOMPARE(saved.readAll(), payload);
+        saved.close();
+        QFile::remove(target);
+        qDeleteAll(slowSockets);
     }
 
     void tl431ExampleRunsWithOperatingPoint()
