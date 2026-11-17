@@ -274,9 +274,12 @@ ReleaseAsset UpdateChecker::pickAsset(const ReleaseInfo& release, HostPlatform p
     if (!packages.isEmpty())
         return packages.first().asset;
 
-    // 架构对不上时的退路：同平台随便给一个（apt / 安装程序自己会拒绝装错架构）
+    // 架构对不上时的退路：同平台随便给一个（apt / 安装程序自己会拒绝装错架构）。
+    // macOS 没有安装程序，退路是任意一个 dmg —— 解压出来架构不对，
+    // 系统会直接拒绝运行，同样不会装错。
     const char* loose = platform == HostPlatform::Linux ? ".deb"
         : platform == HostPlatform::Windows             ? "-setup.exe"
+        : platform == HostPlatform::MacOS               ? ".dmg"
                                                         : nullptr;
     if (loose) {
         for (const ReleaseAsset& asset : release.assets) {

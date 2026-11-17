@@ -1870,6 +1870,8 @@ private slots:
         add(QStringLiteral("circuit-master-0.2.0-windows-x64.zip"));
         add(QStringLiteral("circuit-master-0.2.0-windows-x64-setup.exe"));
         add(QStringLiteral("circuit-master-0.2.0-windows-arm64-setup.exe"));
+        add(QStringLiteral("circuit-master-0.2.0-macos-arm64.dmg"));
+        add(QStringLiteral("circuit-master-0.2.0-macos-x64.dmg"));
 
         // Linux：按架构挑 deb，优先 deb 而不是 tar.gz
         const auto pick = [&release](HostPlatform os, HostArch arch,
@@ -1888,6 +1890,17 @@ private slots:
                  QStringLiteral("circuit-master-0.2.0-windows-x64-setup.exe"));
         QCOMPARE(pick(HostPlatform::Windows, HostArch::Arm64),
                  QStringLiteral("circuit-master-0.2.0-windows-arm64-setup.exe"));
+
+        // macOS 架构对不上时也有一条退路（随便给个 dmg，系统会拒绝运行错的架构）
+        QCOMPARE(UpdateChecker::pickAsset(release, HostPlatform::MacOS, HostArch::Riscv64,
+                                          InstallKind::System).name,
+                 QStringLiteral("circuit-master-0.2.0-macos-arm64.dmg"));
+
+        // macOS：只有一种形态，按架构挑 dmg
+        QCOMPARE(pick(HostPlatform::MacOS, HostArch::Arm64),
+                 QStringLiteral("circuit-master-0.2.0-macos-arm64.dmg"));
+        QCOMPARE(pick(HostPlatform::MacOS, HostArch::Amd64),
+                 QStringLiteral("circuit-master-0.2.0-macos-x64.dmg"));
 
         // 某架构没出包时退回 portable
         ReleaseInfo only = release;
@@ -1973,10 +1986,12 @@ private slots:
         qunsetenv("CSM_INSTALL_KIND");
 
         // 不支持的平台：返回空，界面回退到发布页
-        QVERIFY(UpdateChecker::pickAsset(release, HostPlatform::MacOS, HostArch::Arm64,
+        QVERIFY(UpdateChecker::pickAsset(release, HostPlatform::Other, HostArch::Amd64,
                                          InstallKind::System).name.isEmpty());
-        // 当前构建目标一定能挑到 Linux 包（本机是 Linux-amd64）
-        QVERIFY(!UpdateChecker::pickAssetForHost(release).name.isEmpty());
+        // 当前构建目标一定能挑到自己平台的包：三平台都在 fixture 里
+        QVERIFY2(!UpdateChecker::pickAssetForHost(release).name.isEmpty(),
+                 qPrintable(QStringLiteral("平台 %1 没挑到包")
+                                .arg(int(csm::kHostPlatform))));
     }
 
     void downloadUrlsPreferWorkingMirror()

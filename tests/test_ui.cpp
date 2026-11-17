@@ -98,11 +98,15 @@ private slots:
         release.pageUrl = QUrl(QStringLiteral("https://github.com/lhdjply/circuit-master/releases/tag/v0.2.0"));
         // 各平台的包都摆上（都指向同一个本地文件），挑包逻辑与宿主机无关
         const QString localUrl = QUrl::fromLocalFile(source).toString();
+        // 三平台都要有：这个用例要验证「挑到当前平台对应的包」，
+        // 只放 Linux/Windows 的资产时，在 macOS 上跑就会一个都挑不到
         for (const QString& name : {QStringLiteral("circuit-master_0.2.0_amd64.deb"),
                                     QStringLiteral("circuit-master-0.2.0-linux-amd64.tar.gz"),
                                     QStringLiteral("circuit-master-0.2.0-windows-x64-setup.exe"),
                                     QStringLiteral("circuit-master-0.2.0-windows-arm64-setup.exe"),
-                                    QStringLiteral("circuit-master-0.2.0-windows-x64.zip")}) {
+                                    QStringLiteral("circuit-master-0.2.0-windows-x64.zip"),
+                                    QStringLiteral("circuit-master-0.2.0-macos-arm64.dmg"),
+                                    QStringLiteral("circuit-master-0.2.0-macos-x64.dmg")}) {
             ReleaseAsset item;
             item.name = name;
             item.url = localUrl;
@@ -837,11 +841,14 @@ private slots:
         release.tagName = QStringLiteral("v0.2.9");
         release.pageUrl = QUrl(QStringLiteral("https://example.invalid"));
         const QString localUrl = QUrl::fromLocalFile(source).toString();
+        // 同样要覆盖三平台，否则在 macOS 上挑不到包
         for (const QString& name : {QStringLiteral("circuit-master_0.2.9_amd64.deb"),
                                     QStringLiteral("circuit-master-0.2.9-linux-amd64.tar.gz"),
                                     QStringLiteral("circuit-master-0.2.9-windows-x64-setup.exe"),
                                     QStringLiteral("circuit-master-0.2.9-windows-arm64-setup.exe"),
-                                    QStringLiteral("circuit-master-0.2.9-windows-x64.zip")}) {
+                                    QStringLiteral("circuit-master-0.2.9-windows-x64.zip"),
+                                    QStringLiteral("circuit-master-0.2.9-macos-arm64.dmg"),
+                                    QStringLiteral("circuit-master-0.2.9-macos-x64.dmg")}) {
             ReleaseAsset item;
             item.name = name;
             item.url = localUrl;
