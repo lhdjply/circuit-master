@@ -1172,30 +1172,42 @@ void updateState(const Problem& p, ElementState& st, const std::vector<double>& 
 
 QString nodeLabel(const Circuit& circuit, const Netlist& net, int node)
 {
+    // 分两趟收集：网络标签（网络的「名字」）优先，再补引脚。
+    // compPins 是 QHash，迭代顺序每个进程都不一样；只有一趟遍历时，
+    // 三个引脚名额可能被器件占满，标签名就时有时无 —— 报告也跟着飘。
+    QStringList names;
     QStringList pins;
-    QSet<QString> seen;
+    QSet<QString> seenNames;
     for (auto it = net.compPins.constBegin(); it != net.compPins.constEnd(); ++it) {
-        const QVector<int>& nodes = it.value();
         const Component* comp = circuit.find(it.key());
-        if (!comp)
+        if (!comp || comp->type != ComponentType::NetLabel)
             continue;
-        // 网络标签不是器件，它的名字就是网络名，直接写出来（不带 .1）
-        if (comp->type == ComponentType::NetLabel) {
-            const QString name = comp->displayName();
-            if (nodes.value(0) == node && !seen.contains(name) && pins.size() < 3) {
-                seen.insert(name);
-                pins << name;
-            }
-            continue;
+        const QString name = comp->displayName();
+        if (it.value().value(0) == node && !seenNames.contains(name)) {
+            seenNames.insert(name);
+            names << name;
         }
+    }
+    for (auto it = net.compPins.constBegin(); it != net.compPins.constEnd(); ++it) {
+        const Component* comp = circuit.find(it.key());
+        if (!comp || comp->type == ComponentType::NetLabel)
+            continue;
+        const QVector<int>& nodes = it.value();
         for (int i = 0; i < nodes.size(); ++i) {
-            if (nodes.at(i) == node && pins.size() < 3)
+            if (nodes.at(i) == node)
                 pins << QStringLiteral("%1.%2").arg(comp->refdes).arg(i + 1);
         }
     }
-    if (pins.isEmpty())
+
+    QStringList parts = names;
+    for (const QString& pin : pins) {
+        if (parts.size() >= 3)
+            break;
+        parts << pin;
+    }
+    if (parts.isEmpty())
         return QStringLiteral("节点 %1").arg(node);
-    return QStringLiteral("节点 %1 (%2)").arg(node).arg(pins.join(QStringLiteral(", ")));
+    return QStringLiteral("节点 %1 (%2)").arg(node).arg(parts.join(QStringLiteral(", ")));
 }
 
 QString buildReport(const Circuit& circuit, const Problem& p, const Netlist& net,
