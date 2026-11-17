@@ -106,8 +106,13 @@ void SevenSegmentDisplay::updateRange(double value)
     // 于是「0.2 ~ 1000」这一大段里当前量程保持不变 —— 读数在 1 V 附近抖动时
     // 不会在「999.9 mV」和「1.000 V」之间来回跳；同时最多只出现一位前导零
     // （0.2000），不会退化成「0.0012 mV」那种看不清的写法。
+    // 升档阈值要跟显示精度对齐：4½ 位下 999.9999 会舍入成「1000.00」，
+    // 这时留在原地就得写 4 位整数（挤掉小数位），不如直接升到 kΩ 显示「1.0000」。
+    // 阈值取「舍入后会到 1000」的那个点。
+    const int total = fullDigitsOf(m_digits) + 1;
+    const double epsilon = 0.5 * std::pow(10.0, -double(std::max(0, total - 3)));
     double d = magnitude / std::pow(10.0, m_rangeExp);
-    while (d >= 1000.0 && m_rangeExp < kMaxExp) {
+    while (d >= 1000.0 - epsilon && m_rangeExp < kMaxExp) {
         m_rangeExp += 3;
         d /= 1000.0;
     }
@@ -123,6 +128,11 @@ QString SevenSegmentDisplay::displayedUnit() const
         return m_unit;
     const int exp = m_hasRange ? m_rangeExp : expOfMagnitude(std::abs(m_value));
     return prefixForExp(exp) + m_unit;
+}
+
+QString SevenSegmentDisplay::readoutText() const
+{
+    return formatReading(m_value).digitsText;
 }
 
 QString SevenSegmentDisplay::prefixForExp(int exp)
@@ -176,14 +186,29 @@ SevenSegmentDisplay::Reading SevenSegmentDisplay::formatReading(double value) co
 
     // N½ 位：共 N+1 个数字位，最高位只能是 1（满量程 1.999…）
     const int total = fullDigitsOf(m_digits) + 1;
-    const int intDigits = mantissa >= 1000.0 ? 4
-        : mantissa >= 100.0                  ? 3
-        : mantissa >= 10.0                   ? 2
-                                             : 1;
+
+    // 进位会把整数位撑大一位：999.9999 按 5 位有效数字舍入是 1000.00，
+    // 整数部分从 3 位变成 4 位。若仍按原来算的位数插小数点，就会写成
+    // 「100.00」—— 整整差 10 倍。这里先舍入、再看进位，必要时减一位小数重算。
+    const auto intDigitsOf = [](double v) {
+        return v >= 1000.0 ? 4 : v >= 100.0 ? 3 : v >= 10.0 ? 2 : 1;
+    };
+    int intDigits = intDigitsOf(mantissa);
+    double rounded = mantissa;
+    for (int guard = 0; guard < 8; ++guard) {
+        const int decimals = std::max(0, total - intDigits);
+        const double factor = std::pow(10.0, decimals);
+        rounded = std::round(mantissa * factor) / factor;
+        const int carried = intDigitsOf(rounded);
+        if (carried == intDigits)
+            break;
+        intDigits = carried;
+    }
     const int decimals = std::max(0, total - intDigits);
+
     // 按「数字位总数 = total」重排：QString::number 的字符串里小数点也算一位，
     // 直接截断会少一位数字；这里去掉点、截够 total 位数字、再按整数位数插回点
-    QString raw = QString::number(mantissa, 'f', decimals);
+    QString raw = QString::number(rounded, 'f', decimals);
     QString digitsOnly = raw;
     digitsOnly.remove(QLatin1Char('.'));
     if (digitsOnly.size() > total)

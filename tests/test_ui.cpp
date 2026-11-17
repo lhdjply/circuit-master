@@ -848,6 +848,50 @@ private slots:
         QVERIFY2(std::isnan(display->value()), "改电路后旧读数应当作废");
     }
 
+    void sevenSegmentRoundsUpWithoutLosingADigit()
+    {
+        // 999.9999 按 5 位有效数字舍入是 1000.0，整数位从 3 位变 4 位。
+        // 之前按原位数插小数点，会写成「100.00」—— 整整差 10 倍。
+        SevenSegmentDisplay display;
+        display.setUnit(QStringLiteral("Ω"));
+        display.setDigits(MultimeterDigits::Half4);
+
+        const auto prefixScale = [](const QString& unit) {
+            const QString base = unit.right(1);
+            const QString prefix = unit.left(unit.size() - 1);
+            if (prefix == QStringLiteral("k"))
+                return 1e3;
+            if (prefix == QStringLiteral("M"))
+                return 1e6;
+            if (prefix == QStringLiteral("G"))
+                return 1e9;
+            if (prefix == QStringLiteral("m"))
+                return 1e-3;
+            if (prefix == QStringLiteral("µ"))
+                return 1e-6;
+            if (prefix == QStringLiteral("n"))
+                return 1e-9;
+            if (prefix == QStringLiteral("p"))
+                return 1e-12;
+            Q_UNUSED(base);
+            return 1.0;
+        };
+
+        // 一串「刚好在进位边缘」的值：读回来的数必须和输入对上
+        for (double v : {999.9999, 99.99999, 9.999999, 0.9999999, 1.0, 100.0, 1000.0,
+                         9999.999, 0.0001234, 123.45}) {
+            display.setValue(v);
+            bool ok = false;
+            const double shown = display.readoutText().toDouble(&ok) * prefixScale(display.displayedUnit());
+            QVERIFY2(ok, qPrintable(display.readoutText()));
+            QVERIFY2(std::abs(shown - v) <= v * 5e-4 + 1e-12,
+                     qPrintable(QStringLiteral("输入 %1，显示 %2 %3（读回 %4）")
+                                    .arg(v)
+                                    .arg(display.readoutText(), display.displayedUnit())
+                                    .arg(shown)));
+        }
+    }
+
     void transformerHasFourPinsAndPanel()
     {
         MainWindow window;

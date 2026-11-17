@@ -33,6 +33,8 @@ public:
     void setSignSlot(bool enabled);
     /// 当前显示的「前缀 + 单位」，例如 "mV"、"V"、"kΩ"（测试与调试用）
     QString displayedUnit() const;
+    /// 当前显示的纯数字部分（不含单位），例如 "1.0000"（测试与调试用）
+    QString readoutText() const;
     double value() const { return m_value; }
 
 protected:
