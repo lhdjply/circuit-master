@@ -1015,8 +1015,8 @@ private slots:
 
     void ob2362DrivesGateByFeedback()
     {
-        // OB2362 简化模型：FB 决定 CS 目标值，GATE 在每周期按占空比拉高，
-        // CS 超过目标就关断（逐周期限流）
+        // OB2362 简化模型：FB 决定占空比，GATE 在每周期按占空比拉高，
+        // CS 达到限流阈值就关断（逐周期限流）。VCC 要高于 UVLO 起机电压 17 V。
         Circuit c;
         Component vcc;
         vcc.id = 1;
@@ -1024,7 +1024,7 @@ private slots:
         vcc.pos = QPointF(300, 300);
         vcc.rotation = 90;
         vcc.refdes = QStringLiteral("V1");
-        vcc.dcValue = 12.0;
+        vcc.dcValue = 20.0;
         c.components.append(vcc);
 
         Component ctl;
@@ -1138,6 +1138,143 @@ private slots:
                 }
             }
         }
+    }
+
+    void ob2362HasBiasClampAndUvlo()
+    {
+        // FB 偏置：光耦不通时 FB 应当浮到约 4.5 V（开环 OLP 阈值），占空比拉满
+        auto build = [](double vccSource) {
+            Circuit c;
+            Component vcc;
+            vcc.id = 1;
+            vcc.type = ComponentType::VoltageSource;
+            vcc.pos = QPointF(300, 300);
+            vcc.rotation = 90;
+            vcc.refdes = QStringLiteral("V1");
+            vcc.dcValue = vccSource;
+            c.components.append(vcc);
+
+            Component ctl;
+            ctl.id = 2;
+            ctl.type = ComponentType::Ob2362;
+            ctl.pos = QPointF(500, 300);
+            ctl.refdes = QStringLiteral("U1");
+            ctl.frequency = 65000.0;
+            ctl.value = 0.72;
+            c.components.append(ctl);
+
+            Component g;
+            g.id = 3;
+            g.type = ComponentType::Ground;
+            g.pos = QPointF(300, 400);
+            g.refdes = QStringLiteral("GND");
+            c.components.append(g);
+            for (const QPointF& pos : {QPointF(500, 400), QPointF(620, 400)}) {
+                Component gg = g;
+                gg.id = 4 + static_cast<int>(c.components.size());
+                gg.pos = pos;
+                c.components.append(gg);
+            }
+            // VCC 经 10 kΩ 接电源（模拟启动电阻）
+            Component r;
+            r.id = 9;
+            r.type = ComponentType::Resistor;
+            r.pos = QPointF(400, 270);
+            r.refdes = QStringLiteral("R1");
+            r.value = 500.0; // 20 V 经 500 Ω，扣掉 2.5 mA 工作电流后仍有 ~18.8 V
+            c.components.append(r);
+
+            // 电源 + → R1 → U1 的 VCC 脚（pin4 = 500,270）
+            c.wires.append(Wire{{QPointF(300, 270), QPointF(370, 270)}});
+            c.wires.append(Wire{{QPointF(430, 270), QPointF(500, 270)}});
+            c.wires.append(Wire{{QPointF(300, 330), QPointF(300, 400)}});
+            c.wires.append(Wire{{QPointF(500, 330), QPointF(500, 400)}});
+            return c;
+        };
+
+        auto measure = [](const Circuit& c, QString* error) {
+            const Netlist net = c.buildNetlist();
+            SimulationOptions tr;
+            tr.kind = AnalysisKind::Transient;
+            tr.tStop = 2e-4;
+            tr.tStep = 1e-6;
+            const SimulationResult r = Simulator::run(c, tr);
+            if (error)
+                *error = r.error;
+            return qMakePair(net, r);
+        };
+
+        // 1) 正常供电（高于 UVLO 17 V）：FB 浮到 ~4.5 V，占空比接近上限
+        {
+            QString error;
+            const auto pair = measure(build(20.0), &error);
+            QVERIFY2(pair.second.ok, qPrintable(error));
+            const Signal* fb = pair.second.signal(
+                QStringLiteral("V(%1)").arg(pair.first.nodeOf(2, 1)));
+            QVERIFY(fb);
+            QVERIFY2(fb->y.last() > 4.0 && fb->y.last() < 5.0,
+                     qPrintable(QStringLiteral("FB = %1 V").arg(fb->y.last())));
+            const Signal* gate = pair.second.signal(
+                QStringLiteral("V(%1)").arg(pair.first.nodeOf(2, 5)));
+            QVERIFY(gate);
+            int high = 0;
+            for (double y : gate->y)
+                high += (y > 5.0) ? 1 : 0;
+            const double duty = double(high) / std::max(1, int(gate->y.size()));
+            QVERIFY2(duty > 0.5, qPrintable(QStringLiteral("占空比 %1").arg(duty)));
+        }
+
+        // 2) VCC 过压：28 V 钳位，不会跟着电源一路爬到 300 V
+        {
+            QString error;
+            const auto pair = measure(build(300.0), &error);
+            QVERIFY2(pair.second.ok, qPrintable(error));
+            const Signal* vcc = pair.second.signal(
+                QStringLiteral("V(%1)").arg(pair.first.nodeOf(2, 4)));
+            QVERIFY(vcc);
+            QVERIFY2(vcc->y.last() > 25.0 && vcc->y.last() < 31.0,
+                     qPrintable(QStringLiteral("VCC = %1 V").arg(vcc->y.last())));
+        }
+
+        // 3) UVLO：VCC 只有 5 V 时 GATE 一直是低
+        {
+            QString error;
+            const auto pair = measure(build(5.0), &error);
+            QVERIFY2(pair.second.ok, qPrintable(error));
+            const Signal* gate = pair.second.signal(
+                QStringLiteral("V(%1)").arg(pair.first.nodeOf(2, 5)));
+            QVERIFY(gate);
+            for (double y : gate->y)
+                QVERIFY2(y < 1.0, qPrintable(QStringLiteral("UVLO 期间 GATE = %1 V").arg(y)));
+        }
+    }
+
+    void switchingControllerSuggestsFineStep()
+    {
+        // 65 kHz 的开关控制器要求步长 ≤ 1/(f·20) ≈ 0.77 µs，
+        // 否则每个开关周期都被跨过去、波形算成直流
+        Circuit c;
+        Component ctl;
+        ctl.id = 1;
+        ctl.type = ComponentType::Ob2362;
+        ctl.pos = QPointF(100, 100);
+        ctl.refdes = QStringLiteral("U1");
+        ctl.frequency = 65000.0;
+        c.components.append(ctl);
+        const double suggested = c.suggestedMaxStep();
+        QVERIFY2(suggested > 0.0 && suggested < 1e-6,
+                 qPrintable(QStringLiteral("suggested = %1 s").arg(suggested)));
+
+        // 同时有 50 Hz 正弦时，仍以快的那个为准
+        Component src;
+        src.id = 2;
+        src.type = ComponentType::VoltageSource;
+        src.pos = QPointF(200, 100);
+        src.refdes = QStringLiteral("V1");
+        src.function = SourceFunction::Sine;
+        src.frequency = 50.0;
+        c.components.append(src);
+        QCOMPARE(c.suggestedMaxStep(), suggested);
     }
 
     void changelogSectionsAreUnique()

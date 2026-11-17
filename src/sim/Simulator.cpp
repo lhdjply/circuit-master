@@ -93,8 +93,10 @@ struct ElementState {
     QHash<int, double> mosVds;  // MOSFET / IGBT：上一次迭代的 vds(或 vce)
     QHash<int, double> optoVce; // 光耦输出侧：上一次迭代的 Vce
     QHash<int, double> tlVref;  // TL431：上一次迭代的参考端电压（相对阳极）
-    QHash<int, double> obFb;    // OB2362：上一步的 FB 电压
-    QHash<int, double> obCs;    // OB2362：上一步的 CS 电压
+    QHash<int, double> obFb;     // OB2362：上一步的 FB 电压
+    QHash<int, double> obCs;     // OB2362：上一步的 CS 电压
+    QHash<int, double> obVcc;    // OB2362：上一步的 VCC 电压
+    QHash<int, double> obUvloOn; // OB2362：UVLO 锁存状态（0 关 / 1 开）
 };
 
 /// 变压器的绕组：每个绕组是一对引脚（按局部引脚编号）
@@ -607,30 +609,52 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
         }
 
         case ComponentType::Ob2362: {
-            // 简化模型：内部 65 kHz 振荡器 + 峰值电流模式
-            //   GATE 在每周期开始拉高，满足下面任一条件就拉低：
-            //     · 占空比达到由 FB 决定的指令值
-            //     · CS 电压达到限流阈值（逐周期限流）
-            // 只依赖「上一步」的 FB/CS，不引入迭代内状态，数值上稳定。
+            // 行为级模型（按 OB2362A 数据手册）：
+            //   · 内部 65 kHz 振荡器，GATE 每周期按 FB 决定的占空比拉高到约 11 V
+            //   · 峰值电流模式：CS 达到限流阈值就关断
+            //   · FB 脚：内部 30 kΩ 输入阻抗 + 约 150 µA 偏置电流，开路时约 4.5 V
+            //     （对应手册的开环 OLP 阈值 4.4 V），这样没有光耦拉低时能满占空比起机
+            //   · VCC 脚：UVLO 17 V 开 / 7.3 V 关（带回差）、工作电流 2.5 mA、
+            //     28 V 过压钳位
             const int br = p.branchOf.value(comp.id, -1);
             if (br < 0)
                 break;
+
+            const int nfb = p.nodeOf(comp.id, 1);
+            const int ncs = p.nodeOf(comp.id, 3);
+            const int nvcc = p.nodeOf(comp.id, 4);
+
+            const double vfb = st.obFb.value(comp.id, 0.0);
+            const double vcs = st.obCs.value(comp.id, 0.0);
+            const double vcc = st.obVcc.value(comp.id, 0.0);
+            const bool uvloOn = st.obUvloOn.value(comp.id, 0.0) > 0.5;
+
+            // FB 脚：30 kΩ 输入阻抗 + 150 µA 偏置
+            addG(a, nfb, 0, 1.0 / 30000.0);
+            addI(b, 0, nfb, 150e-6);
+
+            // VCC 脚：工作电流 + 28 V 钳位
+            addI(b, nvcc, 0, uvloOn ? 2.5e-3 : 0.0);
+            if (vcc > 28.0) {
+                // I(V) = g·(V − 28) 线性化：I ≈ g·V − g·28
+                const double gClamp = 5.0;
+                addG(a, nvcc, 0, gClamp);
+                addI(b, nvcc, 0, -gClamp * 28.0);
+            }
+
+            // GATE：FB 决定占空比，CS 达阈值则提前关断
             const double fsw = comp.frequency > 1.0 ? comp.frequency : 65000.0;
             const double period = 1.0 / fsw;
             const double phase = period > 0.0 ? std::fmod(t, period) / period : 0.0;
-            const double vfb = st.obFb.value(comp.id, 0.0);
-            const double vcs = st.obCs.value(comp.id, 0.0);
-            // 数据手册：CS 限流阈值 0.45 V（零占空比）、钳位 0.72 V；FB 与 CS 之间
-            // 的增益约 3.5，即 Vcs_target ≈ (VFB − 0.5)/3.5；GATE 输出钳位约 11 V
+            const double dutyMax = std::clamp((vfb - 0.8) / 2.0, 0.0, 0.8);
             const double vlimit = comp.value > 0.01 ? comp.value : 0.72;
-            const double vcc = st.obFb.value(-comp.id, 0.0); // 复用：VCC 存在负键里
-            const double vcsTarget = std::clamp((vfb - 0.5) / 3.5, 0.0, vlimit);
-            const double duty = 0.8;
-            const bool uvlo = vcc > 0.0 && vcc < 7.3; // VCC 欠压关断
-            const double gate = (!uvlo && phase < duty && vcs < vcsTarget) ? 11.0 : 0.0;
+            const bool cycleOn = phase < dutyMax && vcs < vlimit;
+            const double gate = (uvloOn && cycleOn) ? 11.0 : 0.0;
             addBranch(a, b, p, comp.id, 0.0, gate);
+            (void)ncs;
             break;
         }
+
         case ComponentType::OpAmp: {
             // 三端理想运放：v_out - Rout·i_out = A·(v+ - v-)
             const int br = p.branchOf.value(comp.id, -1);
@@ -980,9 +1004,17 @@ void updateState(const Problem& p, ElementState& st, const std::vector<double>& 
             if (br >= 0)
                 st.indI.insert(cp->id, x[size_t(p.nNodes + br)]);
         } else if (cp->type == ComponentType::Ob2362) {
-            st.obFb.insert(cp->id, p.voltage(x, p.nodeOf(cp->id, 1)));        // FB
-            st.obCs.insert(cp->id, p.voltage(x, p.nodeOf(cp->id, 3)));        // CS
-            st.obFb.insert(-cp->id, p.voltage(x, p.nodeOf(cp->id, 4)));       // VCC（负键复用）
+            st.obFb.insert(cp->id, p.voltage(x, p.nodeOf(cp->id, 1)));  // FB
+            st.obCs.insert(cp->id, p.voltage(x, p.nodeOf(cp->id, 3)));  // CS
+            const double vcc = p.voltage(x, p.nodeOf(cp->id, 4));
+            st.obVcc.insert(cp->id, vcc);
+            // UVLO 带回差：17 V 起机、7.3 V 关断
+            double on = st.obUvloOn.value(cp->id, 0.0);
+            if (on < 0.5 && vcc > 17.0)
+                on = 1.0;
+            else if (on > 0.5 && vcc < 7.3)
+                on = 0.0;
+            st.obUvloOn.insert(cp->id, on);
         } else if (cp->type == ComponentType::Transformer) {
             QVector<double> currents;
             for (int br : p.windingBranches.value(cp->id))
@@ -1473,11 +1505,29 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
     if (options.kind == AnalysisKind::Transient) {
         double tStop = options.tStop > 0.0 ? options.tStop : 0.01;
         double h = options.tStep > 0.0 ? options.tStep : tStop / 1000.0;
+        // 只提示、不擅自改步长：改步长会改变结果（老工程与测试都按给定步长算）
+        const double suggested = circuit.suggestedMaxStep();
+        if (suggested > 0.0 && h > suggested) {
+            result.log << QStringLiteral(
+                              "提示：最大步长 %1 比电路的开关动态粗（建议 ≤ %2），"
+                              "开关波形会失真，输出可能算不出来。")
+                              .arg(formatEng(h, QStringLiteral("s"), 3),
+                                   formatEng(suggested, QStringLiteral("s"), 3));
+        }
+
         double steps = std::ceil(tStop / h);
         if (steps > kMaxPoints) {
             h = tStop / kMaxPoints;
             steps = kMaxPoints;
-            result.log << QStringLiteral("步数过多，已自动调整为 %1 步。").arg(kMaxPoints);
+            result.log << QStringLiteral("步数过多，已自动调整为 %1 步（步长 %2）。")
+                              .arg(kMaxPoints)
+                              .arg(formatEng(h, QStringLiteral("s"), 3));
+            if (suggested > 0.0 && h > suggested) {
+                result.log << QStringLiteral(
+                                  "注意：受点数上限限制，当前步长仍比电路动态粗，"
+                                  "开关波形会失真。建议把停止时间缩短到 %1 以内。")
+                                  .arg(formatEng(suggested * kMaxPoints, QStringLiteral("s"), 2));
+            }
         }
         const int stepCount = std::max(1, int(steps));
 

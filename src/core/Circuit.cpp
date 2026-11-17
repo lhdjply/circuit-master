@@ -511,6 +511,13 @@ double Circuit::suggestedMaxStep() const
 {
     double fmax = 0.0;
     for (const Component& comp : components) {
+        // 开关控制器内部有几十 kHz 的振荡器：步长必须比它的周期细得多，
+        // 否则每个开关周期都被跨过去，波形直接算成直流
+        if (comp.type == ComponentType::Ob2362) {
+            if (comp.frequency > 0.0)
+                fmax = std::max(fmax, comp.frequency);
+            continue;
+        }
         if (!isSource(comp.type))
             continue;
         if (comp.function == SourceFunction::Sine && comp.frequency > 0.0) {
