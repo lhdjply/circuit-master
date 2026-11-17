@@ -179,6 +179,7 @@ ComponentItem* SchematicScene::placeComponent(ComponentType type, const QPointF&
         break;
     case ComponentType::Probe:
     case ComponentType::CurrentProbe:
+    case ComponentType::Multimeter:
     case ComponentType::Diode:
     case ComponentType::Ground:
         break;

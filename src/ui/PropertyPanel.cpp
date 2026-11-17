@@ -133,6 +133,20 @@ void PropertyPanel::buildUi()
                         int(TransformerKind::PrimaryAuxSecondary));
     m_form->addRow(QStringLiteral("绕组形式"), m_windings);
 
+    m_meterMode = new QComboBox(page);
+    m_meterMode->setObjectName(QStringLiteral("multimeterModeCombo"));
+    m_meterMode->addItem(QStringLiteral("直流电压档（并联，10 MΩ 内阻）"),
+                         int(MultimeterMode::Voltage));
+    m_meterMode->addItem(QStringLiteral("直流电流档（串入电路）"),
+                         int(MultimeterMode::Current));
+    m_meterMode->addItem(QStringLiteral("电阻档（注入 1 A 测试电流）"),
+                         int(MultimeterMode::Resistance));
+    m_meterMode->addItem(QStringLiteral("交流电压档（50 Hz 有效值）"),
+                         int(MultimeterMode::AcVoltage));
+    m_meterMode->addItem(QStringLiteral("交流电流档（50 Hz 有效值）"),
+                         int(MultimeterMode::AcCurrent));
+    m_form->addRow(QStringLiteral("档位"), m_meterMode);
+
     m_groundKind = new QComboBox(page);
     m_groundKind->addItem(QStringLiteral("GND（主地）"), int(GroundKind::Gnd));
     m_groundKind->addItem(QStringLiteral("AGND（模拟地）"), int(GroundKind::Agnd));
@@ -215,6 +229,8 @@ void PropertyPanel::buildUi()
     connect(m_ctr, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_vceSat, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_lpri, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
+    connect(m_meterMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &PropertyPanel::applyValue);
     connect(m_windings, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int) { applyValue(); });
     connect(m_polarity, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -305,6 +321,7 @@ void PropertyPanel::refreshFromItem()
     m_vceSat->setText(quantityText(c.vceSat, UnitKind::Volt));
     m_lpri->setText(quantityText(c.lpri, UnitKind::Henry));
     m_windings->setCurrentIndex(m_windings->findData(int(c.transformerKind)));
+    m_meterMode->setCurrentIndex(m_meterMode->findData(int(c.multimeterMode)));
     m_polarity->setCurrentIndex(m_polarity->findData(c.secondaryInverted ? 1 : 0));
     m_groundKind->setCurrentIndex(m_groundKind->findData(int(c.groundKind)));
     m_rotation->setText(QString::number(c.rotation));
@@ -425,6 +442,7 @@ void PropertyPanel::updateVisibility()
 
     m_form->setRowVisible(m_value, analog);
     m_form->setRowVisible(m_function, source);
+    m_form->setRowVisible(m_meterMode, c.type == ComponentType::Multimeter);
     m_form->setRowVisible(m_windings, c.type == ComponentType::Transformer);
     m_form->setRowVisible(m_polarity, c.type == ComponentType::Transformer);
     m_form->setRowVisible(m_groundKind, c.type == ComponentType::Ground
@@ -510,6 +528,16 @@ void PropertyPanel::applyValue()
     if (type == ComponentType::Ground || type == ComponentType::Probe) {
         Component c = m_item->component();
         c.groundKind = static_cast<GroundKind>(m_groundKind->currentData().toInt());
+        m_item->setComponent(c);
+        updateSubtitle();
+        emit changed();
+        return;
+    }
+
+    if (type == ComponentType::Multimeter) {
+        Component c = m_item->component();
+        if (m_meterMode)
+            c.multimeterMode = static_cast<MultimeterMode>(m_meterMode->currentData().toInt());
         m_item->setComponent(c);
         updateSubtitle();
         emit changed();

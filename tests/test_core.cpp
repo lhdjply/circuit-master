@@ -1314,6 +1314,206 @@ private slots:
                  qPrintable(QString::number(old.components.at(0).amplitude)));
     }
 
+    void multimeterMeasuresVoltageCurrentResistance()
+    {
+        // 万用表三个档位各测一次：电压档读分压、电流档读串入电流、电阻档读阻值
+        auto makeMeter = [](MultimeterMode mode) {
+            Circuit c;
+            Component v;
+            v.id = 1;
+            v.type = ComponentType::VoltageSource;
+            v.pos = QPointF(100, 300);
+            v.rotation = 90;
+            v.refdes = QStringLiteral("V1");
+            v.dcValue = 5.0;
+            c.components.append(v);
+            Component r1;
+            r1.id = 2;
+            r1.type = ComponentType::Resistor;
+            r1.pos = QPointF(220, 200);
+            r1.refdes = QStringLiteral("R1");
+            r1.value = 1000.0;
+            c.components.append(r1);
+            Component mm;
+            mm.id = 3;
+            mm.type = ComponentType::Multimeter;
+            mm.pos = QPointF(300, 300);
+            mm.refdes = QStringLiteral("XMM1");
+            mm.multimeterMode = mode;
+            c.components.append(mm);
+            Component g;
+            g.id = 4;
+            g.type = ComponentType::Ground;
+            g.pos = QPointF(100, 480);
+            g.refdes = QStringLiteral("GND");
+            c.components.append(g);
+            // 引脚都在 ±30：XMM 的两个引脚是 (270,300) 与 (330,300)
+            c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(190, 200)}});
+            c.wires.append(Wire{{QPointF(250, 200), QPointF(270, 200), QPointF(270, 300)}});
+            c.wires.append(Wire{{QPointF(330, 300), QPointF(330, 480), QPointF(100, 480)}});
+            c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 480)}});
+            return c;
+        };
+
+        auto readMeter = [](const Circuit& c, double* out) {
+            SimulationOptions tr;
+            tr.kind = AnalysisKind::Transient;
+            tr.tStop = 0.01;
+            tr.tStep = 1e-4;
+            const SimulationResult r = Simulator::run(c, tr);
+            QVERIFY2(r.ok, qPrintable(r.error));
+            const Signal* sig = r.signal(QStringLiteral("XMM1"));
+            QVERIFY(sig);
+            QVERIFY(!sig->y.isEmpty());
+            *out = sig->y.last();
+        };
+
+        // 电压档：并联在 R1（1 kΩ）上，读数应接近 5 V（10 MΩ 内阻的压降可忽略）
+        double volts = 0.0;
+        readMeter(makeMeter(MultimeterMode::Voltage), &volts);
+        QVERIFY2(near(volts, 5.0, 0.01), qPrintable(QString::number(volts)));
+
+        // 电流档：串进 5 V + 1 kΩ 回路，读数应接近 5 mA
+        double amps = 0.0;
+        readMeter(makeMeter(MultimeterMode::Current), &amps);
+        QVERIFY2(near(amps, 0.005, 1e-4), qPrintable(QString::number(amps)));
+
+        // 电阻档：同一条回路里量 R1，注入 1 A 读 V/I = 1000 Ω
+        // （档位独立成一条支路时读的是「从引脚看进去」的电阻）
+        Circuit ohm = makeMeter(MultimeterMode::Resistance);
+        ohm.components[1].value = 1000.0;
+        double ohms = 0.0;
+        readMeter(ohm, &ohms);
+        QVERIFY2(near(ohms, 1000.0, 5.0), qPrintable(QString::number(ohms)));
+
+        // 存盘往返：档位不能丢
+        Circuit saved = makeMeter(MultimeterMode::Resistance);
+        const QJsonObject json = saved.toJson();
+        QCOMPARE(json.value(QStringLiteral("components")).toArray().at(2).toObject()
+                     .value(QStringLiteral("multimeterMode")).toInt(),
+                 int(MultimeterMode::Resistance));
+        QString error;
+        const Circuit back = Circuit::fromJson(json, &error);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        QCOMPARE(back.components.at(2).multimeterMode, MultimeterMode::Resistance);
+    }
+
+    void multimeterMeasuresAcRms()
+    {
+        // 交流档：220 V 有效值 50 Hz 正弦，电压档并联、电流档串进 1 kΩ 回路。
+        // 读数应分别是 220 V 与 220 mA（交流档按一个 50 Hz 周期算有效值）。
+        Circuit c;
+        Component v;
+        v.id = 1;
+        v.type = ComponentType::VoltageSource;
+        v.pos = QPointF(100, 350);
+        v.rotation = 90;
+        v.refdes = QStringLiteral("V1");
+        v.function = SourceFunction::Sine;
+        v.amplitude = 220.0;
+        v.frequency = 50.0;
+        c.components.append(v);
+
+        Component mmV;
+        mmV.id = 2;
+        mmV.type = ComponentType::Multimeter;
+        mmV.pos = QPointF(250, 350);
+        mmV.rotation = 90;
+        mmV.refdes = QStringLiteral("XMM1");
+        mmV.multimeterMode = MultimeterMode::AcVoltage;
+        c.components.append(mmV);
+
+        Component r;
+        r.id = 3;
+        r.type = ComponentType::Resistor;
+        r.pos = QPointF(350, 200);
+        r.refdes = QStringLiteral("R1");
+        r.value = 1000.0;
+        c.components.append(r);
+
+        Component mmA;
+        mmA.id = 4;
+        mmA.type = ComponentType::Multimeter;
+        mmA.pos = QPointF(400, 350);
+        mmA.rotation = 90;
+        mmA.refdes = QStringLiteral("XMM2");
+        mmA.multimeterMode = MultimeterMode::AcCurrent;
+        c.components.append(mmA);
+
+        Component g;
+        g.id = 5;
+        g.type = ComponentType::Ground;
+        g.pos = QPointF(100, 500);
+        g.refdes = QStringLiteral("GND");
+        c.components.append(g);
+
+        c.wires.append(Wire{{QPointF(100, 320), QPointF(100, 200), QPointF(320, 200)}});
+        c.wires.append(Wire{{QPointF(380, 200), QPointF(400, 200), QPointF(400, 320)}});
+        c.wires.append(Wire{{QPointF(400, 380), QPointF(400, 500), QPointF(100, 500)}});
+        c.wires.append(Wire{{QPointF(100, 380), QPointF(100, 500)}});
+        c.wires.append(Wire{{QPointF(250, 200), QPointF(250, 320)}});
+        c.wires.append(Wire{{QPointF(250, 380), QPointF(250, 500)}});
+
+        const Netlist net = c.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+
+        SimulationOptions tr;
+        tr.kind = AnalysisKind::Transient;
+        tr.tStop = 0.2;
+        tr.tStep = 2e-5;
+        const SimulationResult r1 = Simulator::run(c, tr);
+        QVERIFY2(r1.ok, qPrintable(r1.error));
+
+        const Signal* volts = r1.signal(QStringLiteral("XMM1"));
+        QVERIFY(volts);
+        QCOMPARE(volts->unit, QStringLiteral("V"));
+        // 有效值精度受「窗口末段不满一个桶」影响，约 0.3%
+        QVERIFY2(near(volts->y.last(), 220.0, 1.0),
+                 qPrintable(QStringLiteral("交流电压 %1 V").arg(volts->y.last())));
+
+        const Signal* amps = r1.signal(QStringLiteral("XMM2"));
+        QVERIFY(amps);
+        QCOMPARE(amps->unit, QStringLiteral("A"));
+        QVERIFY2(near(amps->y.last(), 0.220, 1e-3),
+                 qPrintable(QStringLiteral("交流电流 %1 A").arg(amps->y.last())));
+
+        // 窗口正好是一个整周期（h = 2e-5、period = 0.02 → 1000 个样本），
+        // 有效值应当很准：220 V 读成 220.000
+        QVERIFY2(near(volts->y.last(), 220.0, 0.05),
+                 qPrintable(QStringLiteral("精确值 %1 V").arg(volts->y.last(), 0, 'f', 4)));
+
+        // 停止时间不足一个周期时不给读数（NaN → 界面画横杠），
+        // 而不是给出一个随时间乱跳的数
+        SimulationOptions brief = tr;
+        brief.tStop = 0.005;
+        const SimulationResult rShort = Simulator::run(c, brief);
+        QVERIFY2(rShort.ok, qPrintable(rShort.error));
+        const Signal* shortSig = rShort.signal(QStringLiteral("XMM1"));
+        QVERIFY(shortSig);
+        QVERIFY2(!shortSig->y.isEmpty() && !std::isfinite(shortSig->y.last()),
+                 "窗口没满时应当没有读数");
+        // 日志里要告诉用户停止时间不够
+        bool warned = false;
+        for (const QString& line : rShort.log)
+            if (line.contains(QStringLiteral("交流档")))
+                warned = true;
+        QVERIFY2(warned, qPrintable(rShort.log.join(QLatin1Char('\n'))));
+
+        // 直流工作点下没有交流分量，交流档读 0
+        SimulationOptions op;
+        op.kind = AnalysisKind::OperatingPoint;
+        const SimulationResult r2 = Simulator::run(c, op);
+        QVERIFY2(r2.ok, qPrintable(r2.error));
+        QVERIFY2(r2.report.contains(QStringLiteral("万用表读数")),
+                 qPrintable(r2.report));
+
+        // 直流电压档读的是瞬时值（正弦的平均值为 0）
+        Circuit dc = c;
+        dc.components[1].multimeterMode = MultimeterMode::Voltage;
+        const SimulationResult r3 = Simulator::run(dc, op);
+        QVERIFY2(r3.ok, qPrintable(r3.error));
+    }
+
     void changelogSectionsAreUnique()
     {
         // 「未发布」只能有一个：多次插条目时最容易写成两个，发布时会被漏掉

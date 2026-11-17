@@ -36,6 +36,7 @@ QString typeToTag(ComponentType type)
     case ComponentType::VoltageSource: return QStringLiteral("V");
     case ComponentType::CurrentSource: return QStringLiteral("I");
     case ComponentType::Probe:         return QStringLiteral("TP");
+    case ComponentType::Multimeter:    return QStringLiteral("XMM");
     case ComponentType::CurrentProbe:  return QStringLiteral("IP");
     case ComponentType::Ground:        return QStringLiteral("GND");
     }
@@ -62,6 +63,7 @@ ComponentType tagToType(const QString& tag)
     if (tag == QLatin1String("V")) return ComponentType::VoltageSource;
     if (tag == QLatin1String("I")) return ComponentType::CurrentSource;
     if (tag == QLatin1String("TP")) return ComponentType::Probe;
+    if (tag == QLatin1String("XMM")) return ComponentType::Multimeter;
     if (tag == QLatin1String("IP")) return ComponentType::CurrentProbe;
     if (tag == QLatin1String("GND")) return ComponentType::Ground;
     return ComponentType::Resistor;
@@ -191,6 +193,36 @@ QString Circuit::toSpiceNetlist() const
                          .arg(comp.refdes)
                          .arg(nodes.at(0))
                          .arg(nodes.at(1));
+            continue;
+        }
+
+        // 万用表没有 SPICE 对应器件：电压档导出成 10 MΩ 电阻（内阻），
+        // 电流档导出成 0V 电压源（安培计），电阻档没法表达，只留注释
+        if (comp.type == ComponentType::Multimeter) {
+            switch (comp.multimeterMode) {
+            case MultimeterMode::Voltage:
+                lines << QStringLiteral("R%1 %2 %3 10MEG")
+                             .arg(comp.refdes).arg(nodes.at(0)).arg(nodes.at(1));
+                break;
+            case MultimeterMode::Current:
+                lines << QStringLiteral("V%1 %2 %3 0")
+                             .arg(comp.refdes).arg(nodes.at(0)).arg(nodes.at(1));
+                break;
+            case MultimeterMode::AcVoltage:
+                // 交流电压档同样是并联取样，用 10 MΩ 表示
+                lines << QStringLiteral("R%1 %2 %3 10MEG")
+                             .arg(comp.refdes).arg(nodes.at(0)).arg(nodes.at(1));
+                break;
+            case MultimeterMode::AcCurrent:
+                // 交流电流档同样串 0V 源
+                lines << QStringLiteral("V%1 %2 %3 0")
+                             .arg(comp.refdes).arg(nodes.at(0)).arg(nodes.at(1));
+                break;
+            case MultimeterMode::Resistance:
+                lines << QStringLiteral("* %1: 万用表（电阻档），SPICE 不支持")
+                                     .arg(comp.refdes);
+                break;
+            }
             continue;
         }
 
@@ -409,6 +441,7 @@ QJsonObject Circuit::toJson() const
         o.insert(QStringLiteral("secondaryInverted"), c.secondaryInverted);
         o.insert(QStringLiteral("auxRatio"), c.auxRatio);
         o.insert(QStringLiteral("groundKind"), int(c.groundKind));
+        o.insert(QStringLiteral("multimeterMode"), int(c.multimeterMode));
         o.insert(QStringLiteral("transformerKind"),
                  c.transformerKind == TransformerKind::PrimaryAuxSecondary
                      ? QStringLiteral("primary-aux-secondary")
@@ -490,6 +523,8 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
         c.secondaryInverted = o.value(QStringLiteral("secondaryInverted")).toBool(false);
         c.auxRatio = o.value(QStringLiteral("auxRatio")).toDouble(1.0);
         c.groundKind = static_cast<GroundKind>(o.value(QStringLiteral("groundKind")).toInt(0));
+        c.multimeterMode = static_cast<MultimeterMode>(
+            o.value(QStringLiteral("multimeterMode")).toInt(0));
         c.transformerKind =
             o.value(QStringLiteral("transformerKind")).toString() == QLatin1String("primary-aux-secondary")
                 ? TransformerKind::PrimaryAuxSecondary

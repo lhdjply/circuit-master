@@ -131,6 +131,7 @@ set(CSM_UI_SOURCES
     src/ui/SchematicView.cpp
     src/ui/PropertyPanel.cpp
     src/ui/WaveformWindow.cpp
+    src/ui/MultimeterWindow.cpp
     src/ui/UpdateDialog.cpp
     src/ui/MainWindow.cpp
 )

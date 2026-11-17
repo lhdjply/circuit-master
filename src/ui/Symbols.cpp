@@ -600,6 +600,49 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         break;
     }
 
+    case ComponentType::Multimeter: {
+        // 圆形表盘（双圈，与电压/电流测试点区分），中间是档位字母
+        p->drawLine(QPointF(-30.0, 0.0), QPointF(-14.0, 0.0));
+        p->drawLine(QPointF(14.0, 0.0), QPointF(30.0, 0.0));
+        p->setBrush(theme::symbolFill);
+        p->drawEllipse(QPointF(0.0, 0.0), 15.0, 15.0);
+        p->setBrush(Qt::NoBrush);
+        p->setPen(symbolPen(color, 1.0));
+        p->drawEllipse(QPointF(0.0, 0.0), 12.0, 12.0);
+        p->setPen(symbolPen(color, 1.8));
+
+        const QString letter = multimeterModeLetter(comp.multimeterMode);
+        QFont font = p->font();
+        // 交流档的 "V~" / "A~" 是两个字符，字号收小一点才塞得进表盘
+        font.setPointSizeF(letter.size() > 1 ? 6.5 : 8.0);
+        font.setBold(true);
+        p->setFont(font);
+
+        // 表盘里的档位字母：逆着旋转摆正
+        p->save();
+        p->rotate(-double(rotation));
+        p->scale(mirrorX ? -1.0 : 1.0, mirrorY ? -1.0 : 1.0);
+        p->drawText(QRectF(-11.0, -9.0, 22.0, 18.0), Qt::AlignCenter, letter);
+        p->restore();
+
+        // 引脚极性：0 号引脚是「+」（红表笔），1 号是「−」（COM / 黑表笔）。
+        // 位置写在元件自己的坐标系里 —— 跟着引脚一起转，转到哪都贴在对应引线旁；
+        // 文字再反向旋转，保证始终正着读。
+        font.setPointSizeF(7.0);
+        p->setFont(font);
+        const auto mark = [&](const QPointF& at, const QString& text) {
+            p->save();
+            p->translate(at);
+            p->rotate(-double(rotation));
+            p->scale(mirrorX ? -1.0 : 1.0, mirrorY ? -1.0 : 1.0);
+            p->drawText(QRectF(-7.0, -7.0, 14.0, 14.0), Qt::AlignCenter, text);
+            p->restore();
+        };
+        mark(QPointF(-21.0, -8.0), QStringLiteral("+"));
+        mark(QPointF(21.0, -8.0), QStringLiteral("−"));
+        break;
+    }
+
     case ComponentType::Ground: {
         p->drawLine(QPointF(0.0, 0.0), QPointF(0.0, 13.0));
         if (comp.groundKind == GroundKind::Earth) {

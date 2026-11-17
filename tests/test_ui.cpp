@@ -8,6 +8,8 @@
 #include "ui/SchematicView.h"
 #include "ui/WireItem.h"
 #include "ui/ComponentItem.h"
+#include "ui/PropertyPanel.h"
+#include "ui/MultimeterWindow.h"
 #include "core/Netlist.h"
 #include "core/Circuit.h"
 #include "ui/WaveformWindow.h"
@@ -321,6 +323,218 @@ private slots:
         QVERIFY2(joined.contains(QStringLiteral("复制")), qPrintable(joined));
         QVERIFY2(joined.contains(QStringLiteral("粘贴")), qPrintable(joined));
         QVERIFY2(!joined.contains(QStringLiteral("Copy")), qPrintable(joined));
+    }
+
+    void multimeterModeFromPanel()
+    {
+        // 万用表：元件库有入口，属性面板能切换档位，符号文字跟着变
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        auto* item = scene->placeComponent(ComponentType::Multimeter, QPointF(300, 300));
+        QVERIFY(item);
+        item->setSelected(true); // 属性面板跟随选中项
+        settle();
+        QCOMPARE(item->component().refdes, QStringLiteral("XMM1"));
+        QCOMPARE(item->component().multimeterMode, MultimeterMode::Voltage);
+
+        auto* panel = window.findChild<PropertyPanel*>();
+        QVERIFY(panel);
+        auto* mode = panel->findChild<QComboBox*>(
+            QStringLiteral("multimeterModeCombo"));
+        QVERIFY2(mode, "属性面板里应当有档位下拉框");
+        QCOMPARE(mode->currentData().toInt(), int(MultimeterMode::Voltage));
+
+        mode->setCurrentIndex(mode->findData(int(MultimeterMode::Current)));
+        settle();
+        QCOMPARE(item->component().multimeterMode, MultimeterMode::Current);
+
+        // 电流档串进回路后，工作点应当测到电流（波形页会有 XMM1 信号）
+        mode->setCurrentIndex(mode->findData(int(MultimeterMode::Resistance)));
+        settle();
+        QCOMPARE(item->component().multimeterMode, MultimeterMode::Resistance);
+    }
+
+    void multimeterReadoutWindowOpensOnClick()
+    {
+        // 仿真时点击万用表应弹出七段码读数窗口；删掉元件窗口跟着关闭
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        auto* item = scene->placeComponent(ComponentType::Multimeter, QPointF(300, 300));
+        QVERIFY(item);
+        settle();
+
+        // 选中 = 点击：读数窗口应当出现
+        item->setSelected(true);
+        settle();
+        auto* meterWindow = window.findChild<MultimeterWindow*>();
+        QVERIFY2(meterWindow, "点击万用表后应当弹出读数窗口");
+        QCOMPARE(meterWindow->refdes(), QStringLiteral("XMM1"));
+        QVERIFY(meterWindow->isVisible());
+
+        // 窗口里应当有七段码显示和位数选择
+        QVERIFY(meterWindow->findChild<SevenSegmentDisplay*>() != nullptr);
+
+        // 删掉元件，窗口自动关闭
+        QAction* deleteAction = nullptr;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text() == QStringLiteral("删除"))
+                deleteAction = action;
+        }
+        QVERIFY(deleteAction);
+        deleteAction->trigger();
+        // 测试用 processEvents 驱动事件循环，DeferredDelete 要显式冲一下才会销毁
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+        settle();
+        QVERIFY2(window.findChild<MultimeterWindow*>() == nullptr,
+                 "删除万用表后读数窗口应当关闭");
+    }
+
+    void sevenSegmentDigitsFillTheDisplay()
+    {
+        // 回归：drawDigit 曾经漏加 pos.y()，除顶段以外的段全挤在控件顶部，
+        // 读数完全看不出是数字。这里用「亮段的包围盒」把位置和大小都盯住。
+        SevenSegmentDisplay display;
+        display.resize(420, 180);
+        // 不画单位：右下角的单位文字也是绿色，会把包围盒往下拽，干扰几何判断
+        display.setUnit(QString());
+        display.setDigits(MultimeterDigits::Half4);
+        display.setValue(2.4999);
+        display.show();
+        settle();
+
+        const QImage image = display.grab().toImage();
+        QVERIFY(!image.isNull());
+
+        int minX = image.width(), maxX = -1, minY = image.height(), maxY = -1;
+        for (int y = 0; y < image.height(); ++y) {
+            for (int x = 0; x < image.width(); ++x) {
+                const QColor c = image.pixelColor(x, y);
+                // 亮段是荧光绿：绿色明显高于红蓝
+                if (c.green() > 150 && c.green() > c.red() + 60 && c.green() > c.blue() + 60) {
+                    minX = std::min(minX, x);
+                    maxX = std::max(maxX, x);
+                    minY = std::min(minY, y);
+                    maxY = std::max(maxY, y);
+                }
+            }
+        }
+        QVERIFY2(maxX > minX && maxY > minY, "显示区里应当有亮段");
+
+        // 纵向必须上下对称：漏加 pos.y() 时所有横段挤在顶部，上半多下半少，
+        // 这个差值是 0 附近才对
+        const double centerY = (minY + maxY) / 2.0;
+        const double widgetCenterY = image.height() / 2.0;
+        QVERIFY2(std::abs(centerY - widgetCenterY) < image.height() * 0.1,
+                 qPrintable(QStringLiteral("亮段纵向中心 %1 偏离控件中心 %2")
+                                .arg(centerY).arg(widgetCenterY)));
+        const double upper = centerY - minY;
+        const double lower = maxY - centerY;
+        QVERIFY2(std::abs(upper - lower) < image.height() * 0.1,
+                 qPrintable(QStringLiteral("亮段上下不对称：上 %1、下 %2")
+                                .arg(upper).arg(lower)));
+
+        // 数字应当占满大部分高度，而不是挤成一条
+        const double inkHeight = maxY - minY;
+        QVERIFY2(inkHeight > image.height() * 0.35,
+                 qPrintable(QStringLiteral("亮段高度只有 %1 / %2")
+                                .arg(inkHeight).arg(image.height())));
+
+        // 横向也要铺开（5 个数字位）
+        const double inkWidth = maxX - minX;
+        QVERIFY2(inkWidth > image.width() * 0.5,
+                 qPrintable(QStringLiteral("亮段宽度只有 %1 / %2")
+                                .arg(inkWidth).arg(image.width())));
+    }
+
+    void sevenSegmentRangeDoesNotFlicker()
+    {
+        // 读数在 1 V 附近抖动时，单位不能在「999.9 mV」和「1.000 V」之间来回跳
+        SevenSegmentDisplay display;
+        display.setUnit(QStringLiteral("V"));
+        display.setDigits(MultimeterDigits::Half4);
+
+        display.setValue(1.0000);
+        QCOMPARE(display.displayedUnit(), QStringLiteral("V"));
+        for (double v : {0.9995, 1.0002, 0.9998, 1.0001, 1.0000, 1.0003, 0.9999})
+            QCOMPARE(display.displayedUnit(), QStringLiteral("V"));
+
+        // 掉到 50 mV 以下才换到 mV
+        display.setValue(0.05);
+        QCOMPARE(display.displayedUnit(), QStringLiteral("mV"));
+        // 再涨回 1.5 V，按 1000 mV 的上限升回 V
+        display.setValue(1.5);
+        QCOMPARE(display.displayedUnit(), QStringLiteral("V"));
+        // 123 µV 应当落到 µV，而不是「0.0012 mV」
+        display.setValue(0.000123);
+        QCOMPARE(display.displayedUnit(), QStringLiteral("µV"));
+    }
+
+    void dcMeterShowsMinusOnly()
+    {
+        // 真表的惯例：正数不显示符号，负数才显示「−」；
+        // 但直流档始终占着那一格，位数不会因为正负而左右跳
+        SevenSegmentDisplay display;
+        display.setUnit(QStringLiteral("V"));
+        display.setDigits(MultimeterDigits::Half4);
+        display.setSignSlot(true);
+        display.resize(420, 180);
+        display.show();
+        settle();
+
+        auto leftmostInk = [&](double value) {
+            display.setValue(value);
+            settle();
+            const QImage image = display.grab().toImage();
+            for (int x = 0; x < image.width(); ++x) {
+                for (int y = 0; y < image.height(); ++y) {
+                    const QColor c = image.pixelColor(x, y);
+                    if (c.green() > 150 && c.green() > c.red() + 60 && c.green() > c.blue() + 60)
+                        return x;
+                }
+            }
+            return -1;
+        };
+
+        const int positive = leftmostInk(5.0);
+        const int negative = leftmostInk(-5.0);
+        QVERIFY2(positive > 0 && negative > 0, "两种极性都应当有亮段");
+        // 负数多画一条负号，亮段的最左位置明显更靠左
+        QVERIFY2(negative < positive - 8,
+                 qPrintable(QStringLiteral("正数最左 %1、负数最左 %2").arg(positive).arg(negative)));
+
+        // 交流档不占符号位：正数的最左位置应当和直流档正数接近（只差负号那格）
+        SevenSegmentDisplay ac;
+        ac.setUnit(QStringLiteral("V"));
+        ac.setDigits(MultimeterDigits::Half4);
+        ac.setSignSlot(false);
+        ac.resize(420, 180);
+        ac.show();
+        settle();
+        ac.setValue(5.0);
+        settle();
+        const QImage acImage = ac.grab().toImage();
+        int acLeft = -1;
+        for (int x = 0; x < acImage.width() && acLeft < 0; ++x)
+            for (int y = 0; y < acImage.height(); ++y) {
+                const QColor c = acImage.pixelColor(x, y);
+                if (c.green() > 150 && c.green() > c.red() + 60 && c.green() > c.blue() + 60) {
+                    acLeft = x;
+                    break;
+                }
+            }
+        QVERIFY2(acLeft > 0 && acLeft < positive,
+                 qPrintable(QStringLiteral("交流档最左 %1、直流档正数最左 %2")
+                                .arg(acLeft).arg(positive)));
     }
 
     void transformerHasFourPinsAndPanel()

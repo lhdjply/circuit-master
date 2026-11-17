@@ -67,6 +67,7 @@ int pinCount(ComponentType type)
     switch (type) {
     case ComponentType::Ground: return 1;
     case ComponentType::Probe:  return 1;
+    case ComponentType::Multimeter: return 2;
     case ComponentType::OpAmp:  return 3;
     case ComponentType::Npn:
     case ComponentType::Pnp:
@@ -117,6 +118,7 @@ QString typeName(ComponentType type)
     case ComponentType::CurrentSource: return QStringLiteral("电流源");
     case ComponentType::Probe:         return QStringLiteral("电压测试点");
     case ComponentType::CurrentProbe:  return QStringLiteral("电流测试点");
+    case ComponentType::Multimeter:    return QStringLiteral("万用表");
     case ComponentType::Ground:        return QStringLiteral("接地");
     }
     return QString();
@@ -146,6 +148,7 @@ QString typeSymbol(ComponentType type)
     case ComponentType::CurrentSource: return QStringLiteral("I");
     case ComponentType::Probe:         return QStringLiteral("TP");
     case ComponentType::CurrentProbe:  return QStringLiteral("IP");
+    case ComponentType::Multimeter:    return QStringLiteral("XMM");
     case ComponentType::Ground:        return QStringLiteral("GND");
     }
     return QString();
@@ -315,6 +318,7 @@ QString Component::unitName() const
     case ComponentType::Probe:
     case ComponentType::Ground:        return QString();
     case ComponentType::CurrentProbe:  return QStringLiteral("A");
+    case ComponentType::Multimeter:    return QString(); // 万用表没有可设的数值
     }
     return QString();
 }
@@ -386,6 +390,9 @@ QString Component::displayValue() const
     case ComponentType::CurrentProbe:
         return QString();
 
+    case ComponentType::Multimeter:
+        return multimeterModeLetter(multimeterMode);
+
     case ComponentType::Ground:
         return QStringLiteral("0");
     }
@@ -455,10 +462,52 @@ QString Component::spiceValueSpec() const
 
     case ComponentType::Probe:
     case ComponentType::CurrentProbe:
+    case ComponentType::Multimeter:
     case ComponentType::Ground:
         return QString();
     }
     return QString();
+}
+
+QString multimeterModeName(MultimeterMode mode)
+{
+    switch (mode) {
+    case MultimeterMode::Voltage:    return QStringLiteral("直流电压档");
+    case MultimeterMode::Current:    return QStringLiteral("直流电流档");
+    case MultimeterMode::Resistance: return QStringLiteral("电阻档");
+    case MultimeterMode::AcVoltage:  return QStringLiteral("交流电压档");
+    case MultimeterMode::AcCurrent:  return QStringLiteral("交流电流档");
+    }
+    return QString();
+}
+
+QString multimeterModeLetter(MultimeterMode mode)
+{
+    switch (mode) {
+    case MultimeterMode::Voltage:    return QStringLiteral("V");
+    case MultimeterMode::Current:    return QStringLiteral("A");
+    case MultimeterMode::Resistance: return QStringLiteral("Ω");
+    case MultimeterMode::AcVoltage:  return QStringLiteral("V~");
+    case MultimeterMode::AcCurrent:  return QStringLiteral("A~");
+    }
+    return QString();
+}
+
+QString multimeterModeUnit(MultimeterMode mode)
+{
+    switch (mode) {
+    case MultimeterMode::Voltage:
+    case MultimeterMode::AcVoltage:  return QStringLiteral("V");
+    case MultimeterMode::Current:
+    case MultimeterMode::AcCurrent:  return QStringLiteral("A");
+    case MultimeterMode::Resistance: return QStringLiteral("Ω");
+    }
+    return QString();
+}
+
+bool isAcMeterMode(MultimeterMode mode)
+{
+    return mode == MultimeterMode::AcVoltage || mode == MultimeterMode::AcCurrent;
 }
 
 } // namespace csm

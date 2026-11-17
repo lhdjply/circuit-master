@@ -23,6 +23,7 @@ class PropertyPanel;
 class SchematicScene;
 class SchematicView;
 class WaveformWindow;
+class MultimeterWindow;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -84,6 +85,12 @@ private:
 
     void onSelectionChanged();
     void onEditRequested(ComponentItem* item);
+    /// 点击万用表时打开（或置前）它的读数窗口
+    void openMeterWindow(ComponentItem* item);
+    /// 按当前仿真状态刷新所有打开的万用表读数窗口
+    void refreshMeterWindows();
+    /// 关闭所有万用表读数窗口（新建 / 打开电路时调用）
+    void closeMeterWindows();
     void setDirty(bool dirty);
     bool maybeSave();
     void updateTitle();
@@ -100,6 +107,7 @@ private:
     QTabWidget* m_waveTabs = nullptr;
     WaveformWindow* m_wavePlot = nullptr;   // 静态波形
     WaveformWindow* m_waveLive = nullptr;   // 动态示波器
+    QHash<QString, MultimeterWindow*> m_meterWindows; // 万用表读数窗口（按参考编号）
     QPlainTextEdit* m_log = nullptr;
     QListWidget* m_library = nullptr;
     QComboBox* m_libraryCategory = nullptr;

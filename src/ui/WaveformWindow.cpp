@@ -780,6 +780,10 @@ void WaveformWindow::rebuild()
             : s.unit == QLatin1String("A")                  ? currentScale
                                                             : 1.0;
         for (int i = 0; i < count; ++i) {
+            // 万用表的交流档在一个周期攒满之前是 NaN，跳过这些点，
+            // 直接交给 QLineSeries 会让整条曲线消失
+            if (!std::isfinite(s.y.at(i)))
+                continue;
             const double xValue = logX ? std::log10(std::max(s.x.at(i), 1e-12))
                                        : s.x.at(i) * xFactor;
             series->append(xValue, s.y.at(i) * yScale);
@@ -1185,6 +1189,8 @@ void WaveformWindow::liveTick()
         points.reserve(wave.x.size());
         for (int k = 0; k < wave.x.size(); ++k) {
             if (wave.x.at(k) < timeOffset)
+                continue;
+            if (!std::isfinite(wave.y.at(k)))
                 continue;
             points.append(QPointF((wave.x.at(k) - timeOffset) * timeScale, wave.y.at(k)));
         }

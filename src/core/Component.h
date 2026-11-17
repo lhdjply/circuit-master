@@ -27,7 +27,17 @@ enum class ComponentType {
     CurrentSource,
     Probe,
     CurrentProbe,
+    Multimeter,   ///< 万用表：两引脚仪器，按档位测电压 / 电流 / 电阻
     Ground,
+};
+
+/// 万用表的档位
+enum class MultimeterMode {
+    Voltage,     ///< 直流电压档：并联，10 MΩ 内阻，读两点电压
+    Current,     ///< 直流电流档：串入电路，读流过自身的电流
+    Resistance,  ///< 电阻档：注入 1 A 测试电流，读 V / I
+    AcVoltage,   ///< 交流电压档：隔直后按一个 50 Hz 周期算有效值
+    AcCurrent,   ///< 交流电流档：隔直后按一个 50 Hz 周期算有效值
 };
 
 /// 接地的种类：不同符号代表不同的参考网络，在单点处连到一起
@@ -62,6 +72,14 @@ int pinCount(const struct Component& comp);
 QString typeName(ComponentType type);      // 中文显示名
 /// 接地种类的显示名（GND / AGND / DGND / PGND / EARTH）
 QString groundKindName(GroundKind kind);
+/// 万用表档位的显示名（电压档 / 电流档 / 电阻档）
+QString multimeterModeName(MultimeterMode mode);
+/// 万用表档位画在符号里的字母（V / A / Ω / V~ / A~）
+QString multimeterModeLetter(MultimeterMode mode);
+/// 万用表读数用的基本单位（V / A / Ω）
+QString multimeterModeUnit(MultimeterMode mode);
+/// 是否是需要按周期算有效值的交流档
+bool isAcMeterMode(MultimeterMode mode);
 QString typeSymbol(ComponentType type);    // R / C / L / D / S / V / I / GND
 QString refPrefix(ComponentType type);     // 参考编号前缀
 bool isTwoTerminal(ComponentType type);
@@ -102,6 +120,12 @@ struct Component {
     double lpri = 1.0;
     /// 接地符号的种类（Ground）；测试点的参考地也用它（Probe）
     GroundKind groundKind = GroundKind::Gnd;
+    /// 万用表的档位（Multimeter）
+    MultimeterMode multimeterMode = MultimeterMode::Voltage;
+    /// 交流档算有效值用的频率（Hz）：测量窗口取一个周期。
+    /// 默认 50 Hz（市电）；被测信号不是 50 Hz 时必须跟着改，
+    /// 否则窗口里装不下一个完整周期，读数会随时间乱跳。
+    double acFrequency = 50.0;
     /// 变压器的绕组形式（单绕组 / 初级 + 辅助 + 次级）
     TransformerKind transformerKind = TransformerKind::Single;
     /// 次级同名端画在下方（反相）：耦合系数取负，次级电压反 180°

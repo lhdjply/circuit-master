@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <complex>
 #include <vector>
 
@@ -97,6 +98,60 @@ struct ElementState {
     QHash<int, double> obCs;     // OB2362：上一步的 CS 电压
     QHash<int, double> obVcc;    // OB2362：上一步的 VCC 电压
     QHash<int, double> obUvloOn; // OB2362：UVLO 锁存状态（0 关 / 1 开）
+
+    /// 万用表交流档的滑动窗口：存「正好一个周期」的采样，算交流有效值。
+    /// 窗口样本数 = round(period / (decim·h))，所以窗口跨度正好是一个整周期，
+    /// 正弦的有效值就是 A/√2，不会有「窗口差一点点」带来的偏差。
+    /// 采样过密（h 很小、周期很长）时按 decim 抽稀，保证样本数有上界。
+    struct AcWindow {
+        QVector<double> samples;
+        int index = 0;   // 下一个写入位置
+        int filled = 0;  // 已填样本数
+        int decim = 1;   // 每 decim 个采样存一个
+        int skip = 0;    // 抽稀计数器
+    };
+    QHash<int, AcWindow> meterAc;
+    QHash<int, double> meterAcRms; // 最近一次算出的交流有效值
+
+    /// 把一次采样喂进交流窗口，返回整窗的交流有效值（窗口没满时返回 NaN）
+    double feedAcWindow(int id, double value, double h, double period)
+    {
+        constexpr int kMaxSamples = 20000;
+        AcWindow& w = meterAc[id];
+
+        if (w.samples.isEmpty()) {
+            // 首次调用：按 period/h 定窗口大小，样本过多就抽稀
+            const double raw = std::max(period / std::max(h, 1e-15), 2.0);
+            w.decim = std::max(1, int(std::ceil(raw / kMaxSamples)));
+            w.samples.assign(std::max(2, int(std::lround(period / (w.decim * h)))), 0.0);
+            w.index = 0;
+            w.filled = 0;
+            w.skip = 0;
+        }
+
+        if (++w.skip < w.decim)
+            return std::numeric_limits<double>::quiet_NaN();
+        w.skip = 0;
+
+        w.samples[w.index] = value;
+        w.index = (w.index + 1) % w.samples.size();
+        if (w.filled < w.samples.size())
+            ++w.filled;
+
+        // 还没攒够一个整周期：返回 NaN，界面显示一排横杠。
+        // 真实万用表在低频档也要等几个周期才稳住，这里不假装已经量到了。
+        if (w.filled < w.samples.size())
+            return std::numeric_limits<double>::quiet_NaN();
+
+        double total = 0.0, totalSq = 0.0;
+        for (double v : w.samples) {
+            total += v;
+            totalSq += v * v;
+        }
+        const double n = double(w.samples.size());
+        const double mean = total / n;
+        return std::sqrt(std::max(totalSq / n - mean * mean, 0.0));
+    }
 };
 
 /// 变压器的绕组：每个绕组是一对引脚（按局部引脚编号）
@@ -347,6 +402,9 @@ Problem buildProblem(const Circuit& circuit, const Netlist& net)
         const bool needsBranch = comp.type == ComponentType::VoltageSource
             || comp.type == ComponentType::Inductor || comp.type == ComponentType::OpAmp
             || comp.type == ComponentType::CurrentProbe
+            || (comp.type == ComponentType::Multimeter
+                && (comp.multimeterMode == MultimeterMode::Current
+                    || comp.multimeterMode == MultimeterMode::AcCurrent))
             || comp.type == ComponentType::Ob2362; // GATE 输出当作电压源
         if (needsBranch) {
             int n1 = -1;
@@ -457,6 +515,29 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
 
         case ComponentType::CurrentProbe:
             addBranch(a, b, p, comp.id, 0.0, 0.0);
+            break;
+
+        case ComponentType::Multimeter:
+            // 直流/交流电压档：10 MΩ 内阻并联（真实 DMM 的量级，对电路的扰动可忽略）
+            // 直流/交流电流档：串入一条 0 V 支路（安培计），电流从支路未知量里读
+            // 电阻档：注入 1 A 测试电流（从引脚 0 流向外部、经被测网络回到引脚 1），
+            //         读 V(0) − V(1) 即 R（Ω）；1 A 是为了让常见阻值直接读出欧姆数
+            //
+            // 交流档不做真正的隔直电容：仿真里串一个 20 ms 级的电容会拖慢收敛，
+            // 隔直放到读数环节做（扣掉窗口均值），效果与真表一致。
+            switch (comp.multimeterMode) {
+            case MultimeterMode::Voltage:
+            case MultimeterMode::AcVoltage:
+                addG(a, n1, n2, 1.0 / 10e6);
+                break;
+            case MultimeterMode::Current:
+            case MultimeterMode::AcCurrent:
+                addBranch(a, b, p, comp.id, 0.0, 0.0);
+                break;
+            case MultimeterMode::Resistance:
+                addI(b, n2, n1, 1.0);
+                break;
+            }
             break;
 
         case ComponentType::CurrentSource:
@@ -957,6 +1038,9 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
         }
         case ComponentType::Probe:
             break;
+        case ComponentType::Multimeter:
+            // 读数走专属的 XMM 信号（与 makeSignals 末尾的顺序一致），这里不产生元件电流
+            break;
         }
         out.append(current);
     }
@@ -969,6 +1053,33 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
         const int b = p.referenceNode.value(int(cp->groundKind), 0);
         if (a > 0)
             out.append(p.voltage(x, a) - p.voltage(x, b));
+    }
+
+    // 与 makeSignals 的顺序保持一致：万用表读数
+    for (const Component* cp : p.elements) {
+        if (cp->type != ComponentType::Multimeter)
+            continue;
+        const int a = p.nodeOf(cp->id, 0);
+        const int b = p.nodeOf(cp->id, 1);
+        const bool currentMode = cp->multimeterMode == MultimeterMode::Current
+            || cp->multimeterMode == MultimeterMode::AcCurrent;
+
+        double instant = 0.0;
+        if (currentMode) {
+            const int br = p.branchOf.value(cp->id, -1);
+            instant = br >= 0 ? x[size_t(p.nNodes + br)] : 0.0;
+        } else {
+            // 电压档：V；电阻档：V / 1 A = R（Ω）
+            instant = p.voltage(x, a) - p.voltage(x, b);
+        }
+
+        if (isAcMeterMode(cp->multimeterMode)) {
+            // 交流档：取滑动窗口里算好的有效值（由 updateState 在每步之后喂进去）
+            const auto it = st.meterAcRms.constFind(cp->id);
+            out.append(it == st.meterAcRms.constEnd() ? 0.0 : it.value());
+        } else {
+            out.append(instant);
+        }
     }
 }
 
@@ -991,7 +1102,36 @@ QVector<Signal> makeSignals(const Problem& p)
             list.append(Signal{QStringLiteral("V(%1,%2)").arg(a).arg(b), QStringLiteral("V"),
                                {}, {}});
     }
+
+    // 万用表：每个档位一条专属信号，读数含义随档位变化（V / A / Ω）
+    for (const Component* cp : p.elements) {
+        if (cp->type != ComponentType::Multimeter)
+            continue;
+        list.append(Signal{cp->refdes, multimeterModeUnit(cp->multimeterMode), {}, {}});
+    }
     return list;
+}
+
+/// 把当前时刻的万用表读数喂进交流档的滑动窗口（瞬态每步调用一次）。
+/// 直流工作点不调用 —— 没有时间轴，交流有效值就是 0。
+void updateAcMeters(const Problem& p, ElementState& st, const std::vector<double>& x,
+                    double h, double period = 0.02)
+{
+    for (const Component* cp : p.elements) {
+        if (cp->type != ComponentType::Multimeter || !isAcMeterMode(cp->multimeterMode))
+            continue;
+        double instant = 0.0;
+        if (cp->multimeterMode == MultimeterMode::AcCurrent) {
+            const int br = p.branchOf.value(cp->id, -1);
+            if (br >= 0)
+                instant = x[size_t(p.nNodes + br)];
+        } else {
+            const int a = p.nodeOf(cp->id, 0);
+            const int b = p.nodeOf(cp->id, 1);
+            instant = p.voltage(x, a) - p.voltage(x, b);
+        }
+        st.meterAcRms.insert(cp->id, st.feedAcWindow(cp->id, instant, h, period));
+    }
 }
 
 void updateState(const Problem& p, ElementState& st, const std::vector<double>& x)
@@ -1071,6 +1211,32 @@ QString buildReport(const Circuit& circuit, const Problem& p, const Netlist& net
                           formatEng(currents.at(idx), QStringLiteral("A"), 4));
         ++idx;
     }
+
+    // 万用表读数：排在采样向量的最后一段（节点电压 + 元件电流 + 测试点差分之后），
+    // 含义随档位变化（V / A / Ω）
+    // 万用表读数在采样向量里排在最后：节点电压 + 元件电流 + 带参考地的测试点差分之后
+    int meterBase = int(p.nNodes + p.elements.size());
+    for (const Component* cp : p.elements) {
+        if (cp->type == ComponentType::Probe && cp->groundKind != GroundKind::Gnd)
+            ++meterBase;
+    }
+    QVector<QPair<QString, QString>> meters; // (名字, 单位)
+    for (const Component* cp : p.elements) {
+        if (cp->type != ComponentType::Multimeter)
+            continue;
+        meters.append(qMakePair(cp->refdes, multimeterModeUnit(cp->multimeterMode)));
+    }
+    if (!meters.isEmpty()) {
+        lines << QString();
+        lines << QStringLiteral("万用表读数：");
+        for (int k = 0; k < meters.size(); ++k) {
+            const double value = meterBase + k < currents.size()
+                ? currents.at(meterBase + k) : 0.0;
+            lines << QStringLiteral("  %1 = %2")
+                         .arg(meters.at(k).first.leftJustified(8, QLatin1Char(' ')),
+                              formatEng(value, meters.at(k).second, 4));
+        }
+    }
     return lines.join(QLatin1Char('\n'));
 }
 
@@ -1125,6 +1291,23 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
             break;
         case ComponentType::CurrentProbe:
             addBranch(a, b, p, comp.id, Cx(0.0, 0.0), Cx(0.0, 0.0));
+            break;
+        case ComponentType::Multimeter:
+            // 电压档：10 MΩ 并联；电流档：0 V 支路；电阻档：1 A 测试电流源
+            // （交流下源幅度按 1 处理，V/I 的比值即阻抗，dB 读数是 20·log10|Z|）
+            switch (comp.multimeterMode) {
+            case MultimeterMode::Voltage:
+            case MultimeterMode::AcVoltage:
+                addG(a, n1, n2, Cx(1.0 / 10e6, 0.0));
+                break;
+            case MultimeterMode::Current:
+            case MultimeterMode::AcCurrent:
+                addBranch(a, b, p, comp.id, Cx(0.0, 0.0), Cx(0.0, 0.0));
+                break;
+            case MultimeterMode::Resistance:
+                addI(b, n2, n1, Cx(1.0, 0.0));
+                break;
+            }
             break;
         case ComponentType::CurrentSource:
             addI(b, n1, n2, Cx(1.0, 0.0));
@@ -1315,6 +1498,11 @@ bool LiveTransient::start(const Circuit& circuit, double step, QString* error)
         if (a > 0)
             d.names << QStringLiteral("V(%1,%2)").arg(a).arg(b);
     }
+    // 万用表：与 makeSignals 的末尾顺序一致（名字就是参考编号，单位随档位）
+    for (const Component* comp : d.problem.elements) {
+        if (comp->type == ComponentType::Multimeter)
+            d.names << comp->refdes;
+    }
 
     d.started = true;
     return true;
@@ -1379,6 +1567,11 @@ bool LiveTransient::updateCircuit(const Circuit& circuit, QString* error)
         if (a > 0)
             d.names << QStringLiteral("V(%1,%2)").arg(a).arg(b);
     }
+    // 万用表：与 makeSignals 的末尾顺序一致（名字就是参考编号，单位随档位）
+    for (const Component* comp : d.problem.elements) {
+        if (comp->type == ComponentType::Multimeter)
+            d.names << comp->refdes;
+    }
     return true;
 }
 
@@ -1393,6 +1586,7 @@ bool LiveTransient::advance(int steps, QString* error)
         if (!newtonSolve(d.problem, d.state, true, d.h, d.t, d.x, d.diode, error))
             return false;
         updateState(d.problem, d.state, d.x);
+        updateAcMeters(d.problem, d.state, d.x, d.h);
         trackReverseCaps(d.problem, d.x, d.worstReverse);
     }
     return true;
@@ -1557,6 +1751,7 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
                 result.waves.clear();
                 return result;
             }
+            updateAcMeters(p, st, x, h);
             sample(p, x, st, true, h, t, dm, values);
             appendPoint(t);
             updateState(p, st, x);
@@ -1570,6 +1765,24 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
         }
 
         result.ok = true;
+        // 交流万用表要攒满一个整周期才有读数：停止时间比一个周期还短时
+        // 读数会一直显示横杠，这里明确告诉用户该把停止时间放长到多少
+        for (const Component& comp : circuit.components) {
+            if (comp.type != ComponentType::Multimeter || !isAcMeterMode(comp.multimeterMode))
+                continue;
+            const double freq = comp.acFrequency > 0.1 ? comp.acFrequency : 50.0;
+            const double period = 1.0 / freq;
+            if (tStop < period) {
+                result.log << QStringLiteral(
+                                  "提示：%1 是交流档，需要一个完整周期（%2 Hz → %3）才有读数；"
+                                  "当前停止时间 %4 不够，读数会显示横杠。")
+                                  .arg(comp.refdes)
+                                  .arg(freq, 0, 'g', 4)
+                                  .arg(formatEng(period, QStringLiteral("s"), 3),
+                                       formatEng(tStop, QStringLiteral("s"), 3));
+            }
+        }
+
         result.log << QStringLiteral("瞬态分析完成：%1 步，步长 %2，终止于 %3")
                           .arg(stepCount)
                           .arg(formatEng(h, QStringLiteral("s"), 3),
@@ -1610,6 +1823,25 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
         currentProbeBranches.append(br);
     }
 
+    // 万用表：与 makeSignals 末尾的顺序一致，信号排在电流测试点之后
+    QVector<int> meterBranches;
+    QVector<const Component*> meterComps;
+    int acMeterBase = -1;
+    for (const Component& comp : circuit.components) {
+        if (comp.type != ComponentType::Multimeter)
+            continue;
+        Signal s;
+        s.name = comp.refdes;
+        s.unit = QStringLiteral("dB");
+        s.x.reserve(points);
+        s.y.reserve(points);
+        if (acMeterBase < 0)
+            acMeterBase = result.waves.size();
+        result.waves.append(s);
+        meterComps.append(&comp);
+        meterBranches.append(p.branchOf.value(comp.id, -1));
+    }
+
     const int n = p.nNodes + p.nBranches;
     Matrix<Cx> a(n);
     std::vector<Cx> b(size_t(n), Cx(0.0, 0.0));
@@ -1642,6 +1874,26 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
             const double db = 20.0 * std::log10(std::max(mag, 1e-30));
             result.waves[p.nNodes + k].x.append(f);
             result.waves[p.nNodes + k].y.append(db);
+        }
+
+        // 万用表：电压/电阻档输出跨端电压幅值（电阻档即 20·log10|Z|），
+        // 电流档输出支路电流幅值
+        for (int k = 0; k < meterBranches.size(); ++k) {
+            const Component& comp = *meterComps.at(k);
+            double mag = 0.0;
+            if (comp.multimeterMode == MultimeterMode::Current) {
+                const int br = meterBranches.at(k);
+                mag = br >= 0 ? std::abs(xc[size_t(p.nNodes + br)]) : 0.0;
+            } else {
+                const int na = p.nodeOf(comp.id, 0);
+                const int nb = p.nodeOf(comp.id, 1);
+                const Cx va = na > 0 ? xc[size_t(na - 1)] : Cx(0.0, 0.0);
+                const Cx vb = nb > 0 ? xc[size_t(nb - 1)] : Cx(0.0, 0.0);
+                mag = std::abs(va - vb);
+            }
+            const double db = 20.0 * std::log10(std::max(mag, 1e-30));
+            result.waves[acMeterBase + k].x.append(f);
+            result.waves[acMeterBase + k].y.append(db);
         }
     }
 

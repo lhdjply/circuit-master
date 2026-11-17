@@ -1,5 +1,7 @@
 #include "ui/MainWindow.h"
 
+#include "ui/MultimeterWindow.h"
+
 #include "csm_version.h"
 
 
@@ -33,6 +35,8 @@
 #include <QDesktopServices>
 #include <QScreen>
 #include <QSet>
+
+#include <limits>
 #include <QJsonDocument>
 #include <QLabel>
 #include <QListWidget>
@@ -244,6 +248,9 @@ QVector<QPair<QString, QString>> probeSpecs(const Circuit& circuit, const Netlis
         } else if (comp.type == ComponentType::CurrentProbe) {
             probes.append({QStringLiteral("%1 (I)").arg(comp.refdes),
                            QStringLiteral("I(%1)").arg(comp.refdes)});
+        } else if (comp.type == ComponentType::Multimeter) {
+            const QString unit = multimeterModeLetter(comp.multimeterMode);
+            probes.append({QStringLiteral("%1 (%2)").arg(comp.refdes, unit), comp.refdes});
         }
     }
     return probes;
@@ -277,6 +284,10 @@ bool applyProbeSignals(const Circuit& circuit, const Netlist& net, SimulationRes
         } else if (comp.type == ComponentType::CurrentProbe) {
             probes.append({QStringLiteral("I(%1)").arg(comp.refdes),
                            QStringLiteral("%1 (I)").arg(comp.refdes)});
+        } else if (comp.type == ComponentType::Multimeter) {
+            const QString unit = multimeterModeLetter(comp.multimeterMode);
+            probes.append({comp.refdes,
+                           QStringLiteral("%1 (%2)").arg(comp.refdes, unit)});
         }
     }
     if (probes.isEmpty()) {
@@ -544,7 +555,10 @@ void MainWindow::createActions()
 
     connect(m_actUndo, &QAction::triggered, this, &MainWindow::undo);
     connect(m_actRedo, &QAction::triggered, this, &MainWindow::redo);
-    connect(m_actDelete, &QAction::triggered, this, [this] { m_view->deleteSelection(); });
+    connect(m_actDelete, &QAction::triggered, this, [this] {
+        m_view->deleteSelection();
+        refreshMeterWindows(); // 删掉万用表时顺手关掉它的读数窗口
+    });
     connect(m_actRotate, &QAction::triggered, this, [this] { m_view->rotateSelection(); });
     connect(m_actSelectAll, &QAction::triggered, this, [this] {
         for (QGraphicsItem* item : m_scene->items())
@@ -720,6 +734,7 @@ void MainWindow::buildLibrary()
          GroundKind::Gnd},
         {ComponentType::Probe, QStringLiteral("电压测试点  TP"), QStringLiteral("测试点")},
         {ComponentType::CurrentProbe, QStringLiteral("电流测试点  IP"), QStringLiteral("测试点")},
+        {ComponentType::Multimeter, QStringLiteral("万用表  XMM"), QStringLiteral("测试点")},
     };
 
     const QString category = m_libraryCategory ? m_libraryCategory->currentText() : QString();
@@ -910,6 +925,7 @@ void MainWindow::restoreSnapshot(const QJsonObject& snapshot)
     }
 
     m_restoring = true;
+    closeMeterWindows();
     m_scene->load(circuit);
     m_restoring = false;
 
@@ -960,11 +976,78 @@ void MainWindow::onSelectionChanged()
         }
     }
     m_props->setComponent(item);
+    if (item && item->component().type == ComponentType::Multimeter)
+        openMeterWindow(item);
     m_actDelete->setEnabled(!selected.isEmpty());
     m_actCut->setEnabled(!selected.isEmpty());
     m_actCopy->setEnabled(!selected.isEmpty());
     m_actPaste->setEnabled(m_scene->hasClipboard());
     m_actRotate->setEnabled(item != nullptr && supportsRotation(item->component().type));
+}
+
+void MainWindow::openMeterWindow(ComponentItem* item)
+{
+    if (!item || item->component().type != ComponentType::Multimeter)
+        return;
+    const QString refdes = item->component().refdes;
+    if (auto* existing = m_meterWindows.value(refdes)) {
+        existing->raise();
+        existing->activateWindow();
+        return;
+    }
+    auto* window = new MultimeterWindow(refdes, item->component().multimeterMode, this);
+    connect(window, &MultimeterWindow::closed, this, [this](MultimeterWindow* w) {
+        m_meterWindows.remove(w->refdes());
+    });
+    m_meterWindows.insert(refdes, window);
+    window->show();
+    refreshMeterWindows();
+}
+
+void MainWindow::refreshMeterWindows()
+{
+    if (m_meterWindows.isEmpty())
+        return;
+
+    // 元件被删掉时顺手关掉它的窗口
+    QSet<QString> present;
+    for (const Component& comp : m_scene->toCircuit().components) {
+        if (comp.type == ComponentType::Multimeter)
+            present.insert(comp.refdes);
+    }
+    for (auto it = m_meterWindows.begin(); it != m_meterWindows.end();) {
+        if (!present.contains(it.key())) {
+            (*it)->deleteLater();
+            it = m_meterWindows.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    // 实时仿真进行中：每个时钟从实时引擎取当前值；
+    // 否则用静态仿真的末次结果（没有结果时窗口保持横杠）
+    for (auto it = m_meterWindows.constBegin(); it != m_meterWindows.constEnd(); ++it) {
+        const QString refdes = it.key();
+        if (m_waveLive && m_waveLive->isLive()) {
+            it.value()->setValue(m_waveLive->liveValue(refdes));
+            continue;
+        }
+        if (m_hasResult && m_lastResult.waves.size() > 0) {
+            const Signal* sig = m_lastResult.signal(refdes);
+            if (sig && !sig->y.isEmpty()) {
+                it.value()->setValue(sig->y.last());
+                continue;
+            }
+        }
+        it.value()->setValue(std::numeric_limits<double>::quiet_NaN());
+    }
+}
+
+void MainWindow::closeMeterWindows()
+{
+    for (auto it = m_meterWindows.begin(); it != m_meterWindows.end(); ++it)
+        (*it)->deleteLater();
+    m_meterWindows.clear();
 }
 
 void MainWindow::onEditRequested(ComponentItem* item)
@@ -998,6 +1081,7 @@ void MainWindow::appendLog(const QString& text)
 void MainWindow::loadCircuitData(const Circuit& circuit, const QString& title, const QString& path)
 {
     m_loading = true;
+    closeMeterWindows();
     m_scene->load(circuit);
     m_loading = false;
 
@@ -1018,6 +1102,7 @@ void MainWindow::newCircuit()
         return;
 
     m_loading = true;
+    closeMeterWindows();
     m_scene->clearAll();
     m_loading = false;
 
@@ -1205,7 +1290,7 @@ void MainWindow::runSimulation()
 
     const bool hasProbes = applyProbeSignals(circuit, net, result);
     if (!hasProbes && result.kind != AnalysisKind::OperatingPoint)
-        appendLog(QStringLiteral("⚠ 电路中没有测试点，波形为空。请放置电压测试点（TP）或电流测试点（IP）。"));
+        appendLog(QStringLiteral("⚠ 电路中没有测试点，波形为空。请放置电压测试点（TP）、电流测试点（IP）或万用表（XMM）。"));
 
     // 结果留着，由用户打开「波形监控」再看；面板开着就顺手刷新
     m_lastResult = result;
@@ -1213,6 +1298,7 @@ void MainWindow::runSimulation()
     if (m_wavePlot && m_waveWindow && m_waveWindow->isVisible() && m_waveTabs
         && m_waveTabs->currentIndex() == 0)
         m_wavePlot->setResult(m_lastResult);
+    refreshMeterWindows();
 
     // 有测试点就进入「运行中」状态（连续仿真），与「运行仿真 / 停止仿真」按钮语义一致。
     // 放在工作点分支之前：否则算完直流工作点就 return，按钮会停在「运行仿真」上，
@@ -1360,6 +1446,11 @@ void MainWindow::createMonitorWindow()
             // 测试点或节点编号变了，只能重启引擎
             startLiveScope();
         }
+    });
+
+    // 实时仿真推进时同步刷新打开的万用表读数窗口
+    connect(m_waveLive, &WaveformWindow::liveUpdated, this, [this] {
+        refreshMeterWindows();
     });
 
     // 实时仿真推进时同步刷新 LED 亮度

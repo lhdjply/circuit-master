@@ -62,6 +62,7 @@ private:
     QComboBox* m_windings = nullptr;   // 变压器绕组形式
     QComboBox* m_polarity = nullptr;   // 变压器次级同名端
     QComboBox* m_groundKind = nullptr; // 接地种类 / 测试点参考地
+    QComboBox* m_meterMode = nullptr;  // 万用表档位
     QLabel* m_valueLabel = nullptr;
     QComboBox* m_function = nullptr;
     QLineEdit* m_dc = nullptr;
