@@ -375,12 +375,12 @@ MultimeterWindow::MultimeterWindow(const QString& refdes, MultimeterMode mode, Q
     title->setFont(titleFont);
     header->addWidget(title);
 
-    auto* modeLabel = new QLabel(
+    m_modeLabel = new QLabel(
         QStringLiteral("%1 · %2").arg(multimeterModeName(mode),
                                       multimeterModeLetter(mode)),
         this);
-    modeLabel->setStyleSheet(QStringLiteral("color:#64748b;"));
-    header->addWidget(modeLabel);
+    m_modeLabel->setStyleSheet(QStringLiteral("color:#64748b;"));
+    header->addWidget(m_modeLabel);
     header->addStretch(1);
 
     auto* digitsLabel = new QLabel(QStringLiteral("位数"), this);
@@ -410,6 +410,24 @@ MultimeterWindow::MultimeterWindow(const QString& refdes, MultimeterMode mode, Q
     root->addWidget(m_display, 1);
 
     setValue(std::numeric_limits<double>::quiet_NaN());
+}
+
+void MultimeterWindow::setMode(MultimeterMode mode)
+{
+    if (m_mode == mode)
+        return;
+    m_mode = mode;
+    if (m_modeLabel)
+        m_modeLabel->setText(
+            QStringLiteral("%1 · %2").arg(multimeterModeName(mode), multimeterModeLetter(mode)));
+    if (m_display) {
+        m_display->setUnit(multimeterModeUnit(mode));
+        m_display->setSignSlot(mode == MultimeterMode::Voltage
+                               || mode == MultimeterMode::Current);
+        // 换档后旧读数没意义了，先显示横杠，等下一次结果
+        m_display->setValue(std::numeric_limits<double>::quiet_NaN());
+    }
+    m_lastValue = std::numeric_limits<double>::quiet_NaN();
 }
 
 void MultimeterWindow::setValue(double value)

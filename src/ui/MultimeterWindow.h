@@ -33,6 +33,7 @@ public:
     void setSignSlot(bool enabled);
     /// 当前显示的「前缀 + 单位」，例如 "mV"、"V"、"kΩ"（测试与调试用）
     QString displayedUnit() const;
+    double value() const { return m_value; }
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -71,6 +72,9 @@ public:
     MultimeterWindow(const QString& refdes, MultimeterMode mode, QWidget* parent = nullptr);
 
     void setValue(double value);
+    /// 档位在属性面板里改了之后同步过来（表头文字、单位、符号位都要跟着变）
+    void setMode(MultimeterMode mode);
+    MultimeterMode mode() const { return m_mode; }
     QString refdes() const { return m_refdes; }
 
 signals:
@@ -82,6 +86,7 @@ protected:
 private:
     QString m_refdes;
     MultimeterMode m_mode;
+    QLabel* m_modeLabel = nullptr;
     double m_lastValue = std::numeric_limits<double>::quiet_NaN();
     SevenSegmentDisplay* m_display = nullptr;
 };

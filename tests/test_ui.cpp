@@ -806,6 +806,48 @@ private slots:
         QCOMPARE(item->component().refLabelOffset, QPointF());
     }
 
+    void meterWindowFollowsModeAndGoesStale()
+    {
+        // 1) 属性面板改了档位，读数窗口的表头/单位要跟着变
+        // 2) 改了电路之后，上一次静态仿真的读数不能继续摆在窗口里
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        auto* item = scene->placeComponent(ComponentType::Multimeter, QPointF(300, 300));
+        QVERIFY(item);
+        item->setSelected(true);
+        settle();
+
+        QList<MultimeterWindow*> windows = window.findChildren<MultimeterWindow*>();
+        QCOMPARE(windows.size(), 1);
+        MultimeterWindow* meter = windows.first();
+        QCOMPARE(meter->mode(), MultimeterMode::Voltage);
+
+        // 改成电阻档
+        Component c = item->component();
+        QCOMPARE(c.type, ComponentType::Multimeter);
+        c.multimeterMode = MultimeterMode::Resistance;
+        item->setComponent(c);
+        settle();
+        QCOMPARE(meter->mode(), MultimeterMode::Resistance);
+        auto* display = meter->findChild<SevenSegmentDisplay*>();
+        QVERIFY(display);
+        QCOMPARE(display->displayedUnit(), QStringLiteral("Ω"));
+
+        // 给一个读数，再改电路：读数应当作废成横杠（NaN）
+        display->setValue(1000.0);
+        QCOMPARE(display->value(), 1000.0);
+        c.value = 2200.0;
+        item->setComponent(c);
+        scene->commitEdit();
+        settle();
+        QVERIFY2(std::isnan(display->value()), "改电路后旧读数应当作废");
+    }
+
     void transformerHasFourPinsAndPanel()
     {
         MainWindow window;

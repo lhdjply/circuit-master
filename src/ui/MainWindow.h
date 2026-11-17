@@ -130,6 +130,9 @@ private:
     bool m_updateCheckScheduled = false;
     SimulationResult m_lastResult;   // 最近一次仿真的结果，供「静态波形」使用
     bool m_hasResult = false;
+    /// 电路改过之后，上一次静态仿真的读数就过时了。
+    /// 波形还留着无所谓，但万用表要是继续显示旧数字，看起来就像「刚测的」。
+    bool m_resultStale = false;
     QTimer* m_liveRestartTimer = nullptr; // 电路改动后重建实时引擎（防抖）
     QTimer* m_blastTimer = nullptr;       // 爆炸动画驱动
     double m_blastProgress = 0.0;

@@ -369,6 +369,13 @@ MainWindow::MainWindow(QWidget* parent)
 
     connect(m_scene, &SchematicScene::circuitChanged, this, [this] {
         setDirty(true);
+        // 上一次静态仿真的读数过时了：万用表先显示横杠，
+        // 免得改动之后还盯着一个「看着像实时」的旧数字
+        if (!m_loading) {
+            if (m_hasResult)
+                m_resultStale = true;
+            refreshMeterWindows(); // 顺带把「档位」同步到读数窗口
+        }
         // 仿真运行中改了电路（例如开关闭合/断开）：稍后重建引擎，
         // 否则实时仿真还跑在旧拓扑上，LED 不会跟着变
         if (m_waveLive && m_waveLive->isLive() && m_liveRestartTimer)
@@ -1034,13 +1041,23 @@ void MainWindow::refreshMeterWindows()
 
     // 实时仿真进行中：每个时钟从实时引擎取当前值；
     // 否则用静态仿真的末次结果（没有结果时窗口保持横杠）
+    // 档位在属性面板里可能改过，读数窗口要跟着变（表头文字、单位、符号位）
+    for (auto it = m_meterWindows.constBegin(); it != m_meterWindows.constEnd(); ++it) {
+        for (const Component& comp : m_scene->toCircuit().components) {
+            if (comp.type == ComponentType::Multimeter && comp.refdes == it.key()) {
+                it.value()->setMode(comp.multimeterMode);
+                break;
+            }
+        }
+    }
+
     for (auto it = m_meterWindows.constBegin(); it != m_meterWindows.constEnd(); ++it) {
         const QString refdes = it.key();
         if (m_waveLive && m_waveLive->isLive()) {
             it.value()->setValue(m_waveLive->liveValue(refdes));
             continue;
         }
-        if (m_hasResult && m_lastResult.waves.size() > 0) {
+        if (m_hasResult && !m_resultStale && m_lastResult.waves.size() > 0) {
             const Signal* sig = m_lastResult.signal(refdes);
             if (sig && !sig->y.isEmpty()) {
                 it.value()->setValue(sig->y.last());
@@ -1303,6 +1320,7 @@ void MainWindow::runSimulation()
     // 结果留着，由用户打开「波形监控」再看；面板开着就顺手刷新
     m_lastResult = result;
     m_hasResult = true;
+    m_resultStale = false;
     if (m_wavePlot && m_waveWindow && m_waveWindow->isVisible() && m_waveTabs
         && m_waveTabs->currentIndex() == 0)
         m_wavePlot->setResult(m_lastResult);
