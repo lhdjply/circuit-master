@@ -17,4 +17,8 @@ namespace csm {
 /// 装上 Qt 自带的中文翻译（可重复调用，重复装不会叠加）
 void installQtTranslations(QCoreApplication* app);
 
+/// 上一次 installQtTranslations() 是否真的找到了 qtbase_zh_CN.qm。
+/// 没装 Qt 的翻译包（例如某些 CI 镜像）时为 false，此时标准控件仍是英文。
+bool qtTranslationsLoaded();
+
 } // namespace csm

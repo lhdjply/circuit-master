@@ -37,7 +37,8 @@ jobs:
             qt6-base-dev \
             qt6-base-dev-tools \
             qt6-charts-dev \
-            qt6-svg-dev
+            qt6-svg-dev \
+            qt6-translations-l10n
 
       - name: Verify Qt version
         run: |

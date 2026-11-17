@@ -8,6 +8,13 @@
 
 namespace csm {
 
+static bool g_translationsLoaded = false;
+
+bool qtTranslationsLoaded()
+{
+    return g_translationsLoaded;
+}
+
 void installQtTranslations(QCoreApplication* app)
 {
     if (!app)
@@ -23,6 +30,7 @@ void installQtTranslations(QCoreApplication* app)
         auto* translator = new QTranslator(app);
         if (translator->load(QStringLiteral("qtbase_zh_CN"), dir)) {
             app->installTranslator(translator);
+            g_translationsLoaded = true;
             return;
         }
         delete translator;

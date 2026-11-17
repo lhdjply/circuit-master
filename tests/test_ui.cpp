@@ -293,7 +293,12 @@ private slots:
 
     void builtinMenusAreChinese()
     {
-        // Qt 自带控件（输入框右键菜单）也要是中文，靠启动时装的 qtbase_zh_CN
+        // Qt 自带控件（输入框右键菜单）也要是中文，靠启动时装的 qtbase_zh_CN。
+        // 找不到 .qm 就直接失败：说明这台机器缺 Qt 的翻译包
+        // （Debian/Ubuntu 上是 qt6-translations-l10n），发布包也会缺中文。
+        QVERIFY2(csm::qtTranslationsLoaded(),
+                 "没加载到 qtbase_zh_CN.qm：请安装 Qt 的翻译包（qt6-translations-l10n）");
+
         QLineEdit edit;
         edit.setText(QStringLiteral("abc"));
         edit.show();
