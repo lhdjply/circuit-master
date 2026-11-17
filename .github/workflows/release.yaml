@@ -319,11 +319,34 @@ jobs:
           # --compiler-runtime   带上 libstdc++ / libgcc / libwinpthread：
           #                      目标机没有 MSYS2，缺一个就是双击没反应
           # --no-opengl-sw       不发 ~20MB 的软件光栅化器，纯 Widgets 用不到
-          # --translations zh_CN 带上 Qt 自带控件的中文翻译（输入框右键菜单、
-          #                      标准按钮等），程序启动时会从 translations/ 加载
+          # 翻译不走 --translations：windeployqt 会用 lconvert 把各个 .qm
+          # 合并成 qt_zh_CN.qm，而 MSYS2 里没有 lconvert，这一步直接以
+          # 「Creating qt_zh_CN.qm…」失败退出。只把真正需要的
+          # qtbase_zh_CN.qm 复制进去即可——程序启动时找的就是这个名字。
           "$deploy" --release --compiler-runtime \
-                    --no-opengl-sw --translations zh_CN \
+                    --no-opengl-sw --no-translations \
                     --dir "$STAGE" "$STAGE/CircuitMaster.exe"
+
+          # 翻译文件的位置在不同 Qt 打包里略有差别，按常见位置依次找
+          qm=""
+          for candidate in \
+            "$MINGW_PREFIX/share/qt6/translations/qtbase_zh_CN.qm" \
+            "$MINGW_PREFIX/share/qt/translations/qtbase_zh_CN.qm" \
+            "$("$MINGW_PREFIX/bin/qmake" -query QT_INSTALL_TRANSLATIONS 2>/dev/null)/qtbase_zh_CN.qm"; do
+            if [ -f "$candidate" ]; then
+              qm="$candidate"
+              break
+            fi
+          done
+          if [ -z "$qm" ]; then
+            echo "::error::qtbase_zh_CN.qm not found; is qt6-translations installed?"
+            find "$MINGW_PREFIX" -name 'qtbase_zh_CN.qm' 2>/dev/null | head -5
+            exit 1
+          fi
+          echo "using $qm"
+          mkdir -p "$STAGE/translations"
+          cp "$qm" "$STAGE/translations/"
+          ls -l "$STAGE/translations"
 
       # 补齐后还缺的：lib* / Qt6* 只可能来自 MSYS2，缺了就是把包打漏了，
       # 目标机没有 MSYS2，双击就是没反应——直接不发这个包。
@@ -412,6 +435,14 @@ jobs:
 
           echo "--- staged files ---"
           ls -1 "$STAGE" | head -50
+
+          # 中文翻译必须真的在包里：漏了不会让程序起不来，只会让右键菜单、
+          # 标准按钮退回英文，属于「构建全绿但功能缺失」，必须显式检查。
+          if [ ! -f "$STAGE/translations/qtbase_zh_CN.qm" ]; then
+            echo "::error::translations/qtbase_zh_CN.qm is missing from the package"
+            exit 1
+          fi
+          echo "ok: translations/qtbase_zh_CN.qm"
 
       # Qt 的图像与平台插件按子目录加载，zip 里保留目录结构；
       # 纯 Widgets + SVG 应用不需要额外补 OpenSSL 之类的三方 DLL。
