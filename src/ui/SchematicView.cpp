@@ -236,6 +236,7 @@ void SchematicView::contextMenuEvent(QContextMenuEvent* event)
         QAction* rotate = menu.addAction(QStringLiteral("旋转 90°"));
         QAction* flipH = menu.addAction(QStringLiteral("水平翻转"));
         QAction* flipV = menu.addAction(QStringLiteral("垂直翻转"));
+        QAction* resetLabels = menu.addAction(QStringLiteral("还原标签位置"));
         menu.addSeparator();
         QAction* cut = menu.addAction(QStringLiteral("剪切"));
         QAction* copy = menu.addAction(QStringLiteral("复制"));
@@ -254,6 +255,8 @@ void SchematicView::contextMenuEvent(QContextMenuEvent* event)
             component->setMirrored(!component->mirroredX(), component->mirroredY());
         } else if (chosen == flipV) {
             component->setMirrored(component->mirroredX(), !component->mirroredY());
+        } else if (chosen == resetLabels) {
+            component->resetLabelOffsets();
         } else if (chosen == cut) {
             m_scene->cutSelection();
         } else if (chosen == copy) {

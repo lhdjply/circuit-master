@@ -25,6 +25,8 @@ public:
     void setRefdes(const QString& refdes);
     void setValue(double value);
     void setRotationAngle(int degrees);
+    /// 把标号 / 数值挪回默认位置（旋转、翻转时也会自动调用）
+    void resetLabelOffsets();
     void setMirrored(bool horizontal, bool vertical);
     void setClosed(bool closed);
     /// 极性电容反接击穿：画爆炸特效，progress 0→1 是动画进度
@@ -42,6 +44,10 @@ public:
     bool mirroredY() const { return m_comp.mirrorY; }
     QVector<QPointF> pinScenePositions() const;
 
+    /// 标号 / 数值标签在 item 坐标里的可点击范围（拖动与命中测试用）
+    QRectF refLabelRect() const;
+    QRectF valueLabelRect() const;
+
 signals:
     void componentChanged();
     /// 元件被拖动后的位移增量（场景坐标），场景据此带着连线一起走
@@ -51,11 +57,22 @@ signals:
 protected:
     QVariant itemChange(GraphicsItemChange change, const QVariant& value) override;
     void mouseDoubleClickEvent(QGraphicsSceneMouseEvent* event) override;
+    void mousePressEvent(QGraphicsSceneMouseEvent* event) override;
+    void mouseMoveEvent(QGraphicsSceneMouseEvent* event) override;
+    void mouseReleaseEvent(QGraphicsSceneMouseEvent* event) override;
     void hoverEnterEvent(QGraphicsSceneHoverEvent* event) override;
     void hoverLeaveEvent(QGraphicsSceneHoverEvent* event) override;
 
 private:
+    /// 标签的默认摆放位置（已叠加用户拖动出来的偏移）
+    void labelLayout(QRectF* refRect, int* refAlign, QRectF* valueRect, int* valueAlign) const;
+
+    enum class LabelDrag { None, Refdes, Value };
+
     Component m_comp;
+    LabelDrag m_labelDrag = LabelDrag::None;
+    QPointF m_labelPressPos;    // 按下时的 item 坐标
+    QPointF m_labelStartOffset; // 按下时该标签的偏移
     bool m_hover = false;
     double m_ledBrightness = 0.0;
     bool m_blown = false;

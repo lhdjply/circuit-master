@@ -42,8 +42,13 @@ QRectF ComponentItem::boundingRect() const
         return QRectF(-95.0, -84.0, 190.0, 156.0);
 
     const int rot = ((m_comp.rotation % 360) + 360) % 360;
-    const QRectF base = (rot == 90 || rot == 270) ? QRectF(-168.0, -42.0, 336.0, 84.0)
-                                                  : QRectF(-86.0, -48.0, 172.0, 96.0);
+    QRectF base = (rot == 90 || rot == 270) ? QRectF(-168.0, -42.0, 336.0, 84.0)
+                                            : QRectF(-86.0, -48.0, 172.0, 96.0);
+    // 标号 / 数值可以被拖到别处，包围盒要跟着放大，否则会被裁掉
+    if (!m_comp.refdes.isEmpty())
+        base = base.united(refLabelRect());
+    if (!m_comp.displayValue().isEmpty())
+        base = base.united(valueLabelRect());
     if (!m_blown)
         return base;
     return base.united(QRectF(-70.0, -125.0, 140.0, 150.0)); // 蘑菇云往上冒
@@ -51,7 +56,22 @@ QRectF ComponentItem::boundingRect() const
 
 QPainterPath ComponentItem::shape() const
 {
-    return symbolShape(m_comp.type);
+    // 符号本体 + 两个标签的可点范围。标签画在符号外面，只返回 symbolShape()
+    // 的话鼠标根本落不到它上面，也就没法拖动。
+    QPainterPath path = symbolShape(m_comp.type);
+    const QRectF refRect = refLabelRect();
+    if (!refRect.isEmpty()) {
+        QPainterPath extra;
+        extra.addRect(refRect);
+        path = path.united(extra);
+    }
+    const QRectF valueRect = valueLabelRect();
+    if (!valueRect.isEmpty()) {
+        QPainterPath extra;
+        extra.addRect(valueRect);
+        path = path.united(extra);
+    }
+    return path;
 }
 
 void ComponentItem::setBlown(bool blown)
@@ -285,24 +305,12 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
     painter->setFont(f);
     painter->setPen(selected ? theme::selected : theme::text);
 
+    Q_UNUSED(vertical);
     QRectF refRect;
     QRectF valueRect;
     int refAlign = Qt::AlignCenter;
     int valueAlign = Qt::AlignCenter;
-
-    if (vertical) {
-        refRect = QRectF(20.0, -9.0, 140.0, 18.0);
-        valueRect = QRectF(-160.0, -9.0, 140.0, 18.0);
-        refAlign = Qt::AlignLeft | Qt::AlignVCenter;
-        valueAlign = Qt::AlignRight | Qt::AlignVCenter;
-    } else {
-        // 运放三角形较高，标签再向外让一点；三绕组变压器更高，再往下让
-        const bool opamp = m_comp.type == ComponentType::OpAmp;
-        const bool tallTransformer = m_comp.type == ComponentType::Transformer
-            && m_comp.transformerKind == TransformerKind::PrimaryAuxSecondary;
-        refRect = QRectF(-75.0, opamp ? -51.0 : (tallTransformer ? -76.0 : -43.0), 150.0, 18.0);
-        valueRect = QRectF(-80.0, opamp ? 33.0 : (tallTransformer ? 62.0 : 25.0), 160.0, 18.0);
-    }
+    labelLayout(&refRect, &refAlign, &valueRect, &valueAlign);
 
     painter->drawText(refRect, refAlign, m_comp.refdes);
 
@@ -315,10 +323,128 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
     painter->drawText(valueRect, valueAlign, elided);
 }
 
+void ComponentItem::labelLayout(QRectF* refRect, int* refAlign, QRectF* valueRect,
+                                int* valueAlign) const
+{
+    // 竖直放置时把标签放到两侧，避免压住符号
+    const int rot = ((m_comp.rotation % 360) + 360) % 360;
+    const bool vertical = (rot == 90 || rot == 270);
+    if (vertical) {
+        *refRect = QRectF(20.0, -9.0, 140.0, 18.0);
+        *valueRect = QRectF(-160.0, -9.0, 140.0, 18.0);
+        *refAlign = Qt::AlignLeft | Qt::AlignVCenter;
+        *valueAlign = Qt::AlignRight | Qt::AlignVCenter;
+    } else {
+        // 运放三角形较高，标签再向外让一点；三绕组变压器更高，再往下让
+        const bool opamp = m_comp.type == ComponentType::OpAmp;
+        const bool tallTransformer = m_comp.type == ComponentType::Transformer
+            && m_comp.transformerKind == TransformerKind::PrimaryAuxSecondary;
+        *refRect = QRectF(-75.0, opamp ? -51.0 : (tallTransformer ? -76.0 : -43.0), 150.0, 18.0);
+        *valueRect = QRectF(-80.0, opamp ? 33.0 : (tallTransformer ? 62.0 : 25.0), 160.0, 18.0);
+        *refAlign = Qt::AlignCenter;
+        *valueAlign = Qt::AlignCenter;
+    }
+    // 用户拖动出来的偏移
+    refRect->translate(m_comp.refLabelOffset);
+    valueRect->translate(m_comp.valueLabelOffset);
+}
+
+/// 把「对齐用的宽矩形」收成「文字实际占的那一块」，用于命中测试
+static QRectF tightenLabelRect(const QRectF& base, int align, const QString& text, bool bold)
+{
+    QFont font;
+    font.setPointSizeF(8.5);
+    font.setBold(bold);
+    const qreal w = QFontMetricsF(font).horizontalAdvance(text) + 10.0;
+    QRectF r = base;
+    if (align & Qt::AlignLeft) {
+        r.setWidth(w);
+    } else if (align & Qt::AlignRight) {
+        r.setLeft(r.right() - w);
+    } else {
+        r = QRectF(base.center().x() - w / 2.0, base.top(), w, base.height());
+    }
+    return r;
+}
+
+QRectF ComponentItem::refLabelRect() const
+{
+    if (m_comp.refdes.isEmpty())
+        return QRectF();
+    QRectF refRect, valueRect;
+    int refAlign = 0, valueAlign = 0;
+    labelLayout(&refRect, &refAlign, &valueRect, &valueAlign);
+    return tightenLabelRect(refRect, refAlign, m_comp.refdes, true);
+}
+
+QRectF ComponentItem::valueLabelRect() const
+{
+    const QString text = m_comp.displayValue();
+    if (text.isEmpty())
+        return QRectF();
+    QRectF refRect, valueRect;
+    int refAlign = 0, valueAlign = 0;
+    labelLayout(&refRect, &refAlign, &valueRect, &valueAlign);
+    return tightenLabelRect(valueRect, valueAlign, text, false);
+}
+
+void ComponentItem::mousePressEvent(QGraphicsSceneMouseEvent* event)
+{
+    // 按在标号 / 数值上时拖的是标签，不是元件本身
+    if (event->button() == Qt::LeftButton) {
+        const QPointF p = event->pos();
+        if (refLabelRect().contains(p)) {
+            m_labelDrag = LabelDrag::Refdes;
+            m_labelPressPos = p;
+            m_labelStartOffset = m_comp.refLabelOffset;
+            event->accept();
+            return;
+        }
+        if (valueLabelRect().contains(p)) {
+            m_labelDrag = LabelDrag::Value;
+            m_labelPressPos = p;
+            m_labelStartOffset = m_comp.valueLabelOffset;
+            event->accept();
+            return;
+        }
+    }
+    QGraphicsObject::mousePressEvent(event);
+}
+
+void ComponentItem::mouseMoveEvent(QGraphicsSceneMouseEvent* event)
+{
+    if (m_labelDrag == LabelDrag::None) {
+        QGraphicsObject::mouseMoveEvent(event);
+        return;
+    }
+    const QPointF offset = m_labelStartOffset + (event->pos() - m_labelPressPos);
+    if (m_labelDrag == LabelDrag::Refdes)
+        m_comp.refLabelOffset = offset;
+    else
+        m_comp.valueLabelOffset = offset;
+
+    prepareGeometryChange(); // 标签跑远了包围盒要跟着变大
+    update();
+    emit componentChanged();
+    event->accept();
+}
+
+void ComponentItem::mouseReleaseEvent(QGraphicsSceneMouseEvent* event)
+{
+    if (m_labelDrag != LabelDrag::None) {
+        m_labelDrag = LabelDrag::None;
+        event->accept();
+        return;
+    }
+    QGraphicsObject::mouseReleaseEvent(event);
+}
+
 void ComponentItem::setComponent(const Component& comp)
 {
-    const bool rotationChanged = comp.rotation != m_comp.rotation;
-    if (rotationChanged)
+    const bool geometryChanged = comp.rotation != m_comp.rotation
+        || comp.refLabelOffset != m_comp.refLabelOffset
+        || comp.valueLabelOffset != m_comp.valueLabelOffset;
+    if (geometryChanged)
         prepareGeometryChange();
     m_comp = comp;
     if (pos() != comp.pos)
@@ -356,6 +482,10 @@ void ComponentItem::setRotationAngle(int degrees)
         return;
     prepareGeometryChange();
     m_comp.rotation = normalized;
+    // 旋转会换掉标签的默认摆放位置（横放时在上/下，竖放时在左/右），
+    // 之前拖出来的偏移就失去意义了，这里一并还原
+    m_comp.refLabelOffset = QPointF();
+    m_comp.valueLabelOffset = QPointF();
     update();
     emit componentChanged();
 }
@@ -374,6 +504,17 @@ QVector<QPointF> ComponentItem::pinScenePositions() const
     return m_comp.pinPositions();
 }
 
+void ComponentItem::resetLabelOffsets()
+{
+    if (m_comp.refLabelOffset.isNull() && m_comp.valueLabelOffset.isNull())
+        return;
+    prepareGeometryChange();
+    m_comp.refLabelOffset = QPointF();
+    m_comp.valueLabelOffset = QPointF();
+    update();
+    emit componentChanged();
+}
+
 void ComponentItem::setMirrored(bool horizontal, bool vertical)
 {
     if (m_comp.mirrorX == horizontal && m_comp.mirrorY == vertical)
@@ -381,6 +522,9 @@ void ComponentItem::setMirrored(bool horizontal, bool vertical)
     prepareGeometryChange();
     m_comp.mirrorX = horizontal;
     m_comp.mirrorY = vertical;
+    // 翻转同样会打乱标签的默认位置，一起还原
+    m_comp.refLabelOffset = QPointF();
+    m_comp.valueLabelOffset = QPointF();
     update();
     emit componentChanged();
 }

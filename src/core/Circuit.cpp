@@ -447,6 +447,14 @@ QJsonObject Circuit::toJson() const
         o.insert(QStringLiteral("multimeterMode"), int(c.multimeterMode));
         if (!c.netLabel.isEmpty())
             o.insert(QStringLiteral("netLabel"), c.netLabel);
+        if (!c.refLabelOffset.isNull()) {
+            o.insert(QStringLiteral("refLabelDx"), c.refLabelOffset.x());
+            o.insert(QStringLiteral("refLabelDy"), c.refLabelOffset.y());
+        }
+        if (!c.valueLabelOffset.isNull()) {
+            o.insert(QStringLiteral("valueLabelDx"), c.valueLabelOffset.x());
+            o.insert(QStringLiteral("valueLabelDy"), c.valueLabelOffset.y());
+        }
         o.insert(QStringLiteral("transformerKind"),
                  c.transformerKind == TransformerKind::PrimaryAuxSecondary
                      ? QStringLiteral("primary-aux-secondary")
@@ -531,6 +539,10 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
         c.multimeterMode = static_cast<MultimeterMode>(
             o.value(QStringLiteral("multimeterMode")).toInt(0));
         c.netLabel = o.value(QStringLiteral("netLabel")).toString();
+        c.refLabelOffset = QPointF(o.value(QStringLiteral("refLabelDx")).toDouble(),
+                                   o.value(QStringLiteral("refLabelDy")).toDouble());
+        c.valueLabelOffset = QPointF(o.value(QStringLiteral("valueLabelDx")).toDouble(),
+                                     o.value(QStringLiteral("valueLabelDy")).toDouble());
         c.transformerKind =
             o.value(QStringLiteral("transformerKind")).toString() == QLatin1String("primary-aux-secondary")
                 ? TransformerKind::PrimaryAuxSecondary

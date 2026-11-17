@@ -123,6 +123,9 @@ struct Component {
     GroundKind groundKind = GroundKind::Gnd;
     /// 网络标签的名字（NetLabel）：同名标签在网表里并成一个网络
     QString netLabel;
+    /// 标号 / 数值标签相对默认位置的偏移（画布上拖动标签时写入）
+    QPointF refLabelOffset;
+    QPointF valueLabelOffset;
     /// 万用表的档位（Multimeter）
     MultimeterMode multimeterMode = MultimeterMode::Voltage;
     /// 交流档算有效值用的频率（Hz）：测量窗口取一个周期。

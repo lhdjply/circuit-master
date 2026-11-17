@@ -8,6 +8,8 @@
 #include "ui/SchematicView.h"
 #include "ui/WireItem.h"
 #include "ui/ComponentItem.h"
+
+#include <QGraphicsSceneMouseEvent>
 #include "ui/PropertyPanel.h"
 #include "ui/MultimeterWindow.h"
 #include "core/Netlist.h"
@@ -624,6 +626,82 @@ private slots:
         QVERIFY2(shapes.at(1).height() > shapes.at(1).width(), "90° 应当竖着");
         QVERIFY2(shapes.at(2).width() > shapes.at(2).height(), "180° 应当横着");
         QVERIFY2(shapes.at(3).height() > shapes.at(3).width(), "270° 应当竖着");
+    }
+
+    void componentLabelsCanBeDragged()
+    {
+        // 标号与数值可以单独拖动，拖完之后元件本身不动、连线也不动
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        auto* view = window.findChild<SchematicView*>();
+        QVERIFY(scene && view);
+
+        auto* item = scene->placeComponent(ComponentType::Resistor, QPointF(300, 300));
+        QVERIFY(item);
+        settle();
+        const QPointF before = item->pos();
+        QCOMPARE(item->component().refLabelOffset, QPointF());
+
+        // 在标号上按下并拖动
+        const QRectF refRect = item->refLabelRect();
+        QVERIFY(!refRect.isEmpty());
+        const QPointF from = item->mapToScene(refRect.center());
+        const QPointF to = from + QPointF(40.0, -50.0);
+
+        auto* press = new QGraphicsSceneMouseEvent(QEvent::GraphicsSceneMousePress);
+        press->setButton(Qt::LeftButton);
+        press->setButtons(Qt::LeftButton);
+        press->setPos(from);
+        press->setScenePos(from);
+        press->setScreenPos(view->mapFromScene(from));
+        press->setButtonDownScenePos(Qt::LeftButton, from);
+        QApplication::sendEvent(scene, press);
+        delete press;
+
+        auto* move = new QGraphicsSceneMouseEvent(QEvent::GraphicsSceneMouseMove);
+        move->setButton(Qt::LeftButton);
+        move->setButtons(Qt::LeftButton);
+        move->setPos(to);
+        move->setScenePos(to);
+        move->setScreenPos(view->mapFromScene(to));
+        move->setButtonDownScenePos(Qt::LeftButton, from);
+        QApplication::sendEvent(scene, move);
+        delete move;
+
+        auto* release = new QGraphicsSceneMouseEvent(QEvent::GraphicsSceneMouseRelease);
+        release->setButton(Qt::LeftButton);
+        release->setButtons(Qt::NoButton);
+        release->setPos(to);
+        release->setScenePos(to);
+        release->setScreenPos(view->mapFromScene(to));
+        release->setButtonDownScenePos(Qt::LeftButton, from);
+        QApplication::sendEvent(scene, release);
+        delete release;
+        settle();
+
+        // 标号被挪走了，元件位置没变
+        QVERIFY2(item->component().refLabelOffset != QPointF(), "标号应当被拖动");
+        QCOMPARE(item->pos(), before);
+        QCOMPARE(item->component().valueLabelOffset, QPointF());
+
+        // 旋转之后标签位置要还原 —— 旋转会换掉默认摆放位置，旧偏移没意义了
+        item->setRotationAngle(90);
+        settle();
+        QCOMPARE(item->component().refLabelOffset, QPointF());
+        QCOMPARE(item->component().valueLabelOffset, QPointF());
+
+        // 手动「还原标签位置」同样有效
+        Component c = item->component();
+        c.refLabelOffset = QPointF(30.0, 30.0);
+        item->setComponent(c);
+        QVERIFY(item->component().refLabelOffset != QPointF());
+        item->resetLabelOffsets();
+        settle();
+        QCOMPARE(item->component().refLabelOffset, QPointF());
     }
 
     void transformerHasFourPinsAndPanel()
