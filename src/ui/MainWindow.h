@@ -145,6 +145,7 @@ private:
     QAction* m_actDelete = nullptr;
     QAction* m_actRotate = nullptr;
     QAction* m_actSelectAll = nullptr;
+    QAction* m_actSnapWires = nullptr;
 
     QAction* m_actZoomIn = nullptr;
     QAction* m_actZoomOut = nullptr;

@@ -597,6 +597,10 @@ void MainWindow::createActions()
     connect(m_actGuide, &QAction::triggered, this, &MainWindow::showQuickGuide);
     connect(m_actAbout, &QAction::triggered, this, &MainWindow::showAbout);
 
+    m_actSnapWires = new QAction(QStringLiteral("导线对齐网格"), this);
+    m_actSnapWires->setToolTip(QStringLiteral("把导线的拐点吸到网格上，修老版本粘贴留下的歪线"));
+    connect(m_actSnapWires, &QAction::triggered, this, [this] { m_scene->snapWiresToGrid(); });
+
     m_actDelete->setEnabled(false);
     m_actRotate->setEnabled(false);
 
@@ -633,6 +637,8 @@ void MainWindow::createMenus()
     editMenu->addAction(m_actRotate);
     editMenu->addSeparator();
     editMenu->addAction(m_actSelectAll);
+    editMenu->addSeparator();
+    editMenu->addAction(m_actSnapWires);
 
     QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("视图(&V)"));
     viewMenu->addAction(m_actZoomIn);

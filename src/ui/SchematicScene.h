@@ -31,6 +31,14 @@ public:
 
     void deleteSelection();
     void commitEdit();
+    /// 把所有导线顶点吸到 10 px 网格（修早期版本粘贴留下的歪线）
+    void snapWiresToGrid();
+    /// 在指定点把交叉的导线切成一个连接点（画交点用）；返回是否有改动
+    bool connectWiresAt(const QPointF& pos);
+    /// 该点是否是导线交叉（可以打交点）
+    bool hasCrossingAt(const QPointF& pos) const;
+    /// 当前画出的交点（测试与导出用）
+    QVector<QPointF> junctions() const { return m_junctions; }
     /// 画线时用：新画的线如果和已有导线共线且首尾相接，就并成一条。
     /// 只作用于刚画出来的这根线 —— 已经存在工程里的独立导线不会被改变。
     void mergeWireWithNeighbors(WireItem* wire);

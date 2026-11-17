@@ -318,9 +318,11 @@ void SchematicScene::pasteClipboard()
             }
         }
         if (!first) {
-            // 让粘贴内容的中心落在鼠标处，单个元件就是元件本身对准光标
+            // 让粘贴内容的中心落在鼠标处，单个元件就是元件本身对准光标。
+            // 偏移量必须是 10 px 的整数倍：元件位置会被 snap 到网格，而导线的点
+            // 只是整体平移；两者步长不一致时，粘出来的线就会歪掉、和引脚对不上。
             const QPointF target = snap(m_cursorScenePos);
-            offset = target - bounds.center();
+            offset = snap(target - bounds.center());
         }
     }
 
@@ -335,6 +337,8 @@ void SchematicScene::pasteClipboard()
     }
 
     for (Wire wire : m_clipboardWires) {
+        // 整体平移一个 10 px 整数倍的偏移：与原图完全一致，不会把悬空的线头
+        // 拽到别的引脚上，也不会让线变歪
         for (QPointF& point : wire.points)
             point += offset;
         WireItem* item = addWire(wire.points);
@@ -345,6 +349,95 @@ void SchematicScene::pasteClipboard()
     refresh();
     emit circuitChanged();
     commitEdit();
+}
+
+void SchematicScene::snapWiresToGrid()
+{
+    if (wireItems().isEmpty())
+        return;
+
+    int changed = 0;
+    const QList<WireItem*> wires = wireItems();
+    QVector<QVector<QPointF>> repaired;
+    for (WireItem* item : wires) {
+        QVector<QPointF> points;
+        for (const QPointF& p : item->scenePoints()) {
+            const QPointF snapped = snap(p);
+            if (QLineF(p, snapped).length() > 0.01)
+                ++changed;
+            if (points.isEmpty() || points.last() != snapped)
+                points.append(snapped);
+        }
+        repaired.append(points);
+    }
+    if (changed == 0)
+        return;
+
+    // 重建导线（顺便去掉重合点）
+    for (WireItem* item : wires)
+        removeItem(item), delete item;
+    for (const QVector<QPointF>& points : repaired) {
+        if (points.size() >= 2)
+            addWireRaw(points);
+    }
+    refresh();
+    emit circuitChanged();
+    commitEdit();
+}
+
+bool SchematicScene::hasCrossingAt(const QPointF& pos) const
+{
+    const QPointF point = snap(pos);
+    int passing = 0;   // 有导线从中间穿过
+    int touching = 0;  // 有导线的端点/顶点正好在这里
+    for (WireItem* wire : wireItems()) {
+        const QVector<QPointF> pts = wire->scenePoints();
+        for (int i = 0; i < pts.size(); ++i) {
+            if (QLineF(pts.at(i), point).length() <= 0.5) {
+                ++touching;
+                break;
+            }
+        }
+        for (int i = 1; i < pts.size(); ++i) {
+            const QPointF a = pts.at(i - 1);
+            const QPointF b = pts.at(i);
+            const QPointF ab = b - a;
+            const double length2 = ab.x() * ab.x() + ab.y() * ab.y();
+            if (length2 < 1e-9)
+                continue;
+            const QPointF ap = point - a;
+            const double t = (ap.x() * ab.x() + ap.y() * ab.y()) / length2;
+            if (t <= 1e-6 || t >= 1.0 - 1e-6)
+                continue;
+            if (QLineF(a + ab * t, point).length() > 0.5)
+                continue;
+            ++passing;
+            break;
+        }
+    }
+    // 两条线在这里碰上（一条穿过 + 另一条穿过或端点）才值得打交点；
+    // 两条线只是共享端点时本来就连着，不算交叉
+    return passing >= 1 && (passing + touching) >= 2;
+}
+
+bool SchematicScene::connectWiresAt(const QPointF& pos)
+{
+    const QPointF point = snap(pos);
+    QVector<WireItem*> wires = wireItems();
+
+    // 先把「穿过该点」的导线切开，让两条线都有这个顶点
+    bool changed = false;
+    for (WireItem* wire : wires) {
+        if (splitWireAt(wire, point))
+            changed = true;
+    }
+    if (!changed)
+        return false;
+
+    refresh();
+    emit circuitChanged();
+    commitEdit();
+    return true;
 }
 
 void SchematicScene::commitEdit()
@@ -483,18 +576,54 @@ void SchematicScene::mergeWireWithNeighbors(WireItem* wire)
         if (!shared)
             continue;
 
-        // 1) 把「穿过」这个点的导线都切开，让每根线在这里都有端点
-        const QVector<WireItem*> snapshot = wireItems();
-        for (WireItem* candidate : snapshot) {
-            if (!candidate->scene())
+        // 这个点如果已经是「交点」（有线从中间穿过、或有第三条线/引脚搭上来），
+        // 就不能合并：合掉中间的顶点，交点会消失、电气上也就断了。
+        // 只有单纯的两段相接（拐角 / 直通续画）才合并成一条线。
+        // 这个点上有什么：
+        //   endsAtJoint    —— 导线在这点收尾（端点）
+        //   passingAtJoint —— 导线从这段中间直穿而过（连顶点都没有）
+        int endsAtJoint = 0;
+        int passingAtJoint = 0;
+        QVector<WireItem*> interiorWires; // 这点是它们的中间顶点
+        for (WireItem* other : wireItems()) {
+            if (!other->scene())
                 continue;
-            const QVector<QPointF> pts = candidate->scenePoints();
-            if (!liesOn(pts, joint) || !passesThrough(pts, joint))
+            const QVector<QPointF> pts = other->scenePoints();
+            if (pts.size() < 2)
                 continue;
-            splitWireAt(candidate, joint);
+            if (QLineF(pts.first(), joint).length() <= 0.5
+                || QLineF(pts.last(), joint).length() <= 0.5) {
+                ++endsAtJoint;
+                continue;
+            }
+            bool interior = false;
+            for (int i = 1; i < pts.size() - 1; ++i) {
+                if (QLineF(pts.at(i), joint).length() <= 0.5) {
+                    interior = true;
+                    break;
+                }
+            }
+            if (interior) {
+                interiorWires.append(other);
+            } else if (liesOn(pts, joint) && passesThrough(pts, joint)) {
+                ++passingAtJoint; // 从这段中间直穿而过（连顶点都没有）
+            }
         }
 
-        // 2) 在这个点上反复合并「共线」的一对，直到没有可并的
+        // 线头搭在另一条直穿的线上（十字交叉）→ 这是交点，两边的线头不能并成一条，
+        // 否则中间的顶点没了，交点也就消失了
+        if (endsAtJoint >= 1 && passingAtJoint >= 1)
+            continue;
+        // 三条及以上的线头汇聚在一个点 → 也是交点
+        if (endsAtJoint >= 3)
+            continue;
+
+        // 其余情况（拐角、直通续画、支路接到某根线的中间）可以合并：
+        // 先把「中间顶点」处切开，让合并循环能看到端点，再把共线的两段并回去
+        for (WireItem* candidate : interiorWires)
+            splitWireAt(candidate, joint);
+
+        // 3) 在这个点上反复合并「共线」的一对，直到没有可并的
         bool merged = true;
         int guard = 0;
         while (merged && guard++ < 32) {
@@ -644,50 +773,45 @@ void SchematicScene::recomputeJunctions()
 {
     m_junctions.clear();
 
-    QHash<QPoint, int> ends;    // 导线端点 + 引脚数量
-    QHash<QPoint, int> through; // 穿过该点的线段数量
+    QHash<QPoint, int> incident; // 有多少条线段在这点结束（真正的分支）
+    QHash<QPoint, int> passing;  // 有多少条线段从这点中间穿过
+    QHash<QPoint, int> pins;     // 这点上有几个引脚
 
     QVector<QLineF> segments;
     for (WireItem* wire : wireItems()) {
         const QVector<QPointF> pts = wire->scenePoints();
-        for (int i = 0; i < pts.size(); ++i) {
-            ends[gridKey(pts.at(i))] += 1;
-            if (i > 0)
-                segments.append(QLineF(pts.at(i - 1), pts.at(i)));
-        }
+        for (int i = 1; i < pts.size(); ++i)
+            segments.append(QLineF(pts.at(i - 1), pts.at(i)));
+        for (const QPointF& p : pts)
+            incident[gridKey(p)] += 1;
     }
 
-    for (ComponentItem* item : componentItems()) {
-        for (const QPointF& pin : item->pinScenePositions()) {
-            const QPoint key = gridKey(pin);
-            ends[key] += 1;
-            for (const QLineF& seg : segments) {
-                if (strictlyInsideSegment(seg, pin))
-                    through[key] += 1;
-            }
-        }
-    }
-
-    for (WireItem* wire : wireItems()) {
-        for (const QPointF& p : wire->scenePoints()) {
-            const QPoint key = gridKey(p);
-            for (const QLineF& seg : segments) {
-                if (strictlyInsideSegment(seg, p))
-                    through[key] += 1;
-            }
-        }
-    }
+    for (ComponentItem* item : componentItems())
+        for (const QPointF& pin : item->pinScenePositions())
+            pins[gridKey(pin)] += 1;
 
     QSet<QPoint> keys;
-    for (auto it = ends.constBegin(); it != ends.constEnd(); ++it)
+    for (auto it = incident.constBegin(); it != incident.constEnd(); ++it)
         keys.insert(it.key());
-    for (auto it = through.constBegin(); it != through.constEnd(); ++it)
+    for (auto it = pins.constBegin(); it != pins.constEnd(); ++it)
         keys.insert(it.key());
 
+    for (const QLineF& seg : segments) {
+        for (const QPoint& key : keys) {
+            const QPointF point(key.x() * 10.0, key.y() * 10.0);
+            if (strictlyInsideSegment(seg, point))
+                passing[key] += 1;
+        }
+    }
+
     for (const QPoint& key : keys) {
-        const int e = ends.value(key);
-        const int t = through.value(key);
-        const bool dot = (e >= 3) || (e >= 1 && t >= 1);
+        const int branches = incident.value(key);
+        const int through = passing.value(key);
+        const int pinCount = pins.value(key);
+        // 三条及以上的分支 → 交点；一条线段从中间穿过、又有线头/引脚搭上来 → 交点；
+        // 两条线只是十字交叉（各自都是直穿而过）则不是交点，电气上也不相连
+        const bool dot = branches >= 3 || (branches >= 1 && through >= 1)
+            || (pinCount >= 1 && branches >= 2);
         if (dot)
             m_junctions.append(QPointF(key.x() * 10.0, key.y() * 10.0));
     }

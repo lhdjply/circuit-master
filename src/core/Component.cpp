@@ -18,9 +18,11 @@ QVector<QPointF> pinOffsets(const Component& comp)
     // 变压器按绕组形式给不同的引脚布局：三绕组时左边初级 + 辅助、右边次级
     if (comp.type == ComponentType::Transformer) {
         if (comp.transformerKind == TransformerKind::PrimaryAuxSecondary) {
-            return {QPointF(-30.0, -40.0), QPointF(-30.0, -15.0),   // 初级 1（1、2）
-                    QPointF(-30.0, 15.0), QPointF(-30.0, 40.0),     // 初级 2（4、5）
-                    QPointF(30.0, -40.0), QPointF(30.0, 40.0)};     // 次级（8、6）
+            // 引脚坐标必须是 10 px 的整数倍，否则放在网格上时端点落在网格之间，
+            // 导线画不上去（之前用了 ±15，就是这个问题）
+            return {QPointF(-30.0, -50.0), QPointF(-30.0, -20.0),   // 初级（1、2）
+                    QPointF(-30.0, 20.0), QPointF(-30.0, 50.0),     // 辅助（4、5）
+                    QPointF(30.0, -50.0), QPointF(30.0, 50.0)};     // 次级（8、6）
         }
         return {QPointF(-30.0, -10.0), QPointF(-30.0, 10.0), QPointF(30.0, -10.0),
                 QPointF(30.0, 10.0)};
@@ -198,6 +200,20 @@ bool supportsRotation(ComponentType type)
     return true;
 }
 
+QPointF Component::pinPositionRaw(int index) const
+{
+    const QVector<QPointF> offsets = pinOffsets(*this);
+    if (index < 0 || index >= offsets.size())
+        return pos;
+    const QPointF local = offsets.at(index);
+    const double rad = qDegreesToRadians(double(rotation));
+    const double c = std::cos(rad);
+    const double s = std::sin(rad);
+    const QPointF rotated(local.x() * c - local.y() * s, local.x() * s + local.y() * c);
+    return pos + QPointF(rotated.x() * (mirrorX ? -1.0 : 1.0),
+                         rotated.y() * (mirrorY ? -1.0 : 1.0));
+}
+
 QPointF Component::toScene(const QPointF& local) const
 {
     const double rad = qDegreesToRadians(double(rotation));
@@ -205,8 +221,11 @@ QPointF Component::toScene(const QPointF& local) const
     const double s = std::sin(rad);
     const QPointF rotated(local.x() * c - local.y() * s, local.x() * s + local.y() * c);
     // 镜像在屏幕坐标系中进行（先旋转再左右/上下翻转）
-    return pos + QPointF(rotated.x() * (mirrorX ? -1.0 : 1.0),
-                         rotated.y() * (mirrorY ? -1.0 : 1.0));
+    const QPointF scene = pos + QPointF(rotated.x() * (mirrorX ? -1.0 : 1.0),
+                                        rotated.y() * (mirrorY ? -1.0 : 1.0));
+    // 引脚吸附到 10 px 网格：斜放（15°/45°/60°）时旋转出来的坐标是小数，
+    // 而导线端点都在网格上，不取整就会差几个像素、看起来「线画不直」甚至连不上
+    return QPointF(std::round(scene.x() / 10.0) * 10.0, std::round(scene.y() / 10.0) * 10.0);
 }
 
 QPointF Component::pinPosition(int index) const

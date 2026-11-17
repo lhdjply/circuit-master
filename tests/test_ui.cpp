@@ -492,6 +492,277 @@ private slots:
         settle();
     }
 
+    void rotationCanBeSetFromPanel()
+    {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        ComponentItem* item = scene->placeComponent(ComponentType::Resistor, QPointF(300, 300));
+        QVERIFY(item);
+        scene->clearSelection();
+        item->setSelected(true);
+        settle();
+
+        // 属性面板里的「旋转角度」可以填任意角度
+        QLineEdit* rotation = nullptr;
+        for (QLineEdit* edit : window.findChildren<QLineEdit*>())
+            if (edit->text() == QStringLiteral("0") && edit->toolTip().contains(QStringLiteral("角度")))
+                rotation = edit;
+        QVERIFY2(rotation, "属性面板应当有「旋转角度」输入框");
+
+        const auto setAngle = [&](const QString& text) {
+            rotation->setText(text);
+            emit rotation->editingFinished();
+            settle();
+        };
+
+        setAngle(QStringLiteral("90"));
+        QCOMPARE(item->component().rotation, 90);
+        QCOMPARE(item->pinScenePositions().at(0), QPointF(300, 270));
+
+        setAngle(QStringLiteral("180"));
+        QCOMPARE(item->component().rotation, 180);
+        QCOMPARE(item->pinScenePositions().at(0), QPointF(330, 300));
+
+        // 自由角度：45° 不再是 90° 的整数倍
+        setAngle(QStringLiteral("45"));
+        QCOMPARE(item->component().rotation, 45);
+        // 引脚吸附到 10 px 网格，斜放也能和导线端点对齐
+        const QPointF pin45 = item->pinScenePositions().at(0);
+        QCOMPARE(pin45, QPointF(280, 280));
+
+        setAngle(QStringLiteral("0"));
+        QCOMPARE(item->component().rotation, 0);
+    }
+
+    void splitDrawnWiresKeepJunction()
+    {
+        // 竖线一次穿过、横线分两次画到同一点：这里应当是一个交点，
+        // 不能把两段横线自动并成一条（并掉顶点交点就没了）
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        const auto draw = [scene](QVector<QPointF> pts) {
+            WireItem* wire = scene->addWire(pts);
+            scene->mergeWireWithNeighbors(wire);
+        };
+
+        draw({QPointF(250, 100), QPointF(250, 300)}); // 竖线直接穿过
+        draw({QPointF(150, 200), QPointF(250, 200)}); // 横线左半段
+        draw({QPointF(250, 200), QPointF(350, 200)}); // 横线右半段
+        settle();
+
+        bool hasJunction = false;
+        for (const QPointF& p : scene->junctions())
+            if (QLineF(p, QPointF(250, 200)).length() < 0.01)
+                hasJunction = true;
+        QVERIFY2(hasJunction, "分开画出来的交点应当保留");
+
+        // 左半段和右半段不能被合成一条（否则顶点消失、交点也就没了）
+        int horizontalPieces = 0;
+        for (WireItem* wire : scene->wireItems()) {
+            const QVector<QPointF> pts = wire->scenePoints();
+            if (qAbs(pts.first().y() - 200.0) < 0.01 && qAbs(pts.last().y() - 200.0) < 0.01)
+                ++horizontalPieces;
+        }
+        QVERIFY2(horizontalPieces >= 2,
+                 qPrintable(QStringLiteral("横线被并成了 %1 段").arg(horizontalPieces)));
+
+        // 交点处一共三条线：竖线直穿（没有顶点）+ 两段横线各收一个端点，
+        // 电气上仍然连在一起（网表会把「端点落在别的线中间」也算作连接）
+        const Circuit circuit = scene->toCircuit();
+        int endsAtPoint = 0;
+        for (const Wire& wire : circuit.wires)
+            for (const QPointF& p : wire.points)
+                if (QLineF(p, QPointF(250, 200)).length() < 0.01)
+                    ++endsAtPoint;
+        QVERIFY2(endsAtPoint >= 2, qPrintable(QStringLiteral("交点处线端 %1 个").arg(endsAtPoint)));
+    }
+
+    void crossingCanBecomeJunction()
+    {
+        // 两条线十字交叉：默认不相连（不画交点）；打上交点后才连起来
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        // 水平线 y=200，x 100→400；竖直线上 x=250，y 100→300（两者只在 (250,200) 交叉）
+        scene->addWire({QPointF(100, 200), QPointF(400, 200)});
+        scene->addWire({QPointF(250, 100), QPointF(250, 300)});
+        settle();
+        QCOMPARE(scene->wireItems().size(), 2);
+        QCOMPARE(scene->junctions().size(), 0); // 交叉处不画交点
+
+        auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 400));
+        source->setRotationAngle(90);
+        scene->placeComponent(ComponentType::Ground, QPointF(100, 500));
+        scene->addWire({QPointF(100, 430), QPointF(100, 500)});
+        settle();
+
+        QVERIFY(scene->hasCrossingAt(QPointF(250, 200)));
+        scene->connectWiresAt(QPointF(250, 200));
+        settle();
+
+        // 切开之后四条线共点 → 画交点
+        bool hasJunction = false;
+        for (const QPointF& p : scene->junctions())
+            if (QLineF(p, QPointF(250, 200)).length() < 0.01)
+                hasJunction = true;
+        QVERIFY2(hasJunction, "打上交点后应当画出交点");
+
+        // 电气上也连起来了
+        const Circuit circuit = scene->toCircuit();
+        const Netlist net = circuit.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        int nodeAtCrossing = -1;
+        int count = 0;
+        for (const Wire& wire : circuit.wires)
+            for (const QPointF& p : wire.points)
+                if (QLineF(p, QPointF(250, 200)).length() < 0.01)
+                    ++count;
+        Q_UNUSED(nodeAtCrossing);
+        QVERIFY2(count >= 4, qPrintable(QStringLiteral("交点处只有 %1 个线端").arg(count)));
+    }
+
+    void pasteKeepsWiresStraight()
+    {
+        // 粘贴的偏移量必须是 10 px 整数倍：否则元件被 snap 到网格、导线只做平移，
+        // 两者步长不一致，粘出来的线就歪了
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 300));
+        source->setRotationAngle(90);
+        auto* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(250, 200));
+        QVERIFY(source && resistor);
+        scene->addWire({QPointF(100, 270), QPointF(100, 200), QPointF(220, 200)});
+        settle();
+
+        for (QGraphicsItem* item : scene->items())
+            item->setSelected(true);
+        settle();
+        scene->copySelection();
+        // 故意给一个「不整齐」的光标位置
+        scene->setCursorScenePos(QPointF(1237, 763));
+        scene->pasteClipboard();
+        settle();
+
+        // 每条导线的每一段都必须是水平或竖直，且所有顶点都在网格上
+        for (WireItem* wire : scene->wireItems()) {
+            const QVector<QPointF> pts = wire->scenePoints();
+            for (int i = 1; i < pts.size(); ++i) {
+                const QPointF d = pts.at(i) - pts.at(i - 1);
+                QVERIFY2(qAbs(d.x()) < 1e-6 || qAbs(d.y()) < 1e-6,
+                         qPrintable(QStringLiteral("出现斜段 (%1,%2)→(%3,%4)")
+                                        .arg(pts.at(i-1).x()).arg(pts.at(i-1).y())
+                                        .arg(pts.at(i).x()).arg(pts.at(i).y())));
+            }
+            for (const QPointF& p : pts) {
+                QVERIFY2(qAbs(p.x() - qRound(p.x() / 10.0) * 10.0) < 1e-6
+                             && qAbs(p.y() - qRound(p.y() / 10.0) * 10.0) < 1e-6,
+                         qPrintable(QStringLiteral("顶点 (%1,%2) 不在网格上")
+                                        .arg(p.x()).arg(p.y())));
+            }
+        }
+    }
+
+    void snapWiresRepairsSkewedGeometry()
+    {
+        // 老版本粘贴留下的歪线：菜单「导线对齐网格」应当能修好
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        scene->placeComponent(ComponentType::Resistor, QPointF(200, 200));
+        // 造一条歪线（终点偏 5 px）
+        scene->addWire({QPointF(200, 230), QPointF(200, 305), QPointF(280, 305)});
+        settle();
+        QCOMPARE(scene->wireItems().size(), 1);
+
+        scene->snapWiresToGrid();
+        settle();
+        for (WireItem* wire : scene->wireItems()) {
+            for (const QPointF& p : wire->scenePoints()) {
+                QVERIFY2(qAbs(p.x() - qRound(p.x() / 10.0) * 10.0) < 1e-6
+                             && qAbs(p.y() - qRound(p.y() / 10.0) * 10.0) < 1e-6,
+                         qPrintable(QStringLiteral("顶点 (%1,%2) 不在网格上")
+                                        .arg(p.x()).arg(p.y())));
+            }
+        }
+    }
+
+    void pastedWiresSnapToPins()
+    {
+        // 斜放元件的引脚原本带小数，复制粘贴后导线端点会对不上（看着像「连错」）
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        // 一对 45° 斜放二极管 + 一条连接它们的导线
+        auto* d1 = scene->placeComponent(ComponentType::Diode, QPointF(300, 300));
+        auto* d2 = scene->placeComponent(ComponentType::Diode, QPointF(400, 300));
+        QVERIFY(d1 && d2);
+        d1->setRotationAngle(45);
+        d2->setRotationAngle(225);
+        settle();
+        scene->addWire({d1->pinScenePositions().at(1), d2->pinScenePositions().at(0)});
+        settle();
+
+        QCOMPARE(scene->wireItems().size(), 1);
+        QCOMPARE(scene->componentItems().size(), 2);
+
+        // 全选 → 复制 → 光标放到别处 → 粘贴
+        for (QGraphicsItem* item : scene->items())
+            item->setSelected(true);
+        settle();
+        scene->copySelection();
+        scene->setCursorScenePos(QPointF(700, 300));
+        scene->pasteClipboard();
+        settle();
+
+        QCOMPARE(scene->componentItems().size(), 4);
+        QCOMPARE(scene->wireItems().size(), 2);
+
+        // 粘贴出来的导线端点必须落在元件的引脚上
+        QVector<QPointF> pins;
+        for (ComponentItem* comp : scene->componentItems())
+            for (const QPointF& p : comp->pinScenePositions())
+                pins.append(p);
+        for (WireItem* wire : scene->wireItems()) {
+            for (const QPointF& end : {wire->scenePoints().first(), wire->scenePoints().last()}) {
+                double best = 1e9;
+                for (const QPointF& pin : pins)
+                    best = std::min(best, QLineF(end, pin).length());
+                QVERIFY2(best < 0.01, qPrintable(QStringLiteral("导线端点离引脚 %1 px").arg(best)));
+            }
+        }
+    }
+
     void groundCanBeRotated()
     {
         MainWindow window;

@@ -325,32 +325,32 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         };
 
         if (dual) {
-            // 初级 1（y −40 … −15）
-            lead(QPointF(-30.0, -40.0), QPointF(-16.0, -40.0));
-            lead(QPointF(-16.0, -40.0), QPointF(-16.0, -15.0));
-            lead(QPointF(-16.0, -15.0), QPointF(-30.0, -15.0));
-            // 初级 2（y 15 … 40）
-            lead(QPointF(-30.0, 15.0), QPointF(-16.0, 15.0));
-            lead(QPointF(-16.0, 15.0), QPointF(-16.0, 40.0));
-            lead(QPointF(-16.0, 40.0), QPointF(-30.0, 40.0));
-            // 次级（y −40 … 40）
-            lead(QPointF(30.0, -40.0), QPointF(16.0, -40.0));
-            lead(QPointF(16.0, -40.0), QPointF(16.0, 40.0));
-            lead(QPointF(16.0, 40.0), QPointF(30.0, 40.0));
+            // 初级（y −50 … −20）
+            lead(QPointF(-30.0, -50.0), QPointF(-16.0, -50.0));
+            lead(QPointF(-16.0, -50.0), QPointF(-16.0, -20.0));
+            lead(QPointF(-16.0, -20.0), QPointF(-30.0, -20.0));
+            // 辅助绕组（y 20 … 50）
+            lead(QPointF(-30.0, 20.0), QPointF(-16.0, 20.0));
+            lead(QPointF(-16.0, 20.0), QPointF(-16.0, 50.0));
+            lead(QPointF(-16.0, 50.0), QPointF(-30.0, 50.0));
+            // 次级（y −50 … 50）
+            lead(QPointF(30.0, -50.0), QPointF(16.0, -50.0));
+            lead(QPointF(16.0, -50.0), QPointF(16.0, 50.0));
+            lead(QPointF(16.0, 50.0), QPointF(30.0, 50.0));
 
             p->setPen(symbolPen(color, 2.0));
-            for (int i = 0; i < 4; ++i) {
-                p->drawArc(QRectF(-16.0, -39.0 + i * 6.0, 8.0, 6.0), 90 * 16, 180 * 16);
-                p->drawArc(QRectF(-16.0, 16.0 + i * 6.0, 8.0, 6.0), 90 * 16, 180 * 16);
+            for (int i = 0; i < 5; ++i) {
+                p->drawArc(QRectF(-16.0, -50.0 + i * 6.0, 8.0, 6.0), 90 * 16, 180 * 16);
+                p->drawArc(QRectF(-16.0, 20.0 + i * 6.0, 8.0, 6.0), 90 * 16, 180 * 16);
             }
-            for (int i = 0; i < 8; ++i)
-                p->drawArc(QRectF(8.0, -39.0 + i * 10.0, 8.0, 10.0), 90 * 16, 180 * 16);
+            for (int i = 0; i < 10; ++i)
+                p->drawArc(QRectF(8.0, -50.0 + i * 10.0, 8.0, 10.0), 90 * 16, 180 * 16);
 
-            // 铁芯：两组初级各一对，次级整条
+            // 铁芯：两组绕组各一对，次级整条
             p->setPen(symbolPen(color, 2.4));
-            for (const double top : {-40.0, 15.0}) {
-                p->drawLine(QPointF(-2.0, top), QPointF(-2.0, top + 25.0));
-                p->drawLine(QPointF(2.0, top), QPointF(2.0, top + 25.0));
+            for (const double top : {-50.0, 20.0}) {
+                p->drawLine(QPointF(-2.0, top), QPointF(-2.0, top + 30.0));
+                p->drawLine(QPointF(2.0, top), QPointF(2.0, top + 30.0));
             }
         } else {
             p->drawLine(QPointF(-30.0, -10.0), QPointF(-16.0, -10.0));
@@ -378,11 +378,12 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         QVector<QPointF> dots;
         if (dual) {
             // 编号与属性面板的 N1 / N2 / N3 对应
-            marks = {{QPointF(-22.0, -45.0), QStringLiteral("1")},
+            marks = {{QPointF(-22.0, -60.0), QStringLiteral("1")},
                      {QPointF(-22.0, 10.0), QStringLiteral("2")},
-                     {QPointF(22.0, -45.0), QStringLiteral("3")}};
-            dots = {QPointF(-22.0, -40.0), QPointF(-22.0, 15.0),
-                    inverted ? QPointF(22.0, 40.0) : QPointF(22.0, -40.0)};
+                     {QPointF(22.0, -60.0), QStringLiteral("3")}};
+            // 初级 1 的同名端在下端（与辅助绕组反相）
+            dots = {QPointF(-22.0, -20.0), QPointF(-22.0, 20.0),
+                    inverted ? QPointF(22.0, 50.0) : QPointF(22.0, -50.0)};
         } else {
             marks = {{QPointF(-22.0, -21.0), QStringLiteral("1")},
                      {QPointF(22.0, -21.0), QStringLiteral("2")}};

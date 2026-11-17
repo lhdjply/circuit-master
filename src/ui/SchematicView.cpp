@@ -266,9 +266,15 @@ void SchematicView::contextMenuEvent(QContextMenuEvent* event)
             m_scene->deleteSelection();
         }
     } else {
+        const QPointF scenePos = m_scene->snap(mapToScene(event->pos()));
+        QAction* junction = menu.addAction(QStringLiteral("在此处打交点"));
+        junction->setEnabled(m_scene->hasCrossingAt(scenePos));
         QAction* paste = menu.addAction(QStringLiteral("粘贴"));
         paste->setEnabled(m_scene->hasClipboard());
-        if (menu.exec(event->globalPos()) == paste)
+        QAction* chosen = menu.exec(event->globalPos());
+        if (chosen == junction)
+            m_scene->connectWiresAt(scenePos);
+        else if (chosen == paste)
             m_scene->pasteClipboard();
     }
 

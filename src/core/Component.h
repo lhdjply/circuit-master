@@ -129,6 +129,8 @@ struct Component {
 
     QPointF toScene(const QPointF& local) const;
     QPointF pinPosition(int index) const;
+    /// 未吸附到网格的引脚位置（画符号时补引线用）
+    QPointF pinPositionRaw(int index) const;
     QVector<QPointF> pinPositions() const;
 
     /// 独立源在 t 时刻的输出值；非独立源返回 0。

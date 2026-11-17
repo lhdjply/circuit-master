@@ -5,6 +5,8 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+
+#include <cmath>
 #include <QFormLayout>
 #include <QLabel>
 #include <QLineEdit>
@@ -100,6 +102,10 @@ void PropertyPanel::buildUi()
 
     m_refdes = makeEdit();
     m_form->addRow(QStringLiteral("编号"), m_refdes);
+
+    m_rotation = makeEdit(QStringLiteral("例如 45"));
+    m_rotation->setToolTip(QStringLiteral("单位是度，可以填任意角度，例如 15、45、60"));
+    m_form->addRow(QStringLiteral("旋转角度 (°)"), m_rotation);
 
     m_value = makeEdit(QStringLiteral("例如 10k / 4.7u"));
     m_form->addRow(QStringLiteral("数值"), m_value);
@@ -214,6 +220,21 @@ void PropertyPanel::buildUi()
             [this](int) { applyValue(); });
     connect(m_groundKind, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int) { applyValue(); });
+    connect(m_rotation, &QLineEdit::editingFinished, this, [this] {
+        if (!m_item || m_updating)
+            return;
+        QString reason;
+        bool ok = false;
+        const double degrees = parseQuantity(m_rotation->text(), UnitKind::None, &ok, &reason);
+        if (!ok) {
+            markInvalid(m_rotation, reason);
+            return;
+        }
+        markValid(m_rotation);
+        m_item->setRotationAngle(int(std::lround(degrees)));
+        m_rotation->setText(QString::number(m_item->component().rotation));
+        emit changed();
+    });
 
     connect(m_function, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &PropertyPanel::applyFunction);
@@ -285,6 +306,7 @@ void PropertyPanel::refreshFromItem()
     m_windings->setCurrentIndex(m_windings->findData(int(c.transformerKind)));
     m_polarity->setCurrentIndex(m_polarity->findData(c.secondaryInverted ? 1 : 0));
     m_groundKind->setCurrentIndex(m_groundKind->findData(int(c.groundKind)));
+    m_rotation->setText(QString::number(c.rotation));
     m_function->setCurrentIndex(m_function->findData(int(c.function)));
 
     const UnitKind unit = sourceUnitFor(c.type);

@@ -34,7 +34,7 @@ QRectF ComponentItem::boundingRect() const
     // 三绕组变压器更高（绕组 y −40…40，标签在 −62 与 +50），单独给一个包围盒
     if (m_comp.type == ComponentType::Transformer
         && m_comp.transformerKind == TransformerKind::PrimaryAuxSecondary)
-        return QRectF(-90.0, -70.0, 180.0, 130.0);
+        return QRectF(-95.0, -84.0, 190.0, 156.0);
 
     const int rot = ((m_comp.rotation % 360) + 360) % 360;
     const QRectF base = (rot == 90 || rot == 270) ? QRectF(-168.0, -42.0, 336.0, 84.0)
@@ -145,6 +145,19 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
                 m_comp.mirrorY, m_ledBrightness, heat);
 
     painter->restore();
+
+    // 斜放时引脚会吸附到网格，符号画出的引脚端点可能差几像素，补一小段引线
+    if (m_comp.rotation % 90 != 0) {
+        painter->save();
+        painter->setPen(QPen(theme::symbol, 1.6));
+        for (int i = 0; i < pinOffsets(m_comp).size(); ++i) {
+            const QPointF raw = m_comp.pinPositionRaw(i) - m_comp.pos;
+            const QPointF snapped = m_comp.pinPosition(i) - m_comp.pos;
+            if (QLineF(raw, snapped).length() > 0.5)
+                painter->drawLine(raw, snapped);
+        }
+        painter->restore();
+    }
 
     // 红温时给符号本身罩一层红光：用径向渐变，边缘化开，像被烧红而不是盖了个红框
     if (heat > 0.01) {
@@ -278,8 +291,8 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
         const bool opamp = m_comp.type == ComponentType::OpAmp;
         const bool tallTransformer = m_comp.type == ComponentType::Transformer
             && m_comp.transformerKind == TransformerKind::PrimaryAuxSecondary;
-        refRect = QRectF(-75.0, opamp ? -51.0 : (tallTransformer ? -62.0 : -43.0), 150.0, 18.0);
-        valueRect = QRectF(-80.0, opamp ? 33.0 : (tallTransformer ? 50.0 : 25.0), 160.0, 18.0);
+        refRect = QRectF(-75.0, opamp ? -51.0 : (tallTransformer ? -76.0 : -43.0), 150.0, 18.0);
+        valueRect = QRectF(-80.0, opamp ? 33.0 : (tallTransformer ? 62.0 : 25.0), 160.0, 18.0);
     }
 
     painter->drawText(refRect, refAlign, m_comp.refdes);
@@ -325,8 +338,9 @@ void ComponentItem::setValue(double value)
 
 void ComponentItem::setRotationAngle(int degrees)
 {
+    // 允许任意角度（15°、45°…），不再吸附到 90° 的整数倍。
+    // 引脚会跟着转；网表按 10 px 网格取整，所以只要导线端点落在这个网格点上就能连上。
     int normalized = ((degrees % 360) + 360) % 360;
-    normalized = (normalized / 90) * 90;
     if (!supportsRotation(m_comp.type))
         normalized = 0;
     if (m_comp.rotation == normalized)

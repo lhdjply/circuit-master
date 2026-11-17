@@ -671,17 +671,17 @@ private slots:
             c.components.append(gg);
         }
 
-        // 三绕组引脚：0/1 = 初级，2/3 = 辅助绕组，4/5 = 次级（y 坐标 ±40 / ±15）
+        // 三绕组引脚：0/1 = 初级（y −50/−20），2/3 = 辅助（20/50），4/5 = 次级（±50）
         // 初级与辅助绕组串联：V+ → 初级+，初级− → 辅助+，辅助− → 地
         c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(270, 200),
-                             QPointF(270, 260)}});
-        c.wires.append(Wire{{QPointF(270, 285), QPointF(270, 315)}});
-        c.wires.append(Wire{{QPointF(270, 340), QPointF(270, 400)}});
+                             QPointF(270, 250)}});
+        c.wires.append(Wire{{QPointF(270, 280), QPointF(270, 320)}});
+        c.wires.append(Wire{{QPointF(270, 350), QPointF(270, 400)}});
         c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
         // 次级：+ → RL → 地；− → 地
-        c.wires.append(Wire{{QPointF(330, 260), QPointF(450, 260), QPointF(450, 270)}});
+        c.wires.append(Wire{{QPointF(330, 250), QPointF(450, 250), QPointF(450, 270)}});
         c.wires.append(Wire{{QPointF(450, 330), QPointF(450, 400)}});
-        c.wires.append(Wire{{QPointF(330, 340), QPointF(330, 400)}});
+        c.wires.append(Wire{{QPointF(330, 350), QPointF(330, 400)}});
 
         const Netlist net = c.buildNetlist();
         QVERIFY2(net.valid, qPrintable(net.error));
@@ -732,7 +732,7 @@ private slots:
         Component ra;
         ra.id = 3;
         ra.type = ComponentType::Resistor;
-        ra.pos = QPointF(430, 315);
+        ra.pos = QPointF(430, 320);
         ra.refdes = QStringLiteral("RA");
         ra.value = 1000.0;
         c.components.append(ra);
@@ -740,7 +740,7 @@ private slots:
         Component rs;
         rs.id = 4;
         rs.type = ComponentType::Resistor;
-        rs.pos = QPointF(520, 260);
+        rs.pos = QPointF(520, 250);
         rs.refdes = QStringLiteral("RS");
         rs.value = 1000.0;
         c.components.append(rs);
@@ -761,18 +761,18 @@ private slots:
 
         // 初级：V+ → 初级+，初级− → 地
         c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(270, 200),
-                             QPointF(270, 260)}});
+                             QPointF(270, 250)}});
         // 初级− 往左绕下去接地：直接走 x=270 会穿过辅助绕组的两个引脚
-        c.wires.append(Wire{{QPointF(270, 285), QPointF(240, 285), QPointF(240, 400)}});
+        c.wires.append(Wire{{QPointF(270, 280), QPointF(240, 280), QPointF(240, 400)}});
         c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
         // 辅助绕组：辅助+ → RA → 地，辅助− → 地
-        c.wires.append(Wire{{QPointF(270, 315), QPointF(400, 315)}});
-        c.wires.append(Wire{{QPointF(460, 315), QPointF(460, 400)}});
-        c.wires.append(Wire{{QPointF(270, 340), QPointF(270, 400)}});
+        c.wires.append(Wire{{QPointF(270, 320), QPointF(400, 320)}});
+        c.wires.append(Wire{{QPointF(460, 320), QPointF(460, 400)}});
+        c.wires.append(Wire{{QPointF(270, 350), QPointF(270, 400)}});
         // 次级：次级+ → RS → 地，次级− → 地
-        c.wires.append(Wire{{QPointF(330, 260), QPointF(490, 260)}});
-        c.wires.append(Wire{{QPointF(550, 260), QPointF(550, 400)}});
-        c.wires.append(Wire{{QPointF(330, 340), QPointF(330, 400)}});
+        c.wires.append(Wire{{QPointF(330, 250), QPointF(490, 250)}});
+        c.wires.append(Wire{{QPointF(550, 250), QPointF(550, 400)}});
+        c.wires.append(Wire{{QPointF(330, 350), QPointF(330, 400)}});
 
         const Netlist net = c.buildNetlist();
         QVERIFY2(net.valid, qPrintable(net.error));
@@ -1100,6 +1100,44 @@ private slots:
         // 每周期 GATE 拉到约 11 V，关断时回 0
         QVERIFY2(high > 9.0 && high < 12.5, qPrintable(QStringLiteral("GATE 高 %1 V").arg(high)));
         QVERIFY2(low < 0.5, qPrintable(QStringLiteral("GATE 低 %1 V").arg(low)));
+    }
+
+    void allPinsLandOnGrid()
+    {
+        // 引脚坐标必须是 10 px 整数倍：否则元件放在网格上时端点落在网格之间，
+        // 导线（端点都在网格上）画不上去，看起来就是「线画不了」
+        const QVector<ComponentType> types = {
+            ComponentType::Resistor,    ComponentType::Capacitor,  ComponentType::Inductor,
+            ComponentType::Diode,       ComponentType::Led,        ComponentType::Npn,
+            ComponentType::Pnp,         ComponentType::Nmos,       ComponentType::Pmos,
+            ComponentType::Igbt,        ComponentType::Optocoupler,
+            ComponentType::Tl431,       ComponentType::Transformer,
+            ComponentType::Ob2362,      ComponentType::OpAmp,      ComponentType::Switch,
+            ComponentType::VoltageSource, ComponentType::CurrentSource,
+            ComponentType::Probe,       ComponentType::CurrentProbe,
+            ComponentType::Ground,
+        };
+        for (ComponentType type : types) {
+            for (int kind = 0; kind <= 1; ++kind) {
+                Component comp;
+                comp.type = type;
+                comp.pos = QPointF(100, 100); // 网格上
+                if (type == ComponentType::Transformer)
+                    comp.transformerKind = kind == 0 ? TransformerKind::Single
+                                                     : TransformerKind::PrimaryAuxSecondary;
+                for (int i = 0; i < comp.pinPositions().size(); ++i) {
+                    const QPointF pin = comp.pinPosition(i);
+                    const bool onGrid = std::abs(pin.x() - std::round(pin.x() / 10.0) * 10.0) < 1e-6
+                        && std::abs(pin.y() - std::round(pin.y() / 10.0) * 10.0) < 1e-6;
+                    QVERIFY2(onGrid, qPrintable(QStringLiteral("%1 kind=%2 引脚 %3 在 (%4,%5) 不在网格上")
+                                                    .arg(typeName(type))
+                                                    .arg(kind)
+                                                    .arg(i)
+                                                    .arg(pin.x())
+                                                    .arg(pin.y())));
+                }
+            }
+        }
     }
 
     void changelogSectionsAreUnique()
