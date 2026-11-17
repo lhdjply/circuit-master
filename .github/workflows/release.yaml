@@ -209,7 +209,8 @@ jobs:
             "${{ matrix.mingw_prefix }}-pkgconf" \
             "${{ matrix.mingw_prefix }}-qt6-base" \
             "${{ matrix.mingw_prefix }}-qt6-charts" \
-            "${{ matrix.mingw_prefix }}-qt6-svg"
+            "${{ matrix.mingw_prefix }}-qt6-svg" \
+            "${{ matrix.mingw_prefix }}-qt6-translations"
 
           # 以「工具真的能跑」为准：上一步的退出码既可能来自成功，也可能来自被
           # 中断，唯一可靠的判据是命令存不存在

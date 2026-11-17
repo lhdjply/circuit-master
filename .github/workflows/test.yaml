@@ -79,7 +79,11 @@ jobs:
           if [ "$status" -ne 0 ]; then
             echo
             echo "########## Rerunning failed tests (verbose) ##########"
-            ctest --test-dir build --rerun-failed -V || true
+            ctest --test-dir build --rerun-failed -V 2>&1 | tee -a build/ctest-run.log || true
+            # Windows 上 QtTest 的输出偶尔不会随 -V 打出来，直接把 ctest 的
+            # LastTest.log（每个用例的完整输出）也贴出来，省得只知道「Failed」
+            echo "########## LastTest.log ##########"
+            cat build/Testing/Temporary/LastTest.log 2>/dev/null || true
             echo "######################################################"
           fi
           exit "$status"
@@ -189,7 +193,8 @@ jobs:
             mingw-w64-ucrt-x86_64-pkgconf \
             mingw-w64-ucrt-x86_64-qt6-base \
             mingw-w64-ucrt-x86_64-qt6-charts \
-            mingw-w64-ucrt-x86_64-qt6-svg
+            mingw-w64-ucrt-x86_64-qt6-svg \
+            mingw-w64-ucrt-x86_64-qt6-translations
 
           # 以「工具真的能跑」为准：上一步的退出码既可能来自成功，也可能来自被
           # 中断，唯一可靠的判据是命令存不存在
@@ -286,7 +291,11 @@ jobs:
           if [ "$status" -ne 0 ]; then
             echo
             echo "########## Rerunning failed tests (verbose) ##########"
-            ctest --test-dir build --rerun-failed -V || true
+            ctest --test-dir build --rerun-failed -V 2>&1 | tee -a build/ctest-run.log || true
+            # Windows 上 QtTest 的输出偶尔不会随 -V 打出来，直接把 ctest 的
+            # LastTest.log（每个用例的完整输出）也贴出来，省得只知道「Failed」
+            echo "########## LastTest.log ##########"
+            cat build/Testing/Temporary/LastTest.log 2>/dev/null || true
             echo "######################################################"
           fi
           exit "$status"
