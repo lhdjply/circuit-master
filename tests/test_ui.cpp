@@ -81,10 +81,12 @@ private slots:
     void updateDialogDownloadsPackage()
     {
         // 不依赖外网：让下载直接打原始地址（file://）
+        // 还原时用「改动前实际在用的那张表」，别写死 —— 内置镜像会变
+        const QStringList savedMirrors = UpdateChecker::builtinMirrors();
         UpdateChecker::setBuiltinMirrors({});
-        auto restore = qScopeGuard([] { UpdateChecker::setBuiltinMirrors(
-            {QStringLiteral("https://ghfast.top"), QStringLiteral("https://gh-proxy.org"),
-             QStringLiteral("https://ghproxy.net")}); });
+        auto restore = qScopeGuard([savedMirrors] {
+            UpdateChecker::setBuiltinMirrors(savedMirrors);
+        });
         // 造一个本地「安装包」，用 file:// 直链模拟下载
         const QString payload = QStringLiteral("fake package bytes 1234567890");
         const QString source = QDir(QCoreApplication::applicationDirPath())
@@ -1202,10 +1204,12 @@ private slots:
 
     void updateDialogDownloadsToTempAndInstalls()
     {
+        // 还原时用「改动前实际在用的那张表」，别写死 —— 内置镜像会变
+        const QStringList savedMirrors = UpdateChecker::builtinMirrors();
         UpdateChecker::setBuiltinMirrors({});
-        auto restore = qScopeGuard([] { UpdateChecker::setBuiltinMirrors(
-            {QStringLiteral("https://ghfast.top"), QStringLiteral("https://gh-proxy.org"),
-             QStringLiteral("https://ghproxy.net")}); });
+        auto restore = qScopeGuard([savedMirrors] {
+            UpdateChecker::setBuiltinMirrors(savedMirrors);
+        });
         // 「下载并安装」：下到临时目录，下完调用安装流程，不再弹保存对话框
         const QString payload = QStringLiteral("fake package bytes");
         const QString source = QDir(QCoreApplication::applicationDirPath())

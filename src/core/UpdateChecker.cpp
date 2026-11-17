@@ -136,10 +136,19 @@ QStringList UpdateChecker::builtinMirrors()
 {
     if (g_hasMirrorOverride)
         return g_mirrorOverride;
-    // 三个公共的 GitHub 转发服务。它们把 `<前缀>/https://github.com/...` 原样
-    // 转发到 GitHub，因此清单这种「github.com 上的文件」能直接穿过去。
-    return {QStringLiteral("https://ghfast.top"), QStringLiteral("https://gh-proxy.org"),
-            QStringLiteral("https://ghproxy.net")};
+    // 公共的 GitHub 转发服务。它们把 `<前缀>/https://github.com/...` 原样转发到
+    // GitHub，因此清单这种「github.com 上的文件」能直接穿过去。
+    //
+    // gh-proxy.org 有多个边缘节点（v4 / cdn / axisnow 等），同一时刻的可用性并不
+    // 一致，所以全列上、按实测最快的 v4 打头；ghfast.top 与 ghproxy.net 留作退路。
+    // 按实测中位数排序（各 5 次，VERSION 文件约 8 字节）：
+    //   v4.gh-proxy.org 0.16 s · cdn 0.29 s · ghfast.top 0.78 s · gh-proxy.org 0.89 s
+    //   axisnow 4/5 次超时，放最后当彩头
+    // ghproxy.net 5 次里 4 次超时，已从表里去掉。
+    return {QStringLiteral("https://v4.gh-proxy.org"),
+            QStringLiteral("https://cdn.gh-proxy.org"),
+            QStringLiteral("https://ghfast.top"), QStringLiteral("https://gh-proxy.org"),
+            QStringLiteral("https://axisnow.gh-proxy.org")};
 }
 
 void UpdateChecker::setMirrorPrefixes(const QStringList& prefixes)

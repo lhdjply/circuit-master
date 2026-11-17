@@ -5,6 +5,14 @@
 版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 版本号的唯一来源是仓库根目录的 `VERSION` 文件（写法与 tag 一致，如 `v0.1.0`）。
 
+## [未发布]
+
+### 改进
+
+- 检查更新的镜像改成按实测速度排序：v4.gh-proxy.org → cdn.gh-proxy.org →
+  ghfast.top → gh-proxy.org → axisnow.gh-proxy.org。实测常年超时的
+  ghproxy.net 已从表里去掉。
+
 ## [v0.3.0] - 2026-11-17
 
 这一版加了万用表与网络标签，标号数值可以单独摆放，元件库重新分了类。

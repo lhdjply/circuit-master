@@ -53,7 +53,9 @@
 **检查更新**
 
 - 菜单「帮助 → 检查更新…」手动检查，或启动 3 秒后自动检查一次（只在新版本出现时弹窗）
-- 数据来源是随 Release 上传的 `latest.json`，依次尝试 ghfast.top / gh-proxy.org / ghproxy.net 三个镜像，
+- 数据来源是随 Release 上传的 `latest.json`，按实测速度依次尝试
+  v4.gh-proxy.org / cdn.gh-proxy.org / ghfast.top / gh-proxy.org /
+  axisnow.gh-proxy.org 几个镜像，
   首条请求 700 ms 未返回就并行补发一条，避免单条连接卡住
 - **一键下载并安装**：清单里带资产列表，包的类型自动选，下到临时目录后直接拉起安装程序：
   - 平台来自编译期枚举（Linux / Windows），架构也是（amd64 / arm64 / loong64 / riscv64）

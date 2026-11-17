@@ -2301,11 +2301,28 @@ private slots:
         }
         QCOMPARE(ghfast, 1);
 
-        // 没记录通路时：先镜像，最后直链
+        // 没记录通路时：按内置镜像的顺序试，第一个是 v4.gh-proxy.org，直链在最后
         const QVector<QUrl> plain = UpdateChecker::downloadUrls(asset, QString());
-        QVERIFY(plain.size() >= 2);
-        QVERIFY(plain.first().toString().startsWith(QStringLiteral("https://ghfast.top/")));
+        QCOMPARE(plain.size(), UpdateChecker::builtinMirrors().size() + 1);
+        QCOMPARE(plain.first().toString(),
+                 QStringLiteral("https://v4.gh-proxy.org/") + asset);
         QCOMPARE(plain.last().toString(), asset);
+
+        // 内置镜像表本身：按实测速度排序，v4 打头
+        const QStringList mirrors = UpdateChecker::builtinMirrors();
+        QCOMPARE(mirrors.first(), QStringLiteral("https://v4.gh-proxy.org"));
+        // 按实测速度排在 v4 后面的几个
+        const QStringList expected{
+            QStringLiteral("https://v4.gh-proxy.org"),
+            QStringLiteral("https://cdn.gh-proxy.org"),
+            QStringLiteral("https://ghfast.top"),
+            QStringLiteral("https://gh-proxy.org"),
+            QStringLiteral("https://axisnow.gh-proxy.org")};
+        QCOMPARE(mirrors, expected);
+        // 实测常年超时的那个已经去掉了
+        QVERIFY(!mirrors.contains(QStringLiteral("https://ghproxy.net")));
+        // 不能有重复，否则会对着同一个地址重试
+        QCOMPARE(QSet<QString>(mirrors.begin(), mirrors.end()).size(), mirrors.size());
 
         // 空资产地址返回空列表
         QVERIFY(UpdateChecker::downloadUrls(QString(), QString()).isEmpty());
