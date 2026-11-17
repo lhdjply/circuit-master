@@ -2041,10 +2041,21 @@ private slots:
                      QByteArray::number(int(ComponentType::Resistor)));
 
         const QPoint targetInView = view->mapFromScene(QPointF(200, 200));
-        const QPoint target = view->viewport()->mapFrom(view, targetInView);
+        const QPointF target = view->viewport()->mapFrom(view, targetInView);
+        // Qt 6.16 起 QPoint 版构造被标为废弃，那边用 QPointF 版；
+        // 更早的 Qt（本项目最低支持 6.5）只有 QPoint 版，只是不产生警告
+#if QT_VERSION >= QT_VERSION_CHECK(6, 16, 0)
         QDragEnterEvent enter(target, Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QDropEvent drop(target, Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+#else
+        QT_WARNING_PUSH
+        QT_WARNING_DISABLE_DEPRECATED
+        QDragEnterEvent enter(target.toPoint(), Qt::CopyAction, &mime, Qt::LeftButton,
+                              Qt::NoModifier);
+        QDropEvent drop(target, Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QT_WARNING_POP
+#endif
         QApplication::sendEvent(view->viewport(), &enter);
-        QDropEvent drop(QPointF(target), Qt::CopyAction, &mime, Qt::LeftButton, Qt::NoModifier);
         QApplication::sendEvent(view->viewport(), &drop);
         settle();
 
