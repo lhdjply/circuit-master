@@ -1,3 +1,14 @@
+circuit-master (0.3.2) unstable; urgency=medium
+
+  * 修复电阻档读数差 10 倍（1 kΩ 显示成 100.00 Ω，四舍五入进位后小数点错位）。
+  * 修复元件旋转后点击位置错位；标号的可点范围收紧到文字本身。
+  * 修复网络标签的旋转方向和别的元件相反。
+  * 修复属性面板空态提示不居中、以及多出一条滚动条。
+  * 万用表读数窗口跟随档位变化，改电路后旧读数作废。
+  * 移除导出 SPICE 网表。
+
+ -- Circuit Master Maintainers <lhdjply@users.noreply.github.com>  Tue, 17 Nov 2026 16:50:00 +0800
+
 circuit-master (0.3.1) unstable; urgency=medium
 
   * 修复下载安装包卡住：连得上却不吐数据的镜像会一直等，现在按吞吐量换地址。
