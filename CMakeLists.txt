@@ -216,21 +216,34 @@ if (CSM_BUILD_TESTS AND TARGET Qt6::Test)
 endif()
 
 # ---------------------------------------------------------------- 安装
-# 桌面入口由模板生成，Exec 指向实际安装位置
-set(CSM_DESKTOP_EXEC "${CMAKE_INSTALL_FULL_BINDIR}/CircuitMaster")
-configure_file(resources/linux/circuit-master.desktop.in
-               "${CMAKE_CURRENT_BINARY_DIR}/circuit-master.desktop" @ONLY)
+if(APPLE)
+    # MACOSX_BUNDLE 的目标必须给 BUNDLE DESTINATION，否则 configure 直接报错。
+    # .app 装到 prefix 根下（例如 -DCMAKE_INSTALL_PREFIX=/Applications），
+    # 这是 macOS 的惯例；发布用的 .dmg 由 CI 直接对 build/CircuitMaster.app
+    # 跑 macdeployqt，不走这里。
+    install(TARGETS CircuitMaster BUNDLE DESTINATION .)
 
-install(TARGETS CircuitMaster RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/circuit-master.desktop"
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
-# MIME 数据库：让桌面环境认识 .csm（debian/postinst 里刷新）
-install(FILES resources/linux/circuit-master-mime.xml
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages
-        RENAME circuit-master.xml)
-install(FILES resources/assets/icons/icon.svg
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
-        RENAME circuit-master.svg)
-install(DIRECTORY resources/examples/
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/circuit-master/examples
-        FILES_MATCHING PATTERN "*.csm")
+    # 示例仍然装到 prefix 下，方便和 .app 一起分发
+    install(DIRECTORY resources/examples/
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/circuit-master/examples
+            FILES_MATCHING PATTERN "*.csm")
+else()
+    # 桌面入口由模板生成，Exec 指向实际安装位置
+    set(CSM_DESKTOP_EXEC "${CMAKE_INSTALL_FULL_BINDIR}/CircuitMaster")
+    configure_file(resources/linux/circuit-master.desktop.in
+                   "${CMAKE_CURRENT_BINARY_DIR}/circuit-master.desktop" @ONLY)
+
+    install(TARGETS CircuitMaster RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/circuit-master.desktop"
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+    # MIME 数据库：让桌面环境认识 .csm（debian/postinst 里刷新）
+    install(FILES resources/linux/circuit-master-mime.xml
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages
+            RENAME circuit-master.xml)
+    install(FILES resources/assets/icons/icon.svg
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
+            RENAME circuit-master.svg)
+    install(DIRECTORY resources/examples/
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/circuit-master/examples
+            FILES_MATCHING PATTERN "*.csm")
+endif()
