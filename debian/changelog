@@ -1,3 +1,13 @@
+circuit-master (0.3.0) unstable; urgency=medium
+
+  * 新增万用表 XMM：电压 / 电流 / 电阻 / 交流电压 / 交流电流五档位，
+    仿真时点击弹出七段码读数窗口，位数可选 3½ ~ 6½。
+  * 新增网络标签 NET：同名标签在网表里并成一个网络，不用拉线也能连。
+  * 元件的标号与数值可以单独拖动摆放，旋转 / 翻转时自动还原。
+  * 元件库重新分类：基础 / 半导体 / 模拟 IC / 电源 / 开关与接地 / 测量。
+
+ -- Circuit Master Maintainers <lhdjply@users.noreply.github.com>  Tue, 17 Nov 2026 14:30:00 +0800
+
 circuit-master (0.2.2) unstable; urgency=medium
 
   * 新增接地分类（GND/AGND/DGND/PGND/EARTH），测试点可选参考地。
