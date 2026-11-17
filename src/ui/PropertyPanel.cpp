@@ -20,7 +20,8 @@ PropertyPanel::PropertyPanel(QWidget* parent)
     : QWidget(parent)
 {
     buildUi();
-    m_stack->setCurrentWidget(m_placeholder);
+    m_placeholder->setVisible(true);
+    m_stack->setVisible(false);
 }
 
 namespace {
@@ -73,12 +74,17 @@ void PropertyPanel::buildUi()
     root->setContentsMargins(10, 10, 10, 10);
     root->setSpacing(8);
 
-    m_stack = new QStackedWidget(this);
-
+    // 空态提示**不放进 QStackedWidget**：stack 的 sizeHint 取所有页里最大的，
+    // 放进去会被表单页一起撑到上千像素高 —— 提示文字被顶到很下面，
+    // 右边还多出一条滚动条。单独摆一个标签，没选中元件时它才是这一页的全部内容，
+    // 于是面板只需要文字那么高，滚动区域再把它拉到视口大小，文字正好居中。
     m_placeholder = new QLabel(QStringLiteral("在原理图中选择一个元件\n以编辑其参数"), this);
     m_placeholder->setAlignment(Qt::AlignCenter);
-    m_placeholder->setStyleSheet(QStringLiteral("color:#94a3b8; padding:30px;"));
-    m_stack->addWidget(m_placeholder);
+    m_placeholder->setStyleSheet(QStringLiteral("color:#94a3b8;"));
+    m_placeholder->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Ignored);
+    root->addWidget(m_placeholder, 1);
+
+    m_stack = new QStackedWidget(this);
 
     auto* page = new QWidget(this);
     auto* pageLayout = new QVBoxLayout(page);
@@ -223,7 +229,7 @@ void PropertyPanel::buildUi()
     pageLayout->addWidget(hint);
 
     m_stack->addWidget(page);
-    root->addWidget(m_stack);
+    root->addWidget(m_stack, 1);
 
     connect(m_refdes, &QLineEdit::editingFinished, this, &PropertyPanel::applyRefdes);
     connect(m_polarized, &QCheckBox::toggled, this, [this](bool on) {
@@ -283,11 +289,12 @@ void PropertyPanel::buildUi()
 void PropertyPanel::setComponent(ComponentItem* item)
 {
     m_item = item;
-    if (!item) {
-        m_stack->setCurrentWidget(m_placeholder);
+    // 没选中：只显示空态提示；选中了：隐藏提示、显示表单页
+    m_placeholder->setVisible(!item);
+    m_stack->setVisible(item != nullptr);
+    if (!item)
         return;
-    }
-    m_stack->setCurrentIndex(1);
+    m_stack->setCurrentIndex(0);
     refreshFromItem();
     updateVisibility();
 }

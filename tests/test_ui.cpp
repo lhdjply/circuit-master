@@ -10,6 +10,7 @@
 #include "ui/ComponentItem.h"
 
 #include <QGraphicsSceneMouseEvent>
+#include <QStackedWidget>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include "ui/PropertyPanel.h"
@@ -998,6 +999,49 @@ private slots:
             QVERIFY2(item->boundingRect().contains(label),
                      qPrintable(QStringLiteral("%1° 时标号露出包围盒").arg(rot)));
         }
+    }
+
+    void propertyPanelPlaceholderIsCentred()
+    {
+        // 刚启动时属性面板只有一句提示。以前这句提示被塞进 QStackedWidget 里，
+        // 而 stack 的 sizeHint 取所有页里最大的 —— 空态被表单页一起撑到上千像素高，
+        // 提示文字被顶到很下面，右边还多出一条滚动条。
+        MainWindow window;
+        window.resize(1400, 900);
+        window.show();
+        waitShown(window);
+
+        auto* props = window.findChild<PropertyPanel*>();
+        QVERIFY(props);
+
+        QLabel* placeholder = nullptr;
+        for (QLabel* label : props->findChildren<QLabel*>()) {
+            if (label->text().contains(QStringLiteral("在原理图中选择")))
+                placeholder = label;
+        }
+        QVERIFY2(placeholder, "找不到空态提示");
+        QVERIFY2(placeholder->isVisible(), "刚启动时应当显示空态提示");
+
+        // 提示区域应当占满面板，且文字在中线上
+        const int centre = placeholder->y() + placeholder->height() / 2;
+        const int panelCentre = props->height() / 2;
+        QVERIFY2(std::abs(centre - panelCentre) <= 2,
+                 qPrintable(QStringLiteral("提示中心 y=%1，面板中心 y=%2")
+                                .arg(centre)
+                                .arg(panelCentre)));
+
+        // 面板不该因为空态被撑高（表单页那一堆字段不该参与空态的 sizeHint）
+        QVERIFY2(props->height() <= 900,
+                 qPrintable(QStringLiteral("空态面板高 %1，被撑高了").arg(props->height())));
+
+        // 选中元件后提示隐藏、表单出现
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        auto* item = scene->placeComponent(ComponentType::Resistor, QPointF(300, 300));
+        item->setSelected(true);
+        settle();
+        QVERIFY2(!placeholder->isVisible(), "选中元件后提示应当隐藏");
+        QVERIFY2(props->findChild<QStackedWidget*>()->isVisible(), "选中元件后表单应当显示");
     }
 
     void transformerHasFourPinsAndPanel()
