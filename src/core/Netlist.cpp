@@ -170,10 +170,31 @@ Netlist Netlist::build(const Circuit& circuit)
         }
     }
     if (!hasGround) {
-        net.valid = false;
-        net.error = QStringLiteral("电路中没有主接地符号（GND）。请放置 GND 并连接到电路，"
-                                   "否则无法确定参考节点（AGND/DGND/PGND/EARTH 不算参考地）。");
-        return net;
+        // 没有 GND 但有万用表：拿它的负端（1 号引脚，真表上的 COM）当参考节点。
+        // 万用表本来就是两脚表，读数只看两端之差；把 COM 定成 0 V 之后，
+        // 其余节点的电压都相对它 —— 和真表接在电路里的情形一致。
+        const Component* reference = nullptr;
+        for (const Component& comp : circuit.components) {
+            if (comp.type == ComponentType::Multimeter) {
+                reference = &comp;
+                break;
+            }
+        }
+        if (reference) {
+            const int root = dsu.find(dsu.add(toKey(reference->pinPosition(1), grid)));
+            if (!groundRoots.contains(root))
+                groundRoots.append(root);
+            net.warnings << QStringLiteral(
+                                "电路里没有 GND，已把万用表 %1 的负端当作参考节点（0 V）。")
+                                .arg(reference->refdes);
+        } else {
+            net.valid = false;
+            net.error = QStringLiteral(
+                "电路中没有主接地符号（GND）。请放置 GND 并连接到电路，"
+                "否则无法确定参考节点（AGND/DGND/PGND/EARTH 不算参考地；"
+                "有万用表时也可以拿它的负端当参考）。");
+            return net;
+        }
     }
 
     // 5. 分配节点号

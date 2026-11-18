@@ -111,6 +111,7 @@ private slots:
     void currentProbeMeasuresBranch();
     void allPinsLandOnGrid();
     void groundRequired();
+    void meterServesAsReferenceWithoutGround();
 };
 
 void CoreAnalysisTest::suggestedStepUsesPulseWidthNotEdge()
@@ -544,6 +545,76 @@ void CoreAnalysisTest::allPinsLandOnGrid()
             }
         }
     }
+}
+
+void CoreAnalysisTest::meterServesAsReferenceWithoutGround()
+{
+    // 没有 GND，但有万用表：拿它的负端（1 号引脚，真表上的 COM）当参考节点，
+    // 仿真照常能跑 —— 万用表本来就是两脚表，读数只看两端之差。
+    Circuit c;
+
+    Component source;
+    source.id = 1;
+    source.type = ComponentType::VoltageSource;
+    source.pos = QPointF(100, 300);
+    source.rotation = 90;
+    source.refdes = QStringLiteral("V1");
+    source.dcValue = 10.0;
+    c.components.append(source);
+
+    Component resistor;
+    resistor.id = 2;
+    resistor.type = ComponentType::Resistor;
+    resistor.pos = QPointF(300, 200);
+    resistor.refdes = QStringLiteral("R1");
+    resistor.value = 1000.0;
+    c.components.append(resistor);
+
+    Component meter;
+    meter.id = 3;
+    meter.type = ComponentType::Multimeter;
+    meter.pos = QPointF(300, 340);
+    meter.refdes = QStringLiteral("XMM1");
+    meter.multimeterMode = MultimeterMode::Voltage;
+    c.components.append(meter);
+
+    // V1+ → R1 左 → 万用表+；R1 右 → 万用表− → V1−
+    c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(270, 200)}});
+    c.wires.append(Wire{{QPointF(270, 200), QPointF(270, 340)}});
+    c.wires.append(Wire{{QPointF(330, 200), QPointF(420, 200), QPointF(420, 400),
+                         QPointF(100, 400), QPointF(100, 330)}});
+    c.wires.append(Wire{{QPointF(330, 340), QPointF(330, 400)}});
+
+    const Netlist net = c.buildNetlist();
+    QVERIFY2(net.valid, qPrintable(net.error));
+    // 得说清楚参考节点是怎么来的，不能悄悄换掉
+    bool told = false;
+    for (const QString& warning : net.warnings) {
+        if (warning.contains(QStringLiteral("XMM1")) && warning.contains(QStringLiteral("参考节点")))
+            told = true;
+    }
+    QVERIFY2(told, "应当提示已把万用表负端当作参考节点");
+
+    // 万用表负端就是节点 0，正端读到 10 V
+    QCOMPARE(net.nodeOf(meter.id, 1), 0);
+    QVERIFY(net.nodeOf(meter.id, 0) > 0);
+
+    SimulationOptions options;
+    options.kind = AnalysisKind::Transient;
+    options.tStop = 1e-3;
+    options.tStep = 1e-4;
+    const SimulationResult result = Simulator::run(c, options);
+    QVERIFY2(result.ok, qPrintable(result.error));
+    const Signal* reading = result.signal(QStringLiteral("XMM1"));
+    QVERIFY(reading);
+    QVERIFY2(near(reading->y.last(), 10.0, 1e-6),
+             qPrintable(QString::number(reading->y.last())));
+
+    // 既没有 GND 也没有万用表时，仍然要报错（groundRequired 覆盖的另一半）
+    Circuit bare;
+    addComponent(bare, makeComp(ComponentType::Resistor, QPointF(0, 0), 100.0));
+    addComponent(bare, makeComp(ComponentType::VoltageSource, QPointF(-60, 0), 5.0));
+    QVERIFY(!bare.buildNetlist().valid);
 }
 
 void CoreAnalysisTest::groundRequired()
