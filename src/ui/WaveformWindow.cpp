@@ -855,6 +855,19 @@ void WaveformWindow::autoPickLiveScales()
         return;
 
     const bool needInitial = !m_liveAutoScaled;
+
+    // 初次自动量程要等波形展开：刚启动（或刚换了时基重启）时缓冲区里只有
+    // 一小段贴着 0 的波形，按它算峰值会选到最灵敏的档（50 mV/格），
+    // 等于把后面真正的大信号全裁掉。
+    if (needInitial) {
+        double span = 0.0;
+        for (const Signal& wave : m_liveBuffers) {
+            if (wave.x.size() >= 2)
+                span = std::max(span, wave.x.last() - wave.x.first());
+        }
+        if (span < m_liveWindow * 0.5)
+            return;
+    }
     const bool voltageClipped = m_liveHasVoltage && voltPeak > m_liveVoltDiv * 2.9;
     const bool currentClipped = m_liveHasCurrent && ampPeak > m_liveAmpDiv * 2.9;
     if (!needInitial && !voltageClipped && !currentClipped)
@@ -1231,16 +1244,127 @@ void WaveformWindow::autoScale()
     if (!m_chart)
         return;
 
-    // 实时示波器：解除手动锁定，按当前波形重新自动选一次量程
+    // 实时示波器：时基、电压/电流量程一起重新自适应
     if (m_live) {
         m_liveScaleLocked = false;
         m_liveAutoScaled = false;
+        pickLiveTimeBase(); // 先定时基：它决定步长，可能重启引擎
         autoPickLiveScales();
         return;
     }
 
     m_chart->zoomReset();
     rebuild();
+}
+
+double WaveformWindow::estimateLivePeriod() const
+{
+    // 先看电路里的信号源：这条最可靠，也不受当前时基影响。
+    // 只看缓冲区的话，时基太小时（比如 5 ms/格看 1 Hz 信号）根本装不下
+    // 一个完整周期，永远估不出来，也就没法「自动缩放时间」。
+    double fromSource = 0.0;
+    for (const Component& comp : m_liveCircuit.components) {
+        if (!isSource(comp.type))
+            continue;
+        double period = 0.0;
+        if (comp.function == SourceFunction::Pulse && comp.pulsePeriod > 0.0)
+            period = comp.pulsePeriod;
+        else if (comp.function == SourceFunction::Sine && comp.frequency > 0.0)
+            period = 1.0 / comp.frequency;
+        if (period > 0.0)
+            fromSource = std::max(fromSource, period); // 取最慢的那路，看整体形状
+    }
+    if (fromSource > 0.0)
+        return fromSource;
+
+    // 退路：从缓冲区里找穿越中值的上升沿
+    // 挑起伏最大的那路电压信号来估周期
+    const Signal* best = nullptr;
+    double bestSpan = 0.0;
+    for (const Signal& wave : m_liveBuffers) {
+        if (wave.unit != QLatin1String("V") || wave.y.size() < 40)
+            continue;
+        double lo = std::numeric_limits<double>::max();
+        double hi = -std::numeric_limits<double>::max();
+        for (double value : wave.y) {
+            if (!std::isfinite(value))
+                continue;
+            lo = std::min(lo, value);
+            hi = std::max(hi, value);
+        }
+        if (hi > lo && hi - lo > bestSpan) {
+            bestSpan = hi - lo;
+            best = &wave;
+        }
+    }
+    if (!best || !(bestSpan > 0.0))
+        return 0.0;
+
+    // 用「穿过中值」的上升沿数周期，带 10% 回差，避免在噪声上反复触发
+    double sum = 0.0;
+    int count = 0;
+    for (double value : best->y) {
+        if (std::isfinite(value)) {
+            sum += value;
+            ++count;
+        }
+    }
+    if (count == 0)
+        return 0.0;
+    const double mid = sum / count;
+    const double band = bestSpan * 0.1;
+
+    QVector<double> crossings;
+    bool above = false;
+    for (int i = 0; i < best->y.size() && i < best->x.size(); ++i) {
+        const double value = best->y.at(i);
+        if (!std::isfinite(value))
+            continue;
+        if (!above && value > mid + band) {
+            above = true;
+            crossings.append(best->x.at(i));
+        } else if (above && value < mid - band) {
+            above = false;
+        }
+    }
+    if (crossings.size() < 2)
+        return 0.0; // 直流或还没跑完一个周期
+
+    const double span = crossings.last() - crossings.first();
+    if (!(span > 0.0))
+        return 0.0;
+    return span / double(crossings.size() - 1);
+}
+
+void WaveformWindow::pickLiveTimeBase()
+{
+    if (!m_liveWindowBox)
+        return;
+    const double period = estimateLivePeriod();
+    if (!(period > 0.0))
+        return; // 估不出周期就不动时基，免得把用户看到的东西抖掉
+
+    // 让大约 4 个周期铺满 10 格（档位是 1/2/5 序列，实际落在 2.5~5 个周期之间）
+    const double target = period * 4.0 / 10.0;
+
+    int best = -1;
+    double bestDiff = 0.0;
+    for (int i = 0; i < m_liveWindowBox->count(); ++i) {
+        const double value = m_liveWindowBox->itemData(i).toDouble();
+        if (!(value > 0.0))
+            continue;
+        // 档位是 1/2/5 序列，按对数距离找最接近的
+        const double diff = std::abs(std::log(value / target));
+        if (best < 0 || diff < bestDiff) {
+            best = i;
+            bestDiff = diff;
+        }
+    }
+    if (best < 0 || best == m_liveWindowBox->currentIndex())
+        return;
+
+    // 不屏蔽信号：下拉框的槽会重算窗口、步长并重启引擎
+    m_liveWindowBox->setCurrentIndex(best);
 }
 
 void WaveformWindow::selectAll(bool on)

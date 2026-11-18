@@ -144,6 +144,10 @@ private:
     void restartLiveEngine();
     void applyLiveScales();
     void autoPickLiveScales();
+    /// 从当前缓冲里估信号周期（找不到返回 0）
+    double estimateLivePeriod() const;
+    /// 按周期挑一个能看两三个周期的时基
+    void pickLiveTimeBase();
 };
 
 } // namespace csm

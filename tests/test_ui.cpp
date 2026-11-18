@@ -1225,6 +1225,95 @@ private slots:
         QCOMPARE(voltDiv->currentIndex(), target);
     }
 
+    void autoScaleAlsoPicksTimeBase()
+    {
+        // 「自动缩放」不能只缩放电压，时基也得跟着走：
+        // 1 Hz 的方波用 5 ms/格 只能看到一小段，点一下应当跳到能看几个周期的档位。
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 300));
+        source->setRotationAngle(90);
+        Component src = source->component();
+        src.function = SourceFunction::Pulse;
+        src.pulseV1 = 0.0;
+        src.pulseV2 = 5.0;
+        src.pulsePeriod = 1.0;   // 1 Hz
+        src.pulseWidth = 0.5;
+        source->setComponent(src);
+        auto* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(250, 200));
+        Component r = resistor->component();
+        r.value = 1000.0;
+        resistor->setComponent(r);
+        auto* probe = scene->placeComponent(ComponentType::Probe, QPointF(400, 200));
+        QVERIFY(probe);
+        scene->placeComponent(ComponentType::Ground, QPointF(100, 420));
+        scene->addWire({QPointF(100, 270), QPointF(100, 200), QPointF(220, 200)});
+        scene->addWire({QPointF(280, 200), QPointF(400, 200)});
+        scene->addWire({QPointF(100, 330), QPointF(100, 420)});
+        settle();
+
+        window.runSimulation();
+        settle();
+        QAction* monitor = window.findChild<QAction*>(QStringLiteral("actMonitor"));
+        QVERIFY(monitor);
+        monitor->setChecked(true);
+        settle();
+        QTabWidget* tabs = waveTabs(window);
+        QVERIFY(tabs);
+        tabs->setCurrentIndex(1);
+        QTest::qWait(400);
+
+        auto* live = qobject_cast<WaveformWindow*>(tabs->widget(1));
+        QVERIFY(live);
+        QVERIFY2(live->isLive(), "动态示波器应当在运行");
+
+        // 手动把时基调到很小
+        QComboBox* timeBox = nullptr;
+        for (QComboBox* box : live->findChildren<QComboBox*>()) {
+            for (int i = 0; i < box->count(); ++i) {
+                if (box->itemText(i).contains(QStringLiteral("/div"))
+                    && !box->itemText(i).contains(QStringLiteral("V"))) {
+                    timeBox = box;
+                    break;
+                }
+            }
+            if (timeBox)
+                break;
+        }
+        QVERIFY2(timeBox, "找不到「时间/格」下拉框");
+
+        int tiny = -1;
+        for (int i = 0; i < timeBox->count(); ++i) {
+            if (std::abs(timeBox->itemData(i).toDouble() - 5e-3) < 1e-12) {
+                tiny = i;
+                break;
+            }
+        }
+        QVERIFY2(tiny >= 0, "下拉框里应当有 5 ms/div");
+        timeBox->setCurrentIndex(tiny);
+        QTest::qWait(200);
+        QCOMPARE(live->liveTimeDiv(), 5e-3);
+
+        // 点「自动缩放」
+        QPushButton* autoBtn = nullptr;
+        for (QPushButton* button : live->findChildren<QPushButton*>()) {
+            if (button->text() == QStringLiteral("自动缩放") && button->isVisible())
+                autoBtn = button;
+        }
+        QVERIFY2(autoBtn, "动态示波器里应当有「自动缩放」");
+        autoBtn->click();
+        QTest::qWait(300);
+
+        // 1 Hz 信号：时基应当跳到能看见若干个周期的档位（≥ 0.1 s/格）
+        QVERIFY2(live->liveTimeDiv() >= 0.1,
+                 qPrintable(QStringLiteral("时基没跟着缩放：%1 s/div").arg(live->liveTimeDiv())));
+    }
+
     void autoScaleLivesInTheLiveScope()
     {
         // 静态页有框选放大 + 右键复位，不需要「自动缩放」；「示波器」按钮也多余
