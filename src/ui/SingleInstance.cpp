@@ -1,8 +1,10 @@
 #include "ui/SingleInstance.h"
 
+#include <QEventLoop>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QRegularExpression>
+#include <QTimer>
 
 namespace csm {
 
@@ -12,6 +14,8 @@ namespace {
 /// 但也不值得等太久 —— 一共约 600 ms。
 constexpr int kConnectAttempts = 6;
 constexpr int kConnectIntervalMs = 100;
+/// 写完数据后留给对端「accept + 读走」的时间，再断开连接
+constexpr int kFlushGraceMs = 120;
 
 } // namespace
 
@@ -69,9 +73,18 @@ bool SingleInstance::promote(const QStringList& files)
                 socket.flush();
                 socket.waitForBytesWritten(1000);
             }
+            // 不能写完就立刻断开：Windows 的命名管道在 DisconnectNamedPipe 时
+            // 会把对端**还没读走**的数据丢掉。这里跑一小段事件循环（真实运行时
+            // 对端是另一个进程，它自己的事件循环在跑；同进程的测试也能借这段
+            // 时间处理 newConnection），然后再优雅断开。
+            {
+                QEventLoop loop;
+                QTimer::singleShot(kFlushGraceMs, &loop, &QEventLoop::quit);
+                loop.exec();
+            }
             socket.disconnectFromServer();
             if (socket.state() != QLocalSocket::UnconnectedState)
-                socket.waitForDisconnected(300);
+                socket.waitForDisconnected(500);
             return false; // 已有实例：转发完就退出
         }
     }
@@ -98,15 +111,17 @@ void SingleInstance::acceptConnection()
         if (!socket)
             continue;
 
-        // 对方写完就断开，这里按「收到的内容」拼起来，断开时统一处理：
-        // 一条连接可能分几次到达
-        connect(socket, &QLocalSocket::readyRead, socket, [socket] {
-            socket->setProperty("buffer",
-                                socket->property("buffer").toByteArray() + socket->readAll());
-        });
-        connect(socket, &QLocalSocket::disconnected, socket, [this, socket] {
+        // 客户端写完就断开。这里的关键是：等我们拿到这个 socket 时，
+        // 它可能**已经断开、甚至数据都已经到齐了** —— Windows 命名管道的
+        // 时序和 Unix 套接字不同，很容易在挂信号之前就走完。
+        // 所以挂上信号之后必须再补查一次当前状态，不能只靠信号。
+        auto finish = [this, socket] {
+            if (socket->property("csmHandled").toBool())
+                return;
+            socket->setProperty("csmHandled", true);
+
             const QStringList lines =
-                QString::fromUtf8(socket->property("buffer").toByteArray())
+                QString::fromUtf8(socket->property("csmBuffer").toByteArray())
                     .split(QLatin1Char('\n'));
             QStringList files;
             for (const QString& line : lines) {
@@ -117,7 +132,21 @@ void SingleInstance::acceptConnection()
             socket->deleteLater();
             if (!files.isEmpty())
                 emit filesReceived(files);
-        });
+        };
+
+        auto drain = [socket] {
+            socket->setProperty("csmBuffer",
+                                socket->property("csmBuffer").toByteArray() + socket->readAll());
+        };
+
+        connect(socket, &QLocalSocket::readyRead, socket, drain);
+        connect(socket, &QLocalSocket::disconnected, socket, finish);
+
+        // 补查：挂信号之前可能已经读过数据，或者已经断开
+        if (socket->bytesAvailable() > 0)
+            drain();
+        if (socket->state() == QLocalSocket::UnconnectedState)
+            finish();
     }
 }
 
