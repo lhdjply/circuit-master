@@ -53,6 +53,7 @@
 #include <QTest>
 #include <QTimer>
 #include <QValueAxis>
+#include <QWidget>
 #include <cmath>
 
 using namespace csm;
@@ -81,6 +82,18 @@ private slots:
     void captureMainWindow();
 
 private:
+
+    /// 把窗口截图存到 build/shots/ 下（目录不存在就建出来）。
+    /// 拆成独立可执行文件后，不能再指望「别的用例先建好了目录」——
+    /// 干净构建时 shots/ 并不存在，grab().save() 会直接失败。
+    static bool saveShot(QWidget* widget, const QString& fileName)
+    {
+        QDir dir(QCoreApplication::applicationDirPath());
+        if (!dir.mkpath(QStringLiteral("shots")))
+            return false;
+        return widget->grab().save(dir.filePath(QStringLiteral("shots/") + fileName));
+    }
+
     // 下面几个是本文件自用的界面操作辅助。为了每个测试文件彻底独立
     // （删掉别的文件也不影响自己），各留一份，不再共用头文件。
     static void settle(int rounds = 3)
@@ -416,10 +429,7 @@ void UiWorkflowTest::updateDialogRenders()
 
     QVERIFY(dialog.isVisible());
 
-    // 截图目录由 captureMainWindow 创建，而本用例在它之前运行
-    QDir dir(QCoreApplication::applicationDirPath());
-    QVERIFY(dir.mkpath(QStringLiteral("shots")));
-    QVERIFY(dialog.grab().save(dir.filePath(QStringLiteral("shots/update_dialog.png"))));
+    QVERIFY(saveShot(&dialog, QStringLiteral("update_dialog.png")));
 
     // 帮助菜单里应当有「检查更新…」
     MainWindow window;
@@ -769,8 +779,7 @@ void UiWorkflowTest::runStartsAndStopEndsSimulation()
     QVERIFY(monitorWindow->isVisible());
     QVERIFY(live->isLive());
     QTRY_VERIFY_WITH_TIMEOUT(live->liveTime() > 5e-4, 5000);
-    QVERIFY(monitorWindow->grab().save(QCoreApplication::applicationDirPath()
-                                       + QStringLiteral("/shots/monitor_running.png")));
+    QVERIFY(saveShot(monitorWindow, QStringLiteral("monitor_running.png")));
 
     // 只有「停止仿真」才停
     run->trigger();
@@ -940,8 +949,7 @@ void UiWorkflowTest::ledLightsUpAfterSimulation()
     // 5 V 经 1 kΩ → 约 3 mA，应当点亮
     QVERIFY2(led->ledBrightness() > 0.3,
              qPrintable(QString::number(led->ledBrightness())));
-    QVERIFY(window.grab().save(QCoreApplication::applicationDirPath()
-                               + QStringLiteral("/shots/led_on.png")));
+    QVERIFY(saveShot(&window, QStringLiteral("led_on.png")));
 
     // 停止仿真后应当熄灭
     QAction* run = window.findChild<QAction*>(QStringLiteral("actRun"));
@@ -1076,8 +1084,7 @@ void UiWorkflowTest::reversedPolarizedCapacitorExplodes()
     settle();
     QCOMPARE(cap->blastProgress(), 1.0);
     QVERIFY2(cap->isBlown(), "动画结束后爆炸特效应保留");
-    QVERIFY(window.grab().save(QCoreApplication::applicationDirPath()
-                               + QStringLiteral("/shots/cap_explosion.png")));
+    QVERIFY(saveShot(&window, QStringLiteral("cap_explosion.png")));
 
     // 停止仿真后特效清除
     QAction* run = window.findChild<QAction*>(QStringLiteral("actRun"));
@@ -1115,10 +1122,7 @@ void UiWorkflowTest::captureMainWindow()
     QCOMPARE(scene->componentItems().size(), 6); // 4 个元件 + 2 个测试点
     QCOMPARE(scene->wireItems().size(), 3);
 
-    QDir dir(QCoreApplication::applicationDirPath());
-    QVERIFY(dir.mkpath(QStringLiteral("shots")));
-    const QString mainShot = dir.filePath(QStringLiteral("shots/main.png"));
-    QVERIFY(window.grab().save(mainShot));
+    QVERIFY(saveShot(&window, QStringLiteral("main.png")));
 
     // 选中 R1，检查属性面板
     for (ComponentItem* item : scene->componentItems()) {
@@ -1128,14 +1132,14 @@ void UiWorkflowTest::captureMainWindow()
         }
     }
     settle();
-    QVERIFY(window.grab().save(dir.filePath(QStringLiteral("shots/main_selected.png"))));
+    QVERIFY(saveShot(&window, QStringLiteral("main_selected.png")));
 
     window.runSimulation();
     openStaticWave(window);
     auto* wave = waitWaveWindow(window);
-    const QString waveShot = dir.filePath(QStringLiteral("shots/waveform.png"));
-    QVERIFY(wave->grab().save(waveShot));
-    QVERIFY(QFileInfo(waveShot).size() > 5000);
+    QVERIFY(saveShot(wave, QStringLiteral("waveform.png")));
+    QVERIFY(QFileInfo(QCoreApplication::applicationDirPath()
+                      + QStringLiteral("/shots/waveform.png")).size() > 5000);
 }
 
 // 测试入口放在按文件名排序的最后一个文件里（原来那个只做入口的

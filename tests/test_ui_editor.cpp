@@ -53,6 +53,7 @@
 #include <QTest>
 #include <QTimer>
 #include <QValueAxis>
+#include <QWidget>
 #include <cmath>
 
 using namespace csm;
@@ -86,6 +87,18 @@ private slots:
     void drawWireWithMouse();
 
 private:
+
+    /// 把窗口截图存到 build/shots/ 下（目录不存在就建出来）。
+    /// 拆成独立可执行文件后，不能再指望「别的用例先建好了目录」——
+    /// 干净构建时 shots/ 并不存在，grab().save() 会直接失败。
+    static bool saveShot(QWidget* widget, const QString& fileName)
+    {
+        QDir dir(QCoreApplication::applicationDirPath());
+        if (!dir.mkpath(QStringLiteral("shots")))
+            return false;
+        return widget->grab().save(dir.filePath(QStringLiteral("shots/") + fileName));
+    }
+
     // 下面几个是本文件自用的界面操作辅助。为了每个测试文件彻底独立
     // （删掉别的文件也不影响自己），各留一份，不再共用头文件。
     static void settle(int rounds = 3)
@@ -930,8 +943,7 @@ void UiEditorTest::draggingAnchoredWireStretchesInsteadOfDetaching()
         lowest = std::max(lowest, p.y());
     QVERIFY2(lowest >= mid.y() + 50, qPrintable(QString::number(lowest)));
 
-    QVERIFY(window.grab().save(QCoreApplication::applicationDirPath()
-                               + QStringLiteral("/shots/wire_orthogonal.png")));
+    QVERIFY(saveShot(&window, QStringLiteral("wire_orthogonal.png")));
 
     // 走线必须是直角：每段要么水平要么竖直
     for (int i = 1; i < after.size(); ++i) {

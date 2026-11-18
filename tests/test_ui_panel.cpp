@@ -53,6 +53,7 @@
 #include <QTest>
 #include <QTimer>
 #include <QValueAxis>
+#include <QWidget>
 #include <cmath>
 
 using namespace csm;
@@ -76,6 +77,18 @@ private slots:
     void libraryDragPixmapHasNoSelectionBackground();
 
 private:
+
+    /// 把窗口截图存到 build/shots/ 下（目录不存在就建出来）。
+    /// 拆成独立可执行文件后，不能再指望「别的用例先建好了目录」——
+    /// 干净构建时 shots/ 并不存在，grab().save() 会直接失败。
+    static bool saveShot(QWidget* widget, const QString& fileName)
+    {
+        QDir dir(QCoreApplication::applicationDirPath());
+        if (!dir.mkpath(QStringLiteral("shots")))
+            return false;
+        return widget->grab().save(dir.filePath(QStringLiteral("shots/") + fileName));
+    }
+
     // 下面几个是本文件自用的界面操作辅助。为了每个测试文件彻底独立
     // （删掉别的文件也不影响自己），各留一份，不再共用头文件。
     static void settle(int rounds = 3)
@@ -457,8 +470,7 @@ void UiPanelTest::optocouplerSymbolAndPanel()
     }
     QVERIFY2(ctrEdit, "应当显示 CTR 输入框");
 
-    QVERIFY(window.grab().save(QCoreApplication::applicationDirPath()
-                               + QStringLiteral("/shots/optocoupler.png")));
+    QVERIFY(saveShot(&window, QStringLiteral("optocoupler.png")));
 }
 
 void UiPanelTest::transistorSymbolsRender()
@@ -486,8 +498,7 @@ void UiPanelTest::transistorSymbolsRender()
     }
     settle();
 
-    QVERIFY(window.grab().save(QCoreApplication::applicationDirPath()
-                               + QStringLiteral("/shots/transistors.png")));
+    QVERIFY(saveShot(&window, QStringLiteral("transistors.png")));
 }
 
 void UiPanelTest::editPropertiesAndRotate()

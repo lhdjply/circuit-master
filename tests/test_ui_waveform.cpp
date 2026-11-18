@@ -53,6 +53,7 @@
 #include <QTest>
 #include <QTimer>
 #include <QValueAxis>
+#include <QWidget>
 #include <cmath>
 
 using namespace csm;
@@ -79,6 +80,18 @@ private slots:
     void captureOpAmp();
 
 private:
+
+    /// 把窗口截图存到 build/shots/ 下（目录不存在就建出来）。
+    /// 拆成独立可执行文件后，不能再指望「别的用例先建好了目录」——
+    /// 干净构建时 shots/ 并不存在，grab().save() 会直接失败。
+    static bool saveShot(QWidget* widget, const QString& fileName)
+    {
+        QDir dir(QCoreApplication::applicationDirPath());
+        if (!dir.mkpath(QStringLiteral("shots")))
+            return false;
+        return widget->grab().save(dir.filePath(QStringLiteral("shots/") + fileName));
+    }
+
     // 下面几个是本文件自用的界面操作辅助。为了每个测试文件彻底独立
     // （删掉别的文件也不影响自己），各留一份，不再共用头文件。
     static void settle(int rounds = 3)
@@ -927,8 +940,7 @@ void UiWaveformTest::liveScopeFromMenu()
     // 实时仿真的定时器每 33ms 推进一步。等它攒到半个窗口（约 2ms）再截图，
     // 否则截出来是一张空图；轮询在条件满足后立刻返回，不会多等。
     QTRY_VERIFY_WITH_TIMEOUT(wave->liveTime() > 2e-3, 5000);
-    QVERIFY(wave->grab().save(QCoreApplication::applicationDirPath()
-                              + QStringLiteral("/shots/live_scope.png")));
+    QVERIFY(saveShot(wave, QStringLiteral("live_scope.png")));
 
     // 时间窗下拉应覆盖 5 ns ~ 100 s
     QComboBox* windowBox = nullptr;
@@ -962,8 +974,7 @@ void UiWaveformTest::captureAcSweep()
     window.runSimulation();
     openStaticWave(window);
     auto* wave = waitWaveWindow(window);
-    QVERIFY(wave->grab().save(
-        QCoreApplication::applicationDirPath() + QStringLiteral("/shots/waveform_ac.png")));
+    QVERIFY(saveShot(wave, QStringLiteral("waveform_ac.png")));
 }
 
 void UiWaveformTest::captureDiodeRectifier()
@@ -985,8 +996,7 @@ void UiWaveformTest::captureDiodeRectifier()
     window.runSimulation();
     openStaticWave(window);
     auto* wave = waitWaveWindow(window);
-    QVERIFY(wave->grab().save(
-        QCoreApplication::applicationDirPath() + QStringLiteral("/shots/waveform_diode.png")));
+    QVERIFY(saveShot(wave, QStringLiteral("waveform_diode.png")));
 }
 
 void UiWaveformTest::captureOpAmp()
@@ -1006,7 +1016,7 @@ void UiWaveformTest::captureOpAmp()
     settle();
 
     const QString dir = QCoreApplication::applicationDirPath();
-    QVERIFY(window.grab().save(dir + QStringLiteral("/shots/opamp_schematic.png")));
+    QVERIFY(saveShot(&window, QStringLiteral("opamp_schematic.png")));
 
     // 选中运放后，属性面板应显示“开环增益”
     auto* scene = window.findChild<SchematicScene*>();
@@ -1040,7 +1050,7 @@ void UiWaveformTest::captureOpAmp()
                  qPrintable(list->item(i)->text()));
     }
 
-    QVERIFY(wave->grab().save(dir + QStringLiteral("/shots/waveform_opamp.png")));
+    QVERIFY(saveShot(wave, QStringLiteral("waveform_opamp.png")));
 }
 
 QTEST_MAIN(UiWaveformTest)
