@@ -125,6 +125,7 @@ target_compile_options(csm_core PRIVATE -Wall -Wextra -Wno-unused-parameter)
 set(CSM_UI_SOURCES
     src/ui/I18n.cpp
     src/ui/Dialogs.cpp
+    src/ui/SingleInstance.cpp
     src/ui/Symbols.cpp
     src/ui/ComponentItem.cpp
     src/ui/WireItem.cpp
@@ -139,6 +140,7 @@ set(CSM_UI_SOURCES
 set(CSM_UI_HEADERS
     src/ui/I18n.h
     src/ui/Dialogs.h
+    src/ui/SingleInstance.h
     src/ui/Symbols.h
     src/ui/ComponentItem.h
     src/ui/WireItem.h
@@ -213,6 +215,8 @@ if (CSM_BUILD_TESTS AND TARGET Qt6::Test)
         target_compile_definitions(test_core_${group} PRIVATE
             CSM_EXAMPLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/resources/examples")
         add_test(NAME test_core_${group} COMMAND test_core_${group})
+        # 用例里如果意外弹出模态框，进程会一直等下去。给个上限让它失败而不是挂住 CI
+        set_tests_properties(test_core_${group} PROPERTIES TIMEOUT 300)
     endforeach()
 
     set(CSM_UI_TEST_GROUPS editor meter panel waveform workflow)
@@ -226,8 +230,9 @@ if (CSM_BUILD_TESTS AND TARGET Qt6::Test)
         target_link_libraries(test_ui_${group} PRIVATE csm_ui csm_core Qt6::Test)
         add_test(NAME test_ui_${group} COMMAND test_ui_${group})
         # 关掉启动时的更新检查：用例不该依赖网络；界面用例跑在 offscreen 上
-        set_tests_properties(test_ui_${group} PROPERTIES ENVIRONMENT
-            "QT_QPA_PLATFORM=offscreen;CSM_NO_UPDATE_CHECK=1")
+        set_tests_properties(test_ui_${group} PROPERTIES
+            ENVIRONMENT "QT_QPA_PLATFORM=offscreen;CSM_NO_UPDATE_CHECK=1"
+            TIMEOUT 300)
     endforeach()
 
 endif()

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/UpdateChecker.h"
+#include "ui/Document.h"
 #include "sim/Simulator.h"
 
 #include <QJsonObject>
@@ -96,8 +97,32 @@ private:
     void updateAnalysisLabel();
     void appendLog(const QString& text);
     void buildLibrary();
-    void loadCircuitData(const Circuit& circuit, const QString& title, const QString& path);
 
+    // ---- 多文档标签页 ----
+    /// 当前文档（永远非空：至少保留一个空白标签）
+    Document* doc() const;
+    /// 新建一个空白标签并切过去
+    Document* addDocument(const QString& name = QStringLiteral("未命名"),
+                          const QString& path = QString());
+    /// 把 scene / view 的信号接到主窗口（每个文档接一次）
+    void wireDocument(Document* document);
+    /// 切到第 index 个标签：重绑缓存指针、刷新界面
+    void switchToDocument(int index);
+    /// 关闭第 index 个标签（脏的先问保存）
+    bool closeDocument(int index);
+    /// 关闭当前标签
+    void closeCurrentDocument();
+    /// 刷新某个标签的标题（名字 + 星号）
+    void updateTabTitle(Document* document);
+    /// 某个文档是否已经打开（按绝对路径判断）
+    int indexOfPath(const QString& path) const;
+    /// 把电路装进标签页：当前是「干净的空文档」就沿用它，否则新开一个
+    Document* loadCircuitData(const Circuit& circuit, const QString& title, const QString& path,
+                              const SimulationOptions& options);
+
+    QTabWidget* m_tabs = nullptr;          // 中央标签页：一个标签一个文档
+    QVector<Document*> m_documents;
+    // 当前文档的缓存指针：切标签时重绑，界面操作照旧用这两个
     SchematicScene* m_scene = nullptr;
     SchematicView* m_view = nullptr;
     PropertyPanel* m_props = nullptr;
@@ -114,24 +139,10 @@ private:
     QLabel* m_hintLabel = nullptr;
     QLabel* m_analysisLabel = nullptr;
 
-    SimulationOptions m_options;
     QStringList m_examplePaths;
     QStringList m_exampleTitles;
-    QString m_documentName = QStringLiteral("未命名");
-    QString m_filePath;
-    bool m_dirty = false;
     bool m_loading = false;
-
-    QVector<QJsonObject> m_history;
-    QVector<QByteArray> m_historySignatures;
-    int m_historyIndex = -1;
-    bool m_restoring = false;
     bool m_updateCheckScheduled = false;
-    SimulationResult m_lastResult;   // 最近一次仿真的结果，供「静态波形」使用
-    bool m_hasResult = false;
-    /// 电路改过之后，上一次静态仿真的读数就过时了。
-    /// 波形还留着无所谓，但万用表要是继续显示旧数字，看起来就像「刚测的」。
-    bool m_resultStale = false;
     QTimer* m_liveRestartTimer = nullptr; // 电路改动后重建实时引擎（防抖）
     QTimer* m_blastTimer = nullptr;       // 爆炸动画驱动
     double m_blastProgress = 0.0;
@@ -144,6 +155,9 @@ private:
     QAction* m_actOpen = nullptr;
     QAction* m_actSave = nullptr;
     QAction* m_actSaveAs = nullptr;
+    QAction* m_actCloseTab = nullptr;
+    QAction* m_actNextTab = nullptr;
+    QAction* m_actPrevTab = nullptr;
     QAction* m_actQuit = nullptr;
 
     QAction* m_actUndo = nullptr;

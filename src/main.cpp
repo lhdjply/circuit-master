@@ -1,6 +1,7 @@
 #include "csm_version.h"
 #include "ui/I18n.h"
 #include "ui/MainWindow.h"
+#include "ui/SingleInstance.h"
 #include "ui/UpdateDialog.h"
 
 #include <QApplication>
@@ -29,10 +30,11 @@ bool hasArgument(int argc, char* argv[], const char* name)
     return false;
 }
 
-/// 第一个不是选项的参数：双击 .csm 时由文件关联传进来。
+/// 所有不是选项的参数：双击 .csm 时由文件关联传进来。
 /// Windows 的路径可能带引号，这里顺手去掉。
-QString firstFileArgument(int argc, char* argv[])
+QStringList fileArguments(int argc, char* argv[])
 {
+    QStringList files;
     for (int i = 1; i < argc; ++i) {
         const char* raw = argv[i];
         if (!raw || raw[0] == '-')
@@ -42,9 +44,9 @@ QString firstFileArgument(int argc, char* argv[])
             && value.endsWith(QLatin1Char('"')))
             value = value.mid(1, value.size() - 2);
         if (!value.isEmpty())
-            return value;
+            files.append(value);
     }
-    return QString();
+    return files;
 }
 
 } // namespace
@@ -94,13 +96,31 @@ int main(int argc, char* argv[])
     // 上次更新装完后没删掉的安装包，这里补删
     csm::UpdateDialog::cleanupPendingInstaller();
 
+    const QStringList startupFiles = fileArguments(argc, argv);
+
+    // 单实例：已经有窗口在跑的话，把要打开的文件发过去，自己退出。
+    // 这样双击第二个 .csm 会在原窗口里开成新标签，而不是再起一个进程。
+    csm::SingleInstance instance(QStringLiteral("circuit-master"), &app);
+    if (!instance.promote(startupFiles))
+        return 0;
+
     csm::MainWindow window;
     window.show();
 
+    // 运行中收到另一个实例的请求（用户又双击了一个文件）
+    QObject::connect(&instance, &csm::SingleInstance::filesReceived, &window,
+                     [&window](const QStringList& files) {
+                         for (const QString& file : files)
+                             window.openPath(file);
+                         window.raise();
+                         window.activateWindow();
+                     });
+
     // 双击 .csm（文件关联）或 `CircuitMaster 电路.csm` 时直接打开
-    const QString fileToOpen = firstFileArgument(argc, argv);
-    if (!fileToOpen.isEmpty() && !window.openPath(fileToOpen))
-        return 1;
+    for (const QString& file : startupFiles) {
+        if (!window.openPath(file))
+            return 1;
+    }
 
     return app.exec();
 }

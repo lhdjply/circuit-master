@@ -5,6 +5,7 @@
 #include "ui/ComponentItem.h"
 #include "ui/I18n.h"
 #include "ui/MainWindow.h"
+#include "ui/SingleInstance.h"
 #include "ui/MultimeterWindow.h"
 #include "ui/PropertyPanel.h"
 #include "ui/SchematicScene.h"
@@ -76,12 +77,36 @@ private slots:
     void runStartsAndStopEndsSimulation();
     void runWithoutProbesStillRuns();
     void buildAndSimulate();
+    void multipleDocumentsInTabs();
+    void secondLaunchOpensInExistingWindow();
     void ledLightsUpAfterSimulation();
     void switchToggleUpdatesLedWhileRunning();
     void reversedPolarizedCapacitorExplodes();
     void captureMainWindow();
 
 private:
+
+    /// 当前标签页对应的画布。
+    /// 「新建」「打开」都是开新标签页，而 findChild 拿到的是第一个（可能已在后台），
+    /// 所以要按「当前可见的 view」反查它自己的 scene。
+    static SchematicScene* currentScene(MainWindow& window)
+    {
+        SchematicView* view = currentView(window);
+        return view ? qobject_cast<SchematicScene*>(view->scene()) : nullptr;
+    }
+
+    static SchematicView* currentView(MainWindow& window)
+    {
+        for (QTabWidget* tabs : window.findChildren<QTabWidget*>()) {
+            if (tabs->count() > 0 && tabs->tabText(0) != QStringLiteral("静态波形")) {
+                auto* view = qobject_cast<SchematicView*>(tabs->currentWidget());
+                if (view)
+                    return view;
+            }
+        }
+        return nullptr;
+    }
+
 
     /// 把窗口截图存到 build/shots/ 下（目录不存在就建出来）。
     /// 拆成独立可执行文件后，不能再指望「别的用例先建好了目录」——
@@ -843,15 +868,180 @@ void UiWorkflowTest::runWithoutProbesStillRuns()
     QVERIFY(!live->isLive());
 }
 
+void UiWorkflowTest::secondLaunchOpensInExistingWindow()
+{
+    // 单实例：第二个进程把文件转发给已经在跑的那个，自己退出；
+    // 运行中的窗口收到后在**新标签页**里打开。
+    const QString key = QStringLiteral("csm-test-%1").arg(QCoreApplication::applicationPid());
+
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    SingleInstance primary(key);
+    QVERIFY2(primary.promote({}), "第一个实例应当拿到锁");
+
+    // 运行中的窗口接到请求就开标签（和 main.cpp 里的接线一致）
+    int received = 0;
+    connect(&primary, &SingleInstance::filesReceived, &window,
+            [&window, &received](const QStringList& files) {
+                ++received;
+                for (const QString& file : files)
+                    window.openPath(file);
+            });
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("forwarded.csm"));
+    Circuit circuit;
+    Component resistor;
+    resistor.id = 1;
+    resistor.type = ComponentType::Resistor;
+    resistor.pos = QPointF(300, 300);
+    resistor.refdes = QStringLiteral("R1");
+    resistor.value = 1000.0;
+    circuit.components.append(resistor);
+    {
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+        file.write(QJsonDocument(circuit.toJson()).toJson());
+    }
+
+    QTabWidget* tabs = nullptr;
+    for (QTabWidget* candidate : window.findChildren<QTabWidget*>()) {
+        if (candidate->count() > 0 && candidate->tabText(0) != QStringLiteral("静态波形"))
+            tabs = candidate;
+    }
+    QVERIFY(tabs);
+    // 先在当前标签放个元件：空标签会被「打开文件」直接复用（不新开页），
+    // 这里要验的是「已经画了东西时另开一个标签」
+    currentScene(window)->placeComponent(ComponentType::Capacitor, QPointF(400, 300));
+    settle();
+    const int before = tabs->count();
+
+    // 第二个实例：同一个 key，应当转发而不是抢锁
+    SingleInstance secondary(key);
+    QVERIFY2(!secondary.promote({path}), "已有实例时不该再抢到锁，应当转发后退出");
+
+    // 转发是异步的：跑几轮事件循环等它到达
+    QTRY_VERIFY_WITH_TIMEOUT(received == 1, 3000);
+    settle();
+    QCOMPARE(tabs->count(), before + 1);
+    QCOMPARE(currentScene(window)->componentItems().size(), 1);
+}
+
+void UiWorkflowTest::multipleDocumentsInTabs()
+{
+    // 多文件标签页：新建 / 打开各开一个标签，各自的电路、文件名、脏标记互不干扰
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    QTabWidget* tabs = nullptr;
+    for (QTabWidget* candidate : window.findChildren<QTabWidget*>()) {
+        if (candidate->count() > 0 && candidate->tabText(0) != QStringLiteral("静态波形"))
+            tabs = candidate;
+    }
+    QVERIFY2(tabs, "主窗口应当有文档标签页");
+    QCOMPARE(tabs->count(), 1);
+
+    // 第一个文档放一个电阻，标签上应当出现未保存标记
+    auto* firstScene = currentScene(window);
+    QVERIFY(firstScene);
+    firstScene->placeComponent(ComponentType::Resistor, QPointF(200, 200));
+    settle();
+    QVERIFY2(tabs->tabText(0).contains(QLatin1Char('*')), "改过之后标签上应当有未保存标记");
+
+    // 新建第二个标签
+    QAction* newAction = nullptr;
+    for (QAction* action : window.findChildren<QAction*>()) {
+        if (action->text().startsWith(QStringLiteral("新建")))
+            newAction = action;
+    }
+    QVERIFY(newAction);
+    newAction->trigger();
+    settle();
+
+    QCOMPARE(tabs->count(), 2);
+    QCOMPARE(tabs->currentIndex(), 1);
+    auto* secondScene = currentScene(window);
+    QVERIFY(secondScene);
+    QVERIFY2(secondScene != firstScene, "新标签应当是另一个画布");
+    QCOMPARE(secondScene->componentItems().size(), 0);
+
+    // 第二个标签放两个元件，第一个文档不受影响
+    secondScene->placeComponent(ComponentType::Capacitor, QPointF(300, 200));
+    secondScene->placeComponent(ComponentType::Inductor, QPointF(400, 200));
+    settle();
+    QCOMPARE(secondScene->componentItems().size(), 2);
+    QCOMPARE(firstScene->componentItems().size(), 1);
+
+    // 切回第一个标签：画布跟着换回来
+    tabs->setCurrentIndex(0);
+    settle();
+    QCOMPARE(currentScene(window), firstScene);
+    QCOMPARE(currentScene(window)->componentItems().size(), 1);
+
+    // 打开一个文件：当前标签是脏的，所以另开一个（新标签是干净的）
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("tabs.csm"));
+    Circuit circuit;
+    Component resistor;
+    resistor.id = 1;
+    resistor.type = ComponentType::Resistor;
+    resistor.pos = QPointF(300, 300);
+    resistor.refdes = QStringLiteral("R1");
+    resistor.value = 1000.0;
+    circuit.components.append(resistor);
+    {
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly | QIODevice::Text));
+        file.write(QJsonDocument(circuit.toJson()).toJson());
+    }
+    QVERIFY(window.openPath(path));
+    settle();
+    QCOMPARE(tabs->count(), 3);
+    auto* fileScene = currentScene(window);
+    QCOMPARE(fileScene->componentItems().size(), 1);
+    QVERIFY2(!tabs->tabText(tabs->currentIndex()).contains(QLatin1Char('*')),
+             "刚打开的文件不该带未保存标记");
+
+    // 同一个文件再开一次：只切过去，不多开标签
+    QVERIFY(window.openPath(path));
+    settle();
+    QCOMPARE(tabs->count(), 3);
+
+    // 关掉这个干净的标签：不该弹确认框，直接关
+    QAction* closeAction = nullptr;
+    for (QAction* action : window.findChildren<QAction*>()) {
+        if (action->text().contains(QStringLiteral("关闭标签页")))
+            closeAction = action;
+    }
+    QVERIFY(closeAction);
+    closeAction->trigger();
+    settle();
+    QCOMPARE(tabs->count(), 2);
+
+    // 两个标签各自的电路都还在
+    tabs->setCurrentIndex(0);
+    settle();
+    QCOMPARE(currentScene(window), firstScene);
+    QCOMPARE(firstScene->componentItems().size(), 1);
+    tabs->setCurrentIndex(1);
+    settle();
+    QCOMPARE(currentScene(window), secondScene);
+    QCOMPARE(secondScene->componentItems().size(), 2);
+}
+
 void UiWorkflowTest::buildAndSimulate()
 {
     MainWindow window;
     window.resize(1200, 800);
     window.show();
     waitShown(window);
-
-    auto* scene = window.findChild<SchematicScene*>();
-    QVERIFY(scene);
 
     QAction* newAction = nullptr;
     for (QAction* action : window.findChildren<QAction*>()) {
@@ -861,6 +1051,10 @@ void UiWorkflowTest::buildAndSimulate()
     QVERIFY(newAction);
     newAction->trigger();
     settle();
+
+    // 「新建」开的是新标签页，重新取当前文档的 scene
+    auto* scene = currentScene(window);
+    QVERIFY(scene);
 
     auto* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(200, 200));
     auto* capacitor = scene->placeComponent(ComponentType::Capacitor, QPointF(300, 300));

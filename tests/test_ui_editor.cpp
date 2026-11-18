@@ -88,6 +88,28 @@ private slots:
 
 private:
 
+    /// 当前标签页对应的画布。
+    /// 「新建」「打开」都是开新标签页，而 findChild 拿到的是第一个（可能已在后台），
+    /// 所以要按「当前可见的 view」反查它自己的 scene。
+    static SchematicScene* currentScene(MainWindow& window)
+    {
+        SchematicView* view = currentView(window);
+        return view ? qobject_cast<SchematicScene*>(view->scene()) : nullptr;
+    }
+
+    static SchematicView* currentView(MainWindow& window)
+    {
+        for (QTabWidget* tabs : window.findChildren<QTabWidget*>()) {
+            if (tabs->count() > 0 && tabs->tabText(0) != QStringLiteral("静态波形")) {
+                auto* view = qobject_cast<SchematicView*>(tabs->currentWidget());
+                if (view)
+                    return view;
+            }
+        }
+        return nullptr;
+    }
+
+
     /// 把窗口截图存到 build/shots/ 下（目录不存在就建出来）。
     /// 拆成独立可执行文件后，不能再指望「别的用例先建好了目录」——
     /// 干净构建时 shots/ 并不存在，grab().save() 会直接失败。
@@ -1362,10 +1384,6 @@ void UiEditorTest::drawWireWithMouse()
     window.show();
     waitShown(window);
 
-    auto* scene = window.findChild<SchematicScene*>();
-    auto* view = window.findChild<SchematicView*>();
-    QVERIFY(scene && view);
-
     QAction* newAction = nullptr;
     for (QAction* action : window.findChildren<QAction*>()) {
         if (action->text().startsWith(QStringLiteral("新建")))
@@ -1374,6 +1392,12 @@ void UiEditorTest::drawWireWithMouse()
     QVERIFY(newAction);
     newAction->trigger();
     settle();
+
+    // 「新建」是开一个新标签页，画面已经换成新文档 —— 得重新取当前的 scene / view，
+    // 抓着新建之前那个已经在后台了
+    auto* scene = currentScene(window);
+    auto* view = currentView(window);
+    QVERIFY(scene && view);
 
     scene->placeComponent(ComponentType::Resistor, QPointF(300, 300));
     scene->placeComponent(ComponentType::VoltageSource, QPointF(300, 420));

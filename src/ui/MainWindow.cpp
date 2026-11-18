@@ -349,16 +349,32 @@ MainWindow::MainWindow(QWidget* parent)
         appIcon = componentIcon(ComponentType::VoltageSource, QSize(64, 64));
     setWindowIcon(appIcon);
 
-    m_scene = new SchematicScene(this);
-    m_view = new SchematicView(m_scene, this);
-    setCentralWidget(m_view);
+    // 中央是标签页：一个标签一个文档。先建第一个空白文档，后面 addDocument() 也走它
+    m_tabs = new QTabWidget(this);
+    m_tabs->setTabsClosable(true);
+    m_tabs->setMovable(true);
+    m_tabs->setDocumentMode(true);
+    // 标签栏不要拿焦点：QTabBar 会把空格当作「激活当前标签」吃掉，
+    // 于是「空格旋转元件」的快捷键失效
+    m_tabs->tabBar()->setFocusPolicy(Qt::NoFocus);
+    // 关闭按钮换成自绘的灰色 ✖（悬停变蓝）—— 主题默认给的是红色，跟界面不搭
+    m_tabs->tabBar()->setStyleSheet(QStringLiteral(R"(
+QTabBar::close-button {
+    image: url(:/icons/tab_close.svg);
+    subcontrol-position: right;
+}
+QTabBar::close-button:hover {
+    image: url(:/icons/tab_close_active.svg);
+}
+)"));
+    setCentralWidget(m_tabs);
+    connect(m_tabs, &QTabWidget::currentChanged, this, &MainWindow::switchToDocument);
+    connect(m_tabs, &QTabWidget::tabCloseRequested, this, [this](int index) {
+        closeDocument(index);
+    });
 
-    m_options.kind = AnalysisKind::Transient;
-    m_options.tStop = 5e-3;
-    m_options.tStep = 1e-5;
-    m_options.fStart = 10.0;
-    m_options.fStop = 1e6;
-    m_options.acPoints = 160;
+    // 先把第一个空白文档建出来：后面 createStatusBar() 之类的会读 doc()->options
+    addDocument();
 
     createActions();
     scanExamples();
@@ -368,13 +384,111 @@ MainWindow::MainWindow(QWidget* parent)
     createMonitorWindow();
     createStatusBar();
 
-    connect(m_scene, &SchematicScene::circuitChanged, this, [this] {
+    appendLog(QStringLiteral("电路仿真大师 %1  —  Qt6 / MNA 求解器")
+                  .arg(QStringLiteral(CSM_VERSION_STRING)));
+    appendLog(QStringLiteral("提示：左键选择拖动，双击编辑参数，空格键旋转；按 F5 运行仿真。"));
+    appendLog(QStringLiteral("已新建空白电路：可从左侧元件库放置元件，"
+                             "或通过「仿真 → 示例电路」载入示例。"));
+
+    if (m_actMonitor) {
+        m_actMonitor->setEnabled(false);
+        m_actMonitor->setChecked(false);
+    }
+    if (m_waveLive)
+        m_waveLive->stopLiveScope();
+
+    // 启动后自动检查一次更新：先让窗口画出来再查，只有真发现新版本才弹窗。
+    // 测试里用 CSM_NO_UPDATE_CHECK=1 关掉，避免用例依赖网络。
+    if (!qEnvironmentVariableIsSet("CSM_NO_UPDATE_CHECK")) {
+        QTimer::singleShot(3000, this, [this] { checkForUpdates(false); });
+    }
+}
+
+// ---------------------------------------------------------------- 多文档
+
+Document* MainWindow::doc() const
+{
+    if (!m_tabs || m_documents.isEmpty())
+        return nullptr;
+    const int index = m_tabs->currentIndex();
+    return (index >= 0 && index < m_documents.size()) ? m_documents.at(index) : nullptr;
+}
+
+int MainWindow::indexOfPath(const QString& path) const
+{
+    if (path.isEmpty())
+        return -1;
+    const QString target = QFileInfo(path).absoluteFilePath();
+    for (int i = 0; i < m_documents.size(); ++i) {
+        const QString open = m_documents.at(i)->filePath;
+        if (!open.isEmpty() && QFileInfo(open).absoluteFilePath() == target)
+            return i;
+    }
+    return -1;
+}
+
+void MainWindow::updateTabTitle(Document* document)
+{
+    if (!document || !m_tabs)
+        return;
+    const int index = m_documents.indexOf(document);
+    if (index < 0)
+        return;
+    m_tabs->setTabText(index, document->tabTitle());
+    m_tabs->setTabToolTip(index, document->filePath.isEmpty()
+                                     ? QStringLiteral("尚未保存到文件")
+                                     : document->filePath);
+    if (document == doc()) {
+        setWindowTitle(QStringLiteral("%1%2 — 电路仿真大师")
+                           .arg(document->name,
+                                document->dirty ? QStringLiteral(" *") : QString()));
+    }
+}
+
+Document* MainWindow::addDocument(const QString& name, const QString& path)
+{
+    auto* document = new Document;
+    document->name = name;
+    document->filePath = path;
+    document->options.kind = AnalysisKind::Transient;
+    document->options.tStop = 5e-3;
+    document->options.tStep = 1e-5;
+    document->options.fStart = 10.0;
+    document->options.fStop = 1e6;
+    document->options.acPoints = 160;
+
+    document->scene = new SchematicScene(this);
+    document->view = new SchematicView(document->scene, this);
+    wireDocument(document);
+
+    m_documents.append(document);
+    m_tabs->addTab(document->view, document->tabTitle());
+    m_tabs->setTabToolTip(m_documents.size() - 1,
+                          path.isEmpty() ? QStringLiteral("尚未保存到文件") : path);
+
+    // currentChanged 会触发 switchToDocument；这里再显式切一次，
+    // 保证即使旧标签就是当前标签（第一次创建时 index 不变）也完成绑定
+    m_tabs->setCurrentWidget(document->view);
+    switchToDocument(m_documents.indexOf(document));
+    resetHistory(); // 空白电路本身就是第一个历史点
+    return document;
+}
+
+void MainWindow::wireDocument(Document* document)
+{
+    SchematicScene* scene = document->scene;
+    SchematicView* view = document->view;
+
+    connect(scene, &SchematicScene::circuitChanged, this, [this, document] {
+        // 后台标签（不是当前显示的那个）被改动时不碰界面状态
+        if (document != doc())
+            return;
         setDirty(true);
         // 上一次静态仿真的读数过时了：万用表先显示横杠，
         // 免得改动之后还盯着一个「看着像实时」的旧数字
         if (!m_loading) {
-            if (m_hasResult)
-                m_resultStale = true;
+            if (doc()->hasResult)
+                doc()->resultStale = true;
             refreshMeterWindows(); // 顺带把「档位」同步到读数窗口
         }
         // 仿真运行中改了电路（例如开关闭合/断开）：稍后重建引擎，
@@ -382,48 +496,161 @@ MainWindow::MainWindow(QWidget* parent)
         if (m_waveLive && m_waveLive->isLive() && m_liveRestartTimer)
             m_liveRestartTimer->start();
     });
-    connect(m_scene, &SchematicScene::editCommitted, this, &MainWindow::pushHistory);
-    connect(m_scene, &QGraphicsScene::selectionChanged, this, &MainWindow::onSelectionChanged);
-    connect(m_scene, &SchematicScene::editRequested, this, &MainWindow::onEditRequested);
-    connect(m_view, &SchematicView::componentEditRequested, this, &MainWindow::onEditRequested);
-    connect(m_view, &SchematicView::scenePositionChanged, this, [this](const QPointF& p) {
-        m_coordLabel->setText(
-            QStringLiteral("x: %1   y: %2").arg(int(p.x())).arg(int(p.y())));
+    connect(scene, &SchematicScene::editCommitted, this, [this, document] {
+        if (document == doc())
+            pushHistory();
     });
-    connect(m_view, &SchematicView::hintChanged, this,
-            [this](const QString& hint) { m_hintLabel->setText(hint); });
-    connect(m_view, &SchematicView::toolChanged, this, [this] {
-        const bool wire = m_view->tool() == SchematicView::Tool::Wire;
-        m_actWireTool->setChecked(wire);
-        m_actSelectTool->setChecked(!wire);
+    connect(scene, &QGraphicsScene::selectionChanged, this, [this, document] {
+        if (document == doc())
+            onSelectionChanged();
     });
-    connect(m_view, &SchematicView::componentPlaced, this, [this](ComponentItem* item) {
-        m_props->setComponent(item);
-        m_actSelectTool->setChecked(true);
+    connect(scene, &SchematicScene::editRequested, this, [this, document](ComponentItem* item) {
+        if (document == doc())
+            onEditRequested(item);
     });
+    connect(view, &SchematicView::componentEditRequested, this,
+            [this, document](ComponentItem* item) {
+                if (document == doc())
+                    onEditRequested(item);
+            });
+    connect(view, &SchematicView::scenePositionChanged, this, [this](const QPointF& p) {
+        if (m_coordLabel)
+            m_coordLabel->setText(
+                QStringLiteral("x: %1   y: %2").arg(int(p.x())).arg(int(p.y())));
+    });
+    connect(view, &SchematicView::hintChanged, this, [this](const QString& hint) {
+        if (m_hintLabel)
+            m_hintLabel->setText(hint);
+    });
+    connect(view, &SchematicView::toolChanged, this, [this, view] {
+        if (view != m_view)
+            return;
+        const bool wire = view->tool() == SchematicView::Tool::Wire;
+        if (m_actWireTool)
+            m_actWireTool->setChecked(wire);
+        if (m_actSelectTool)
+            m_actSelectTool->setChecked(!wire);
+    });
+    connect(view, &SchematicView::componentPlaced, this,
+            [this, document](ComponentItem* item) {
+                if (document != doc())
+                    return;
+                if (m_props)
+                    m_props->setComponent(item);
+                if (m_actSelectTool)
+                    m_actSelectTool->setChecked(true);
+            });
+}
 
-    appendLog(QStringLiteral("电路仿真大师 %1  —  Qt6 / MNA 求解器")
-                  .arg(QStringLiteral(CSM_VERSION_STRING)));
-    appendLog(QStringLiteral("提示：左键选择拖动，双击编辑参数，空格键旋转；按 F5 运行仿真。"));
-    appendLog(QStringLiteral("已新建空白电路：可从左侧元件库放置元件，"
-                             "或通过「仿真 → 示例电路」载入示例。"));
+void MainWindow::switchToDocument(int index)
+{
+    if (index < 0 || index >= m_documents.size())
+        return;
+    Document* document = m_documents.at(index);
 
-    m_dirty = false;
-    m_hasResult = false;
-    if (m_actMonitor) {
-        m_actMonitor->setEnabled(false);
-        m_actMonitor->setChecked(false);
+    // 切走之前先把「跑到一半」的东西收干净：实时仿真与万用表窗口都只属于
+    // 原来那个文档，留着会显示错的数据
+    if (m_scene != document->scene) {
+        if (m_waveLive && m_waveLive->isLive())
+            m_waveLive->stopLiveScope();
+        closeMeterWindows();
     }
-    if (m_waveLive)
-        m_waveLive->stopLiveScope();
+
+    m_scene = document->scene;
+    m_view = document->view;
+    if (m_view)
+        m_view->setFocus();
+
+    // 构造期间这些控件还不存在，用空指针判断兜住
+    if (!m_props)
+        return;
+
+    m_props->setComponent(nullptr);
+    if (m_actMonitor)
+        m_actMonitor->setEnabled(document->hasResult);
     updateTitle();
-    resetHistory();
+    updateHistoryActions();
+    updateAnalysisLabel();
+    if (m_actCut)
+        m_actCut->setEnabled(false);
+    if (m_actCopy)
+        m_actCopy->setEnabled(false);
+    if (m_actDelete)
+        m_actDelete->setEnabled(false);
+    if (m_actRotate)
+        m_actRotate->setEnabled(false);
+    if (m_actPaste)
+        m_actPaste->setEnabled(m_scene && m_scene->hasClipboard());
+    updateRunAction();
 
-    // 启动后自动检查一次更新：先让窗口画出来再查，只有真发现新版本才弹窗。
-    // 测试里用 CSM_NO_UPDATE_CHECK=1 关掉，避免用例依赖网络。
-    if (!qEnvironmentVariableIsSet("CSM_NO_UPDATE_CHECK")) {
-        QTimer::singleShot(3000, this, [this] { checkForUpdates(false); });
+    // 静态波形页跟着换成本文档上次的结果
+    if (m_wavePlot && document->hasResult)
+        m_wavePlot->setResult(document->lastResult);
+}
+
+bool MainWindow::closeDocument(int index)
+{
+    if (index < 0 || index >= m_documents.size())
+        return false;
+    Document* document = m_documents.at(index);
+
+    // 脏的先问一句：临时切到那个标签再问，用户才知道说的是哪份
+    if (document->dirty) {
+        const int previous = m_tabs->currentIndex();
+        m_tabs->setCurrentIndex(index);
+        const bool ok = maybeSave();
+        if (!ok) {
+            m_tabs->setCurrentIndex(previous);
+            return false;
+        }
     }
+
+    // 最后一个标签不真删：清成空白文档，省得窗口里什么都没有
+    if (m_documents.size() == 1) {
+        m_loading = true;
+        closeMeterWindows();
+        document->scene->clearAll();
+        m_loading = false;
+        document->name = QStringLiteral("未命名");
+        document->filePath.clear();
+        document->dirty = false;
+        document->hasResult = false;
+        document->resultStale = false;
+        document->lastResult = SimulationResult();
+        clearLedStates();
+        clearBlast();
+        resetHistory();
+        updateTabTitle(document);
+        updateRunAction();
+        if (m_actMonitor) {
+            m_actMonitor->setEnabled(false);
+            m_actMonitor->setChecked(false);
+        }
+        return true;
+    }
+
+    const bool wasCurrent = (document == doc());
+    if (wasCurrent)
+        closeMeterWindows();
+
+    m_tabs->removeTab(index);
+    m_documents.removeAt(index);
+    document->scene->deleteLater();
+    document->view->deleteLater();
+    delete document;
+
+    // removeTab 会自动触发 currentChanged；但如果删的是后台标签，
+    // 当前索引可能整体前移，这里再对齐一次
+    if (m_tabs->count() > 0)
+        switchToDocument(m_tabs->currentIndex());
+    return true;
+}
+
+void MainWindow::closeCurrentDocument()
+{
+    const int index = m_tabs ? m_tabs->currentIndex() : -1;
+    if (index >= 0)
+        closeDocument(index);
 }
 
 void MainWindow::createActions()
@@ -448,6 +675,18 @@ void MainWindow::createActions()
     m_actSaveAs = new QAction(QStringLiteral("另存为(&A)…"), this);
     m_actSaveAs->setShortcut(QKeySequence::SaveAs);
 
+
+    m_actCloseTab = new QAction(QStringLiteral("关闭标签页(&W)"), this);
+    m_actCloseTab->setShortcut(QKeySequence::Close); // Ctrl+W
+    m_actCloseTab->setStatusTip(QStringLiteral("关闭当前标签页；有未保存的更改会先问一句"));
+
+    m_actNextTab = new QAction(QStringLiteral("下一个标签页"), this);
+    m_actNextTab->setShortcut(QKeySequence(QStringLiteral("Ctrl+Tab")));
+    m_actNextTab->setShortcutContext(Qt::WindowShortcut);
+
+    m_actPrevTab = new QAction(QStringLiteral("上一个标签页"), this);
+    m_actPrevTab->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+Tab")));
+    m_actPrevTab->setShortcutContext(Qt::WindowShortcut);
 
     m_actQuit = new QAction(QStringLiteral("退出(&Q)"), this);
     m_actQuit->setShortcut(QKeySequence::Quit);
@@ -556,6 +795,18 @@ void MainWindow::createActions()
     connect(m_actOpen, &QAction::triggered, this, &MainWindow::openCircuit);
     connect(m_actSave, &QAction::triggered, this, [this] { saveCircuit(); });
     connect(m_actSaveAs, &QAction::triggered, this, [this] { saveCircuitAs(); });
+    connect(m_actCloseTab, &QAction::triggered, this, &MainWindow::closeCurrentDocument);
+    connect(m_actNextTab, &QAction::triggered, this, [this] {
+        if (!m_tabs || m_tabs->count() < 2)
+            return;
+        m_tabs->setCurrentIndex((m_tabs->currentIndex() + 1) % m_tabs->count());
+    });
+    connect(m_actPrevTab, &QAction::triggered, this, [this] {
+        if (!m_tabs || m_tabs->count() < 2)
+            return;
+        const int count = m_tabs->count();
+        m_tabs->setCurrentIndex((m_tabs->currentIndex() - 1 + count) % count);
+    });
     connect(m_actQuit, &QAction::triggered, this, &QWidget::close);
 
     connect(m_actUndo, &QAction::triggered, this, &MainWindow::undo);
@@ -640,6 +891,8 @@ void MainWindow::createMenus()
     fileMenu->addAction(m_actSave);
     fileMenu->addAction(m_actSaveAs);
     fileMenu->addSeparator();
+    fileMenu->addAction(m_actCloseTab);
+    fileMenu->addSeparator();
     fileMenu->addAction(m_actQuit);
 
     QMenu* editMenu = menuBar()->addMenu(QStringLiteral("编辑(&E)"));
@@ -658,6 +911,9 @@ void MainWindow::createMenus()
     editMenu->addAction(m_actSnapWires);
 
     QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("视图(&V)"));
+    viewMenu->addAction(m_actNextTab);
+    viewMenu->addAction(m_actPrevTab);
+    viewMenu->addSeparator();
     viewMenu->addAction(m_actZoomIn);
     viewMenu->addAction(m_actZoomOut);
     viewMenu->addAction(m_actZoomFit);
@@ -850,19 +1106,19 @@ void MainWindow::createStatusBar()
 void MainWindow::updateAnalysisLabel()
 {
     QString text;
-    switch (m_options.kind) {
+    switch (doc()->options.kind) {
     case AnalysisKind::OperatingPoint:
         text = QStringLiteral("分析：直流工作点");
         break;
     case AnalysisKind::Transient:
         text = QStringLiteral("分析：瞬态 %1 / 步长 %2")
-                   .arg(formatEng(m_options.tStop, QStringLiteral("s"), 3),
-                        formatEng(m_options.tStep, QStringLiteral("s"), 3));
+                   .arg(formatEng(doc()->options.tStop, QStringLiteral("s"), 3),
+                        formatEng(doc()->options.tStep, QStringLiteral("s"), 3));
         break;
     case AnalysisKind::AC:
         text = QStringLiteral("分析：交流 %1 ~ %2")
-                   .arg(formatEng(m_options.fStart, QStringLiteral("Hz"), 3),
-                        formatEng(m_options.fStop, QStringLiteral("Hz"), 3));
+                   .arg(formatEng(doc()->options.fStart, QStringLiteral("Hz"), 3),
+                        formatEng(doc()->options.fStop, QStringLiteral("Hz"), 3));
         break;
     }
     m_analysisLabel->setText(text);
@@ -874,7 +1130,7 @@ MainWindow::~MainWindow()
 
     // 子控件在 ~QWidget() 里被销毁时会失去焦点，QLineEdit 因此发出
     // editingFinished → PropertyPanel::changed → 本窗口的槽；此时 MainWindow
-    // 的成员（m_history、m_scene…）已经析构，回调里访问它们就是 use-after-free。
+    // 的成员（doc()->history、m_scene…）已经析构，回调里访问它们就是 use-after-free。
     // 销毁前先把这些连接断掉。
     if (m_props)
         m_props->disconnect(this);
@@ -890,38 +1146,38 @@ MainWindow::~MainWindow()
 
 void MainWindow::pushHistory()
 {
-    if (m_destroying || m_loading || m_restoring)
+    if (m_destroying || m_loading || doc()->restoring)
         return;
 
     const Circuit circuit = m_scene->toCircuit();
     const QByteArray signature = circuitSignature(circuit);
-    if (m_historyIndex >= 0 && m_historyIndex < m_historySignatures.size()
-        && m_historySignatures.at(m_historyIndex) == signature)
+    if (doc()->historyIndex >= 0 && doc()->historyIndex < doc()->historySignatures.size()
+        && doc()->historySignatures.at(doc()->historyIndex) == signature)
         return; // 内容没变，不产生新记录
 
     // 丢弃重做分支
-    while (m_history.size() > m_historyIndex + 1) {
-        m_history.removeLast();
-        m_historySignatures.removeLast();
+    while (doc()->history.size() > doc()->historyIndex + 1) {
+        doc()->history.removeLast();
+        doc()->historySignatures.removeLast();
     }
 
-    m_history.append(circuit.toJson());
-    m_historySignatures.append(signature);
+    doc()->history.append(circuit.toJson());
+    doc()->historySignatures.append(signature);
 
     constexpr int kMaxHistory = 200;
-    while (m_history.size() > kMaxHistory) {
-        m_history.removeFirst();
-        m_historySignatures.removeFirst();
+    while (doc()->history.size() > kMaxHistory) {
+        doc()->history.removeFirst();
+        doc()->historySignatures.removeFirst();
     }
-    m_historyIndex = m_history.size() - 1;
+    doc()->historyIndex = doc()->history.size() - 1;
     updateHistoryActions();
 }
 
 void MainWindow::resetHistory()
 {
-    m_history.clear();
-    m_historySignatures.clear();
-    m_historyIndex = -1;
+    doc()->history.clear();
+    doc()->historySignatures.clear();
+    doc()->historyIndex = -1;
     pushHistory();
     updateHistoryActions();
 }
@@ -935,10 +1191,10 @@ void MainWindow::restoreSnapshot(const QJsonObject& snapshot)
         return;
     }
 
-    m_restoring = true;
+    doc()->restoring = true;
     closeMeterWindows();
     m_scene->load(circuit);
-    m_restoring = false;
+    doc()->restoring = false;
 
     m_props->setComponent(nullptr);
     setDirty(true);
@@ -946,34 +1202,34 @@ void MainWindow::restoreSnapshot(const QJsonObject& snapshot)
 
 void MainWindow::undo()
 {
-    if (m_historyIndex <= 0)
+    if (doc()->historyIndex <= 0)
         return;
-    --m_historyIndex;
-    restoreSnapshot(m_history.at(m_historyIndex));
+    --doc()->historyIndex;
+    restoreSnapshot(doc()->history.at(doc()->historyIndex));
     updateHistoryActions();
     appendLog(QStringLiteral("已撤销（%1/%2）")
-                  .arg(m_historyIndex + 1)
-                  .arg(m_history.size()));
+                  .arg(doc()->historyIndex + 1)
+                  .arg(doc()->history.size()));
 }
 
 void MainWindow::redo()
 {
-    if (m_historyIndex < 0 || m_historyIndex >= m_history.size() - 1)
+    if (doc()->historyIndex < 0 || doc()->historyIndex >= doc()->history.size() - 1)
         return;
-    ++m_historyIndex;
-    restoreSnapshot(m_history.at(m_historyIndex));
+    ++doc()->historyIndex;
+    restoreSnapshot(doc()->history.at(doc()->historyIndex));
     updateHistoryActions();
     appendLog(QStringLiteral("已重做（%1/%2）")
-                  .arg(m_historyIndex + 1)
-                  .arg(m_history.size()));
+                  .arg(doc()->historyIndex + 1)
+                  .arg(doc()->history.size()));
 }
 
 void MainWindow::updateHistoryActions()
 {
     if (!m_actUndo || !m_actRedo)
         return;
-    m_actUndo->setEnabled(m_historyIndex > 0);
-    m_actRedo->setEnabled(m_historyIndex >= 0 && m_historyIndex < m_history.size() - 1);
+    m_actUndo->setEnabled(doc()->historyIndex > 0);
+    m_actRedo->setEnabled(doc()->historyIndex >= 0 && doc()->historyIndex < doc()->history.size() - 1);
 }
 
 void MainWindow::onSelectionChanged()
@@ -1053,8 +1309,8 @@ void MainWindow::refreshMeterWindows()
             it.value()->setValue(m_waveLive->liveValue(refdes));
             continue;
         }
-        if (m_hasResult && !m_resultStale && m_lastResult.waves.size() > 0) {
-            const Signal* sig = m_lastResult.signal(refdes);
+        if (doc()->hasResult && !doc()->resultStale && doc()->lastResult.waves.size() > 0) {
+            const Signal* sig = doc()->lastResult.signal(refdes);
             if (sig && !sig->y.isEmpty()) {
                 it.value()->setValue(sig->y.last());
                 continue;
@@ -1081,16 +1337,26 @@ void MainWindow::setDirty(bool dirty)
 {
     if (m_loading)
         return;
-    if (m_dirty == dirty)
+    if (doc()->dirty == dirty)
         return;
-    m_dirty = dirty;
+    doc()->dirty = dirty;
     updateTitle();
 }
 
 void MainWindow::updateTitle()
 {
+    Document* document = doc();
+    if (!document)
+        return;
     setWindowTitle(QStringLiteral("%1%2 — 电路仿真大师")
-                       .arg(m_documentName, m_dirty ? QStringLiteral(" *") : QString()));
+                       .arg(document->name,
+                            document->dirty ? QStringLiteral(" *") : QString()));
+    // 标签页上的文字也要跟着变（名字改了、或者多出 / 去掉星号）
+    if (m_tabs && document->view) {
+        const int index = m_tabs->indexOf(document->view);
+        if (index >= 0)
+            m_tabs->setTabText(index, document->tabTitle());
+    }
 }
 
 void MainWindow::appendLog(const QString& text)
@@ -1099,96 +1365,101 @@ void MainWindow::appendLog(const QString& text)
         m_log->appendPlainText(text);
 }
 
-void MainWindow::loadCircuitData(const Circuit& circuit, const QString& title, const QString& path)
+Document* MainWindow::loadCircuitData(const Circuit& circuit, const QString& title,
+                                      const QString& path, const SimulationOptions& options)
 {
-    m_loading = true;
-    closeMeterWindows();
-    m_scene->load(circuit);
-    m_loading = false;
+    // 当前标签如果还是「干净的空文档」，就直接用它 —— 不要在它旁边再开一个空标签，
+    // 那样用户每次打开文件都会多出一个什么都不含的页
+    Document* target = doc();
+    const bool reuse = target && target->name == QStringLiteral("未命名")
+        && target->filePath.isEmpty() && !target->dirty
+        && target->scene->toCircuit().components.isEmpty();
+    if (!reuse)
+        target = addDocument(title, path);
+    else
+        target->name = title, target->filePath = path;
 
-    m_documentName = title;
-    m_filePath = path;
-    m_props->setComponent(nullptr);
-    m_dirty = false;
-    updateTitle();
-
-    resetHistory();
-
-    QTimer::singleShot(0, this, [this] { m_view->zoomFit(); });
-}
-
-void MainWindow::newCircuit()
-{
-    if (!maybeSave())
-        return;
+    target->options = options;
 
     m_loading = true;
     closeMeterWindows();
-    m_scene->clearAll();
+    target->scene->load(circuit);
     m_loading = false;
 
-    m_documentName = QStringLiteral("未命名");
-    m_filePath.clear();
-    m_props->setComponent(nullptr);
-    m_dirty = false;
-    m_hasResult = false;
+    target->dirty = false;
+    target->hasResult = false;
+    target->resultStale = false;
+    target->lastResult = SimulationResult();
+    if (m_props)
+        m_props->setComponent(nullptr);
+    clearLedStates();
+    clearBlast();
+    if (m_waveLive)
+        m_waveLive->stopLiveScope();
     if (m_actMonitor) {
         m_actMonitor->setEnabled(false);
         m_actMonitor->setChecked(false);
     }
-    if (m_waveLive)
-        m_waveLive->stopLiveScope();
-    clearLedStates();
-    clearBlast();
-    updateTitle();
-    resetHistory();
+    updateTabTitle(target);
+    updateAnalysisLabel();
+    syncMonitorOptions();
     updateRunAction();
-    appendLog(QStringLiteral("已新建空白电路。"));
+    resetHistory();
+
+    QTimer::singleShot(0, this, [this, target] {
+        if (target == doc() && m_view)
+            m_view->zoomFit();
+    });
+    return target;
+}
+
+void MainWindow::newCircuit()
+{
+    // 新建就是新开一个标签，不碰当前文档，所以不用问「是否保存」
+    addDocument();
+    appendLog(QStringLiteral("已新建空白电路（新标签页）。"));
 }
 
 bool MainWindow::saveCircuit()
 {
-    if (m_filePath.isEmpty())
+    if (doc()->filePath.isEmpty())
         return saveCircuitAs();
 
     const Circuit circuit = m_scene->toCircuit();
-    QFile file(m_filePath);
+    QFile file(doc()->filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         Dialogs::warn(this, QStringLiteral("保存失败"), file.errorString());
         return false;
     }
     QJsonObject root = circuit.toJson();
-    root.insert(QStringLiteral("analysis"), analysisToJson(m_options));
-    const QJsonDocument doc(root);
-    file.write(doc.toJson(QJsonDocument::Indented));
+    root.insert(QStringLiteral("analysis"), analysisToJson(doc()->options));
+    const QJsonDocument json(root);
+    file.write(json.toJson(QJsonDocument::Indented));
     file.close();
 
-    m_dirty = false;
+    doc()->dirty = false;
     updateTitle();
-    appendLog(QStringLiteral("已保存：%1").arg(m_filePath));
+    appendLog(QStringLiteral("已保存：%1").arg(doc()->filePath));
     return true;
 }
 
 bool MainWindow::saveCircuitAs()
 {
     QString path = QFileDialog::getSaveFileName(
-        this, QStringLiteral("保存电路"), m_documentName + QStringLiteral(".csm"),
+        this, QStringLiteral("保存电路"), doc()->name + QStringLiteral(".csm"),
         QStringLiteral("电路仿真大师电路 (*.csm);;所有文件 (*)"));
     if (path.isEmpty())
         return false;
     if (!path.endsWith(QLatin1String(".csm"), Qt::CaseInsensitive))
         path += QStringLiteral(".csm");
 
-    m_filePath = path;
-    m_documentName = QFileInfo(path).fileName();
+    doc()->filePath = path;
+    doc()->name = QFileInfo(path).fileName();
     return saveCircuit();
 }
 
 void MainWindow::openCircuit()
 {
-    if (!maybeSave())
-        return;
-
     const QString path = QFileDialog::getOpenFileName(
         this, QStringLiteral("打开电路"), QString(),
         QStringLiteral("电路仿真大师电路 (*.csm);;所有文件 (*)"));
@@ -1200,6 +1471,14 @@ void MainWindow::openCircuit()
 
 bool MainWindow::openPath(const QString& path)
 {
+    // 已经开着就切过去，别开两份
+    const int existing = indexOfPath(path);
+    if (existing >= 0) {
+        m_tabs->setCurrentIndex(existing);
+        appendLog(QStringLiteral("该文件已经在标签页里：%1").arg(path));
+        return true;
+    }
+
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         Dialogs::warn(this, QStringLiteral("打开失败"), file.errorString());
@@ -1209,34 +1488,31 @@ bool MainWindow::openPath(const QString& path)
     file.close();
 
     QJsonParseError parseError;
-    const QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
-    if (doc.isNull()) {
+    const QJsonDocument json = QJsonDocument::fromJson(data, &parseError);
+    if (json.isNull()) {
         Dialogs::warn(this, QStringLiteral("打开失败"),
-                             QStringLiteral("JSON 解析错误：%1").arg(parseError.errorString()));
+                      QStringLiteral("JSON 解析错误：%1").arg(parseError.errorString()));
         return false;
     }
 
     QString error;
-    const QJsonObject root = doc.object();
+    const QJsonObject root = json.object();
     const Circuit circuit = Circuit::fromJson(root, &error);
     if (!error.isEmpty()) {
         Dialogs::warn(this, QStringLiteral("打开失败"), error);
         return false;
     }
     if (circuit.components.isEmpty()) {
-        Dialogs::warn(this, QStringLiteral("打开失败"),
-                             QStringLiteral("文件中没有元件。"));
+        Dialogs::warn(this, QStringLiteral("打开失败"), QStringLiteral("文件中没有元件。"));
         return false;
     }
 
+    SimulationOptions options = doc() ? doc()->options : SimulationOptions();
     const QJsonObject analysis = root.value(QStringLiteral("analysis")).toObject();
-    if (!analysis.isEmpty()) {
-        m_options = optionsFromJson(analysis);
-        updateAnalysisLabel();
-        syncMonitorOptions();
-    }
+    if (!analysis.isEmpty())
+        options = optionsFromJson(analysis);
 
-    loadCircuitData(circuit, QFileInfo(path).fileName(), path);
+    loadCircuitData(circuit, QFileInfo(path).fileName(), path, options);
     appendLog(QStringLiteral("已打开：%1（%2 个元件）")
                   .arg(path)
                   .arg(circuit.components.size()));
@@ -1262,7 +1538,7 @@ void MainWindow::runSimulation()
 
     // 运行仿真只做计算，不自动弹任何窗口：波形由「静态波形」/「动态示波器」显式打开
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    SimulationResult result = Simulator::run(circuit, m_options);
+    SimulationResult result = Simulator::run(circuit, doc()->options);
     QApplication::restoreOverrideCursor();
 
     appendLog(QStringLiteral("──────── 仿真 ────────"));
@@ -1286,12 +1562,12 @@ void MainWindow::runSimulation()
         appendLog(QStringLiteral("⚠ 电路中没有测试点，波形为空。请放置电压测试点（TP）、电流测试点（IP）或万用表（XMM）。"));
 
     // 结果留着，由用户打开「波形监控」再看；面板开着就顺手刷新
-    m_lastResult = result;
-    m_hasResult = true;
-    m_resultStale = false;
+    doc()->lastResult = result;
+    doc()->hasResult = true;
+    doc()->resultStale = false;
     if (m_wavePlot && m_waveWindow && m_waveWindow->isVisible() && m_waveTabs
         && m_waveTabs->currentIndex() == 0)
-        m_wavePlot->setResult(m_lastResult);
+        m_wavePlot->setResult(doc()->lastResult);
     refreshMeterWindows();
 
     // 有测试点就进入「运行中」状态（连续仿真），与「运行仿真 / 停止仿真」按钮语义一致。
@@ -1337,7 +1613,7 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
 void MainWindow::syncMonitorOptions()
 {
     if (m_wavePlot)
-        m_wavePlot->setOptions(m_options);
+        m_wavePlot->setOptions(doc()->options);
 }
 
 void MainWindow::updateRunAction()
@@ -1400,7 +1676,7 @@ void MainWindow::createMonitorWindow()
     syncMonitorOptions();
     connect(m_wavePlot, &WaveformWindow::analysisRequested, this,
             [this](const SimulationOptions& options) {
-                m_options = options;
+                doc()->options = options;
                 updateAnalysisLabel();
                 runSimulation();
             });
@@ -1408,12 +1684,12 @@ void MainWindow::createMonitorWindow()
     connect(m_waveLive, &WaveformWindow::liveStateChanged, this, [this](bool) {
         updateRunAction();
     });
-    // 刻度改动记进 m_options，保存工程时一并写入
+    // 刻度改动记进 doc()->options，保存工程时一并写入
     connect(m_waveLive, &WaveformWindow::liveScalesChanged, this,
             [this](double timeDiv, double voltDiv, double ampDiv) {
-                m_options.scopeTimeDiv = timeDiv;
-                m_options.scopeVoltDiv = voltDiv;
-                m_options.scopeAmpDiv = ampDiv;
+                doc()->options.scopeTimeDiv = timeDiv;
+                doc()->options.scopeVoltDiv = voltDiv;
+                doc()->options.scopeAmpDiv = ampDiv;
             });
 
     // 电路改动（比如拨动开关）后重建实时引擎，让仿真跟着新拓扑走
@@ -1477,8 +1753,8 @@ void MainWindow::showMonitor(int tab)
         const QSignalBlocker blocker(m_actMonitor);
         m_actMonitor->setChecked(true);
     }
-    if (tab == 0 && m_hasResult && m_wavePlot)
-        m_wavePlot->setResult(m_lastResult);
+    if (tab == 0 && doc()->hasResult && m_wavePlot)
+        m_wavePlot->setResult(doc()->lastResult);
     if (m_waveTabs)
         m_waveTabs->setCurrentIndex(tab);
 }
@@ -1498,8 +1774,8 @@ void MainWindow::onWaveTabChanged(int index)
     }
 
     // 切回静态波形只是换显示，不停止正在跑的实时仿真
-    if (m_wavePlot && m_hasResult)
-        m_wavePlot->setResult(m_lastResult);
+    if (m_wavePlot && doc()->hasResult)
+        m_wavePlot->setResult(doc()->lastResult);
 }
 
 bool MainWindow::startLiveScope()
@@ -1514,8 +1790,8 @@ bool MainWindow::startLiveScope()
     // 没有测试点也照样启动，只是波形为空（面板里会提示放 TP / IP）
     const QVector<QPair<QString, QString>> probes = probeSpecs(circuit, net);
 
-    m_waveLive->setLiveScalePreferences(m_options.scopeTimeDiv, m_options.scopeVoltDiv,
-                                        m_options.scopeAmpDiv);
+    m_waveLive->setLiveScalePreferences(doc()->options.scopeTimeDiv, doc()->options.scopeVoltDiv,
+                                        doc()->options.scopeAmpDiv);
     m_waveLive->startLive(circuit, probes);
     appendLog(QStringLiteral("动态示波器已启动：连续仿真，切回静态波形或关闭面板即停止。"));
     return true;
@@ -1566,15 +1842,15 @@ void MainWindow::loadExample(int index)
     file.close();
 
     QJsonParseError parseError;
-    const QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
-    if (doc.isNull()) {
+    const QJsonDocument json = QJsonDocument::fromJson(data, &parseError);
+    if (json.isNull()) {
         Dialogs::warn(this, QStringLiteral("示例损坏"),
                              QStringLiteral("JSON 解析错误：%1").arg(parseError.errorString()));
         return;
     }
 
     QString circuitError;
-    const QJsonObject root = doc.object();
+    const QJsonObject root = json.object();
     const Circuit circuit = Circuit::fromJson(root, &circuitError);
     if (!circuitError.isEmpty() || circuit.components.isEmpty()) {
         Dialogs::warn(this, QStringLiteral("示例损坏"),
@@ -1583,17 +1859,14 @@ void MainWindow::loadExample(int index)
         return;
     }
 
-    if (m_dirty && !maybeSave())
-        return;
-
     QString name = root.value(QStringLiteral("name")).toString();
     if (name.isEmpty())
         name = QFileInfo(m_examplePaths.at(index)).baseName();
 
-    m_options = optionsFromJson(root.value(QStringLiteral("analysis")).toObject());
-    updateAnalysisLabel();
-    syncMonitorOptions();
-    loadCircuitData(circuit, name, QString());
+    // 示例不带路径（另存时才问），分析参数跟着示例走
+    const SimulationOptions options =
+        optionsFromJson(root.value(QStringLiteral("analysis")).toObject());
+    loadCircuitData(circuit, name, QString(), options);
     appendLog(QStringLiteral("已载入示例「%1」。按 F5 运行仿真。").arg(name));
 }
 
@@ -1761,12 +2034,12 @@ void MainWindow::showAbout()
 
 bool MainWindow::maybeSave()
 {
-    if (!m_dirty)
+    if (!doc()->dirty)
         return true;
 
     const QMessageBox::StandardButton button = Dialogs::askSaveDiscardCancel(
         this, QStringLiteral("保存更改"),
-        QStringLiteral("「%1」有未保存的更改，是否保存？").arg(m_documentName));
+        QStringLiteral("「%1」有未保存的更改，是否保存？").arg(doc()->name));
 
     if (button == QMessageBox::Save)
         return saveCircuit();
@@ -1777,10 +2050,20 @@ bool MainWindow::maybeSave()
 
 void MainWindow::closeEvent(QCloseEvent* event)
 {
-    if (maybeSave())
-        event->accept();
-    else
-        event->ignore();
+    // 关窗口等于一次性关掉所有标签：脏的逐个问一遍
+    const int original = m_tabs ? m_tabs->currentIndex() : -1;
+    for (int i = 0; i < m_documents.size(); ++i) {
+        if (!m_documents.at(i)->dirty)
+            continue;
+        m_tabs->setCurrentIndex(i); // 让用户看清问的是哪一份
+        if (!maybeSave()) {
+            if (original >= 0)
+                m_tabs->setCurrentIndex(original);
+            event->ignore();
+            return;
+        }
+    }
+    event->accept();
 }
 
 } // namespace csm

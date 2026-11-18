@@ -17,5 +17,7 @@
     <file alias="grid.svg">icons/grid.svg</file>
     <file alias="undo.svg">icons/undo.svg</file>
     <file alias="redo.svg">icons/redo.svg</file>
+    <file alias="tab_close.svg">icons/tab_close.svg</file>
+    <file alias="tab_close_active.svg">icons/tab_close_active.svg</file>
   </qresource>
 </RCC>
