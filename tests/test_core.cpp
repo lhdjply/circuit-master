@@ -1277,6 +1277,39 @@ private slots:
         QCOMPARE(c.suggestedMaxStep(), suggested);
     }
 
+    void suggestedStepUsesPulseWidthNotEdge()
+    {
+        // 步长不该被「边沿有多陡」绑架。
+        // 以前按 1/(edge·4) 算：1 µs 的沿要求 200 ns 步长，而电路时间常数
+        // 常在毫秒量级，根本响应不了这么陡的沿 —— 5 s 的仿真要 2500 万步，
+        // 实时示波器 1 秒只能推进 0.1 s 仿真时间，卡得没法看。
+        Circuit c = loopCircuit(ComponentType::Resistor, 1000.0,
+                                ComponentType::Resistor, 1000.0, 0.0);
+        Component& v = c.components[0];
+        v.function = SourceFunction::Pulse;
+        v.pulsePeriod = 1.0;   // 1 Hz
+        v.pulseWidth = 0.5;    // 半周期
+        v.pulseRise = 1e-6;    // 1 µs 边沿
+        v.pulseFall = 1e-6;
+
+        // 由周期决定：1/(1 Hz × 20) = 50 ms
+        const double wide = c.suggestedMaxStep();
+        QVERIFY2(near(wide, 0.05, 1e-9), qPrintable(QString::number(wide)));
+        QVERIFY2(wide > 1e-3,
+                 qPrintable(QStringLiteral("不该被 1 µs 的沿压到微秒级：%1 s").arg(wide)));
+
+        // 但窄脉冲仍然要细步长：脉宽 1 µs → 1/4 脉宽 = 250 ns
+        v.pulsePeriod = 1e-3;
+        v.pulseWidth = 1e-6;
+        const double narrow = c.suggestedMaxStep();
+        QVERIFY2(near(narrow, 2.5e-7, 1e-12), qPrintable(QString::number(narrow)));
+
+        // 边沿本身完全不影响结果：只改上升/下降沿，建议步长不变
+        v.pulseRise = 1e-9;
+        v.pulseFall = 1e-9;
+        QCOMPARE(c.suggestedMaxStep(), narrow);
+    }
+
     void sineAmplitudeIsRms()
     {
         // 正弦源的幅值填的是有效值：220 V 有效值 → 峰值 311 V

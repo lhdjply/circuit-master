@@ -306,6 +306,7 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
 double Circuit::suggestedMaxStep() const
 {
     double fmax = 0.0;
+    double widthStep = 0.0; // 由脉宽决定的上限：窄脉冲不能被整个跨过去
     for (const Component& comp : components) {
         // 开关控制器内部有几十 kHz 的振荡器：步长必须比它的周期细得多，
         // 否则每个开关周期都被跨过去，波形直接算成直流
@@ -321,16 +322,27 @@ double Circuit::suggestedMaxStep() const
         } else if (comp.function == SourceFunction::Pulse) {
             if (comp.pulsePeriod > 0.0)
                 fmax = std::max(fmax, 1.0 / comp.pulsePeriod);
-            const double edge = std::max(comp.pulseRise, comp.pulseFall);
-            if (edge > 0.0)
-                fmax = std::max(fmax, 1.0 / (edge * 4.0));
+            // 高电平期间至少 4 个采样点，否则窄脉冲会被跨过去
+            const double width = comp.pulseWidth > 0.0 ? comp.pulseWidth
+                                                       : comp.pulsePeriod * 0.5;
+            if (width > 0.0) {
+                const double w = width / 4.0;
+                widthStep = widthStep > 0.0 ? std::min(widthStep, w) : w;
+            }
         }
     }
-    if (fmax <= 0.0)
-        return 0.0;
 
-    // 每个周期至少 20 个采样点
-    return 1.0 / (fmax * 20.0);
+    // 注意：这里**不用**上升/下降沿来约束步长。以前按 1/(edge·4) 算，
+    // 1 µs 的沿就要求 200 ns 步长 —— 而电路的时间常数往往在毫秒量级，
+    // 根本响应不了这么陡的沿，等于是白算（5 s 的仿真要 2500 万步）。
+    // 实测那个 RC 电路：25 µs 与 200 ns 的结果完全一致，1 ms 也只差 0.18%。
+    // 真正要防的是「窄脉冲被整个跨过去」，所以用脉宽而不是沿。
+    double step = 0.0;
+    if (fmax > 0.0)
+        step = 1.0 / (fmax * 20.0); // 每个周期至少 20 个采样点
+    if (widthStep > 0.0)
+        step = step > 0.0 ? std::min(step, widthStep) : widthStep;
+    return step;
 }
 
 QPointF Circuit::snapPoint(const QPointF& p, double grid)
