@@ -118,6 +118,11 @@ void UiMeterTest::multimeterModeFromPanel()
     QVERIFY2(mode, "属性面板里应当有档位下拉框");
     QCOMPARE(mode->currentData().toInt(), int(MultimeterMode::Voltage));
 
+    // 下拉项只写档位名：带注解的长条目（「直流电压档（并联，10 MΩ 内阻）」）
+    // 会把下拉框撑得比面板还宽，右边被裁掉半句
+    for (int i = 0; i < mode->count(); ++i)
+        QCOMPARE(mode->itemText(i), multimeterModeName(MultimeterMode(mode->itemData(i).toInt())));
+
     mode->setCurrentIndex(mode->findData(int(MultimeterMode::Current)));
     settle();
     QCOMPARE(item->component().multimeterMode, MultimeterMode::Current);

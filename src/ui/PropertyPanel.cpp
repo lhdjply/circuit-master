@@ -141,16 +141,18 @@ void PropertyPanel::buildUi()
 
     m_meterMode = new QComboBox(page);
     m_meterMode->setObjectName(QStringLiteral("multimeterModeCombo"));
-    m_meterMode->addItem(QStringLiteral("直流电压档（并联，10 MΩ 内阻）"),
-                         int(MultimeterMode::Voltage));
-    m_meterMode->addItem(QStringLiteral("直流电流档（串入电路）"),
-                         int(MultimeterMode::Current));
-    m_meterMode->addItem(QStringLiteral("电阻档（注入 1 A 测试电流）"),
-                         int(MultimeterMode::Resistance));
-    m_meterMode->addItem(QStringLiteral("交流电压档（50 Hz 有效值）"),
-                         int(MultimeterMode::AcVoltage));
-    m_meterMode->addItem(QStringLiteral("交流电流档（50 Hz 有效值）"),
-                         int(MultimeterMode::AcCurrent));
+    // 下拉项只写档位名。原来「直流电压档（并联，10 MΩ 内阻）」这种长条目
+    // 会把下拉框撑得比整个面板还宽，右边被裁掉半句
+    for (MultimeterMode mode : {MultimeterMode::Voltage, MultimeterMode::Current,
+                                MultimeterMode::Resistance, MultimeterMode::AcVoltage,
+                                MultimeterMode::AcCurrent}) {
+        m_meterMode->addItem(multimeterModeName(mode), int(mode));
+    }
+    // 面板宽度只有 290 上下：下拉框按「最短内容长度」定宽，
+    // 不再让某项的长文字把整行顶出去
+    m_meterMode->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    m_meterMode->setMinimumContentsLength(7);
+
     m_form->addRow(QStringLiteral("档位"), m_meterMode);
 
     m_acFrequency = makeEdit();
