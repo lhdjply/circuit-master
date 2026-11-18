@@ -62,7 +62,6 @@ public:
     QHash<int, double> liveBlownCapacitors() const;
 
 signals:
-    void scopeRequested();
     /// 用户在静态波形页改了参数并点了「重新仿真」
     void analysisRequested(const SimulationOptions& options);
     void liveUpdated();
@@ -95,7 +94,7 @@ private:
     QPlainTextEdit* m_report = nullptr;     // 直流工作点报告（没有时间序列时显示）
     QListWidget* m_list = nullptr;
     QLabel* m_info = nullptr;
-    QPushButton* m_scopeButton = nullptr;
+    QPushButton* m_liveAutoButton = nullptr; // 动态示波器的「自动缩放」
     QWidget* m_analysisBar = nullptr;
     QComboBox* m_kindBox = nullptr;
     QLineEdit* m_tStopEdit = nullptr;
@@ -105,7 +104,6 @@ private:
     QLineEdit* m_pointsEdit = nullptr;
     SimulationOptions m_options;
     QLabel* m_tipLabel = nullptr;
-    QPushButton* m_autoButton = nullptr;
     bool m_building = false;
 
     std::unique_ptr<class LiveTransient> m_live;
@@ -137,6 +135,10 @@ private:
     int m_liveSampleCounter = 0;
     bool m_livePlaying = false;
     bool m_liveAutoScaled = false;
+    /// 用户手动改过「电压/格」或「电流/格」之后，就不再自动换挡。
+    /// 否则选了 500 mV/格，一旦信号超过 ±1.5 V 又被自动跳到 2 V/格，
+    /// 用户的选择形同虚设。
+    bool m_liveScaleLocked = false;
 
     void updateLiveDecimation();
     void restartLiveEngine();

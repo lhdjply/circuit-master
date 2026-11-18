@@ -165,15 +165,10 @@ WaveformWindow::WaveformWindow(QWidget* parent)
 
     auto* toolbar = new QHBoxLayout();
     toolbar->setContentsMargins(10, 8, 10, 8);
-    m_autoButton = new QPushButton(QStringLiteral("自动缩放"), chartSide);
-    QPushButton* autoButton = m_autoButton;
-    m_scopeButton = new QPushButton(QStringLiteral("示波器"), chartSide);
-    m_scopeButton->setToolTip(QStringLiteral("以动态示波器方式回放瞬态波形"));
-    m_scopeButton->setEnabled(false);
+    // 静态页只留导出；「自动缩放」归到动态示波器那一栏
+    //（静态图有框选放大 + 右键复位，本来也不需要它）
     auto* csvButton = new QPushButton(QStringLiteral("导出 CSV"), chartSide);
     auto* pngButton = new QPushButton(QStringLiteral("导出图片"), chartSide);
-    toolbar->addWidget(autoButton);
-    toolbar->addWidget(m_scopeButton);
     toolbar->addSpacing(12);
     m_tipLabel = new QLabel(QStringLiteral("在图上拖拽可框选放大，右键复位"), chartSide);
     m_tipLabel->setStyleSheet(QStringLiteral("color:#94a3b8; font-size:11px;"));
@@ -185,6 +180,10 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     liveLayout->setContentsMargins(0, 0, 0, 0);
     liveLayout->setSpacing(6);
     m_liveButton = new QPushButton(QStringLiteral("暂停"), m_liveControls);
+    m_liveAutoButton = new QPushButton(QStringLiteral("自动缩放"), m_liveControls);
+    m_liveAutoButton->setToolTip(
+        QStringLiteral("按当前波形重新自动选量程（手动改过「电压/格」之后用它恢复自动）"));
+    liveLayout->addWidget(m_liveAutoButton);
     m_liveWindowBox = new QComboBox(m_liveControls);
     const QVector<QPair<QString, double>> divisions = {
         {QStringLiteral("5 ns/div"), 5e-9},    {QStringLiteral("10 ns/div"), 1e-8},
@@ -334,15 +333,18 @@ WaveformWindow::WaveformWindow(QWidget* parent)
                     restartLiveEngine();
                 emit liveScalesChanged(m_liveDiv, m_liveVoltDiv, m_liveAmpDiv);
             });
+    // 手动选过的档位要「记住」：自动换挡只在用户没动过之前生效
     connect(m_liveVoltDivBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this] {
                 m_liveVoltDiv = m_liveVoltDivBox->currentData().toDouble();
+                m_liveScaleLocked = true;
                 applyLiveScales();
                 emit liveScalesChanged(m_liveDiv, m_liveVoltDiv, m_liveAmpDiv);
             });
     connect(m_liveAmpDivBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this] {
                 m_liveAmpDiv = m_liveAmpDivBox->currentData().toDouble();
+                m_liveScaleLocked = true;
                 applyLiveScales();
                 emit liveScalesChanged(m_liveDiv, m_liveVoltDiv, m_liveAmpDiv);
             });
@@ -378,8 +380,7 @@ WaveformWindow::WaveformWindow(QWidget* parent)
 
     connect(allButton, &QPushButton::clicked, this, [this] { selectAll(true); });
     connect(noneButton, &QPushButton::clicked, this, [this] { selectAll(false); });
-    connect(autoButton, &QPushButton::clicked, this, &WaveformWindow::autoScale);
-    connect(m_scopeButton, &QPushButton::clicked, this, &WaveformWindow::scopeRequested);
+    connect(m_liveAutoButton, &QPushButton::clicked, this, &WaveformWindow::autoScale);
     connect(csvButton, &QPushButton::clicked, this, &WaveformWindow::exportCsv);
     connect(pngButton, &QPushButton::clicked, this, &WaveformWindow::exportImage);
     m_view->installEventFilter(this);
@@ -556,9 +557,6 @@ void WaveformWindow::setResult(const SimulationResult& result)
     populateList();
     rebuild();
     setWindowTitle(QStringLiteral("波形查看器 — %1 — 电路仿真大师").arg(kindName(result.kind)));
-    if (m_scopeButton)
-        m_scopeButton->setEnabled(result.kind == AnalysisKind::Transient
-                                  && !result.waves.isEmpty());
 }
 
 void WaveformWindow::populateList()
@@ -851,6 +849,11 @@ void WaveformWindow::autoPickLiveScales()
     if (samples < 50)
         return;
 
+    // 用户手动选过档位：不再自动换挡，哪怕信号超出了量程。
+    // 想恢复自动，点「自动缩放」即可。
+    if (m_liveScaleLocked)
+        return;
+
     const bool needInitial = !m_liveAutoScaled;
     const bool voltageClipped = m_liveHasVoltage && voltPeak > m_liveVoltDiv * 2.9;
     const bool currentClipped = m_liveHasCurrent && ampPeak > m_liveAmpDiv * 2.9;
@@ -860,6 +863,8 @@ void WaveformWindow::autoPickLiveScales()
     auto pick = [](QComboBox* box, double peak) {
         if (!box || peak <= 0.0)
             return;
+        // 程序换挡不能走「用户手动换挡」那条信号，否则下一次就被锁死了
+        QSignalBlocker blocker(box);
         // 峰值占据约 2.5 格：选“不小于 peak/2.5 的最小档”，保证不超出 ±3 格
         const double target = peak / 2.5;
         int best = box->count() - 1;
@@ -978,6 +983,7 @@ void WaveformWindow::startLive(const Circuit& circuit,
     m_liveHasVoltage = hasVoltage;
     m_liveHasCurrent = hasCurrent;
     m_liveAutoScaled = false;
+    m_liveScaleLocked = false; // 新的一次运行，重新按峰值自动选量程
     m_liveVoltDiv = m_liveVoltDivBox->currentData().toDouble();
     m_liveAmpDiv = m_liveAmpDivBox->currentData().toDouble();
     if (m_liveVoltWidget)
@@ -1026,16 +1032,11 @@ void WaveformWindow::startLive(const Circuit& circuit,
 
     m_chart->setTitle(QString());
     m_liveControls->setVisible(true);
-    m_scopeButton->setVisible(false);
     if (m_tipLabel)
         m_tipLabel->setVisible(false);
-    if (m_autoButton)
-        m_autoButton->setVisible(false);
     // 实时模式没有「分析参数」的概念，整条收起
     if (m_analysisBar)
         m_analysisBar->setVisible(false);
-    if (m_autoButton)
-        m_autoButton->setEnabled(false);
     setWindowTitle(QStringLiteral("实时示波器 — 电路仿真大师"));
     m_info->setText(m_liveBuffers.isEmpty()
                         ? QStringLiteral("电路中没有测试点，波形为空。\n"
@@ -1068,16 +1069,10 @@ void WaveformWindow::stopLive()
     m_liveAxisY2 = nullptr;
     if (m_liveControls)
         m_liveControls->setVisible(false);
-    if (m_scopeButton)
-        m_scopeButton->setVisible(true);
     if (m_tipLabel)
         m_tipLabel->setVisible(true);
-    if (m_autoButton)
-        m_autoButton->setVisible(true);
     if (m_analysisBar)
         m_analysisBar->setVisible(true);
-    if (m_autoButton)
-        m_autoButton->setEnabled(true);
     if (wasLive && !m_restartingLive)
         emit liveStateChanged(false);
 }
@@ -1205,16 +1200,45 @@ void WaveformWindow::liveTick()
 
     autoPickLiveScales();
 
-    m_info->setText(QStringLiteral("t = %1  ·  %2/div  ·  步长 %3")
-                        .arg(formatEng(time, QStringLiteral("s"), 3),
-                             formatEng(m_liveDiv, QStringLiteral("s"), 2),
-                             formatEng(h, QStringLiteral("s"), 2)));
+    // 手动锁定量程后如果波形超出 ±3 格，明确提示一句 ——
+    // 否则只会看到一条贴边的平顶曲线，不知道是「被裁了」还是「电路就是这样」
+    bool clipped = false;
+    if (m_liveScaleLocked) {
+        for (const Signal& wave : m_liveBuffers) {
+            const double div = wave.unit == QLatin1String("V") ? m_liveVoltDiv : m_liveAmpDiv;
+            for (double value : wave.y) {
+                if (std::abs(value) > div * 3.0) {
+                    clipped = true;
+                    break;
+                }
+            }
+            if (clipped)
+                break;
+        }
+    }
+
+    QString info = QStringLiteral("t = %1  ·  %2/div  ·  步长 %3")
+                       .arg(formatEng(time, QStringLiteral("s"), 3),
+                            formatEng(m_liveDiv, QStringLiteral("s"), 2),
+                            formatEng(h, QStringLiteral("s"), 2));
+    if (clipped)
+        info += QStringLiteral("\n波形超出量程（手动量程已锁定），点「自动缩放」恢复自动");
+    m_info->setText(info);
 }
 
 void WaveformWindow::autoScale()
 {
     if (!m_chart)
         return;
+
+    // 实时示波器：解除手动锁定，按当前波形重新自动选一次量程
+    if (m_live) {
+        m_liveScaleLocked = false;
+        m_liveAutoScaled = false;
+        autoPickLiveScales();
+        return;
+    }
+
     m_chart->zoomReset();
     rebuild();
 }

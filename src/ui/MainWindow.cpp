@@ -1404,10 +1404,6 @@ void MainWindow::createMonitorWindow()
                 runSimulation();
             });
 
-    // 静态波形里的「示波器」按钮直接切到动态标签页
-    connect(m_wavePlot, &WaveformWindow::scopeRequested, this,
-            [this] { m_waveTabs->setCurrentIndex(1); });
-
     connect(m_waveLive, &WaveformWindow::liveStateChanged, this, [this](bool) {
         updateRunAction();
     });

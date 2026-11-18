@@ -1141,6 +1141,149 @@ private slots:
         }
     }
 
+    void liveScopeKeepsManualScale()
+    {
+        // 手动选「电压/格」之后，自动换挡必须让位：否则选 500 mV/格，
+        // 信号一超过 ±1.5 V 就被自动跳到 2 V/格，用户的选择形同虚设。
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+
+        // 5 V 源 + 分压，峰值约 2.5 V：用 500 mV/格 必然超出 ±1.5 V
+        auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 300));
+        source->setRotationAngle(90);
+        Component src = source->component();
+        src.dcValue = 5.0;
+        source->setComponent(src);
+        auto* r1 = scene->placeComponent(ComponentType::Resistor, QPointF(250, 200));
+        Component c1 = r1->component();
+        c1.value = 1000.0;
+        r1->setComponent(c1);
+        auto* r2 = scene->placeComponent(ComponentType::Resistor, QPointF(250, 350));
+        r2->setRotationAngle(270);
+        Component c2 = r2->component();
+        c2.value = 1000.0;
+        r2->setComponent(c2);
+        auto* probe = scene->placeComponent(ComponentType::Probe, QPointF(400, 200));
+        QVERIFY(probe);
+        scene->placeComponent(ComponentType::Ground, QPointF(100, 420));
+        scene->addWire({QPointF(100, 270), QPointF(100, 200), QPointF(220, 200)});
+        scene->addWire({QPointF(280, 200), QPointF(400, 200)});
+        scene->addWire({QPointF(250, 230), QPointF(250, 320)});
+        scene->addWire({QPointF(100, 330), QPointF(100, 420)});
+        scene->addWire({QPointF(250, 380), QPointF(250, 420), QPointF(100, 420)});
+        settle();
+
+        window.runSimulation();
+        settle();
+        QAction* monitor = window.findChild<QAction*>(QStringLiteral("actMonitor"));
+        QVERIFY(monitor);
+        monitor->setChecked(true);
+        settle();
+        QTabWidget* tabs = waveTabs(window);
+        QVERIFY(tabs);
+        tabs->setCurrentIndex(1); // 动态示波器
+        settle();
+
+        auto* live = qobject_cast<WaveformWindow*>(tabs->widget(1));
+        QVERIFY(live);
+
+        // 找到「电压/格」下拉框
+        QComboBox* voltDiv = nullptr;
+        for (QComboBox* box : live->findChildren<QComboBox*>()) {
+            for (int i = 0; i < box->count(); ++i) {
+                if (box->itemText(i).contains(QStringLiteral("mV"))) {
+                    voltDiv = box;
+                    break;
+                }
+            }
+            if (voltDiv)
+                break;
+        }
+        QVERIFY2(voltDiv, "找不到「电压/格」下拉框");
+
+        // 手动选 500 mV/格
+        int target = -1;
+        for (int i = 0; i < voltDiv->count(); ++i) {
+            if (std::abs(voltDiv->itemData(i).toDouble() - 0.5) < 1e-9) {
+                target = i;
+                break;
+            }
+        }
+        QVERIFY2(target >= 0, "下拉框里应当有 500 mV 档");
+        voltDiv->setCurrentIndex(target);
+
+        // 让实时仿真推进几拍（信号峰值 2.5 V，远超 0.5×3 = 1.5 V）。
+        // 用 qWait 真正跑事件循环，processEvents 循环里定时器很难被触发。
+        QTest::qWait(1500);
+
+        QCOMPARE(live->liveVoltDiv(), 0.5);
+        QCOMPARE(voltDiv->currentIndex(), target);
+    }
+
+    void autoScaleLivesInTheLiveScope()
+    {
+        // 静态页有框选放大 + 右键复位，不需要「自动缩放」；「示波器」按钮也多余
+        //（切标签页就行）。这两个都撤掉，只把「自动缩放」放进动态示波器。
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 300));
+        source->setRotationAngle(90);
+        auto* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(250, 200));
+        auto* probe = scene->placeComponent(ComponentType::Probe, QPointF(400, 200));
+        QVERIFY(probe);
+        scene->placeComponent(ComponentType::Ground, QPointF(100, 420));
+        scene->addWire({QPointF(100, 270), QPointF(100, 200), QPointF(220, 200)});
+        scene->addWire({QPointF(280, 200), QPointF(400, 200)});
+        scene->addWire({QPointF(100, 330), QPointF(100, 420)});
+        settle();
+
+        window.runSimulation();
+        settle();
+        QAction* monitor = window.findChild<QAction*>(QStringLiteral("actMonitor"));
+        QVERIFY(monitor);
+        monitor->setChecked(true);
+        settle();
+
+        QTabWidget* tabs = waveTabs(window);
+        QVERIFY(tabs);
+        auto* staticPage = qobject_cast<WaveformWindow*>(tabs->widget(0));
+        auto* livePage = qobject_cast<WaveformWindow*>(tabs->widget(1));
+        QVERIFY(staticPage && livePage);
+
+        // 两页共用同一个类，控件都在树里；这里看的是「当前是否露出来」
+        auto hasVisibleButton = [](WaveformWindow* page, const QString& text) {
+            for (QPushButton* button : page->findChildren<QPushButton*>()) {
+                if (button->text() == text && button->isVisible())
+                    return true;
+            }
+            return false;
+        };
+
+        // 静态页：两个都撤掉
+        QVERIFY2(!hasVisibleButton(staticPage, QStringLiteral("自动缩放")),
+                 "静态波形页不该再有「自动缩放」");
+        QVERIFY2(!hasVisibleButton(staticPage, QStringLiteral("示波器")),
+                 "静态波形页不该再有「示波器」按钮（切标签页即可）");
+        // 导出还留着
+        QVERIFY(hasVisibleButton(staticPage, QStringLiteral("导出 CSV")));
+
+        // 动态示波器：有「自动缩放」
+        tabs->setCurrentIndex(1);
+        settle();
+        QVERIFY2(hasVisibleButton(livePage, QStringLiteral("自动缩放")),
+                 "动态示波器里应当有「自动缩放」");
+    }
+
     void transformerHasFourPinsAndPanel()
     {
         MainWindow window;
