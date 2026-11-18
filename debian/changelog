@@ -1,3 +1,14 @@
+circuit-master (0.3.3) unstable; urgency=medium
+
+  * 新增多文件标签页：一个标签一份电路，各自的历史、参数与仿真结果。
+  * 新增单实例：再次双击 .csm 在原窗口里开新标签，不再开第二个窗口。
+  * 动态示波器步长改按脉宽约束，不再被脉冲边沿压低到 200 ns。
+  * 动态示波器手动量程不再被自动改掉；自动缩放连时基一起自适应。
+  * 提示框、「关于」窗口改成自绘的样式。
+  * 修复波形监控纵轴裁掉波峰、属性面板档位下拉框被撑宽。
+
+ -- Circuit Master Maintainers <lhdjply@users.noreply.github.com>  Tue, 18 Nov 2026 10:00:00 +0800
+
 circuit-master (0.3.2) unstable; urgency=medium
 
   * 修复电阻档读数差 10 倍（1 kΩ 显示成 100.00 Ω，四舍五入进位后小数点错位）。
