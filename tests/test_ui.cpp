@@ -1314,6 +1314,86 @@ private slots:
                  qPrintable(QStringLiteral("时基没跟着缩放：%1 s/div").arg(live->liveTimeDiv())));
     }
 
+    void changingTimeBaseKeepsVoltageScale()
+    {
+        // 点完「自动缩放」再手动换时基，电压档不该被重新自动选一遍。
+        // 根因是改时基会 restartLiveEngine()，那里以前把 m_liveAutoScaled
+        // 重置成 false，下一拍就当成「初次量程」又跑了一次自动选档。
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        auto* scene = window.findChild<SchematicScene*>();
+        QVERIFY(scene);
+        auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 300));
+        source->setRotationAngle(90);
+        Component src = source->component();
+        src.function = SourceFunction::Pulse;
+        src.pulseV1 = 0.0;
+        src.pulseV2 = 5.0;
+        src.pulsePeriod = 0.02; // 50 Hz：很快就能定下量程
+        src.pulseWidth = 0.01;
+        source->setComponent(src);
+        auto* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(250, 200));
+        Component r = resistor->component();
+        r.value = 1000.0;
+        resistor->setComponent(r);
+        auto* probe = scene->placeComponent(ComponentType::Probe, QPointF(400, 200));
+        QVERIFY(probe);
+        scene->placeComponent(ComponentType::Ground, QPointF(100, 420));
+        scene->addWire({QPointF(100, 270), QPointF(100, 200), QPointF(220, 200)});
+        scene->addWire({QPointF(280, 200), QPointF(400, 200)});
+        scene->addWire({QPointF(100, 330), QPointF(100, 420)});
+        settle();
+
+        window.runSimulation();
+        settle();
+        QAction* monitor = window.findChild<QAction*>(QStringLiteral("actMonitor"));
+        QVERIFY(monitor);
+        monitor->setChecked(true);
+        settle();
+        QTabWidget* tabs = waveTabs(window);
+        QVERIFY(tabs);
+        tabs->setCurrentIndex(1);
+        QTest::qWait(700);
+
+        auto* live = qobject_cast<WaveformWindow*>(tabs->widget(1));
+        QVERIFY(live && live->isLive());
+
+        // 等自动量程跑过一次
+        QTRY_VERIFY_WITH_TIMEOUT(live->liveAutoScaled(), 5000);
+        const double volts = live->liveVoltDiv();
+
+        // 手动换时基
+        QComboBox* timeBox = nullptr;
+        for (QComboBox* box : live->findChildren<QComboBox*>()) {
+            for (int i = 0; i < box->count(); ++i) {
+                if (box->itemText(i).contains(QStringLiteral("/div"))
+                    && !box->itemText(i).contains(QStringLiteral("V"))) {
+                    timeBox = box;
+                    break;
+                }
+            }
+            if (timeBox)
+                break;
+        }
+        QVERIFY(timeBox);
+        const int other = (timeBox->currentIndex() + 3) % timeBox->count();
+        timeBox->setCurrentIndex(other);
+
+        // setCurrentIndex 的槽是同步执行的，此刻还没跑任何一拍：
+        // 换时基只是换时间窗，「已自动定过量程」的状态不该被清掉，
+        // 否则下一拍会当成「初次量程」把电压档重选一遍
+        QVERIFY2(live->liveAutoScaled(),
+                 "换时基后不该退回到「未自动量程」，否则电压档会被重选一遍");
+        QCOMPARE(live->liveVoltDiv(), volts);
+
+        // 再跑一会儿也不该变
+        QTest::qWait(400);
+        QCOMPARE(live->liveVoltDiv(), volts);
+    }
+
     void autoScaleLivesInTheLiveScope()
     {
         // 静态页有框选放大 + 右键复位，不需要「自动缩放」；「示波器」按钮也多余

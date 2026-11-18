@@ -49,6 +49,8 @@ public:
     /// 启动前预设示波器刻度（来自工程文件）
     void setLiveScalePreferences(double timeDiv, double voltDiv, double ampDiv);
     double liveTimeDiv() const { return m_liveDiv; }
+    /// 是否已经自动定过量程（改时基不该把它清掉，见 restartLiveEngine 的注释）
+    bool liveAutoScaled() const { return m_liveAutoScaled; }
     double liveVoltDiv() const { return m_liveVoltDiv; }
     double liveAmpDiv() const { return m_liveAmpDiv; }
     bool isLive() const { return m_live != nullptr; }

@@ -865,7 +865,14 @@ void WaveformWindow::autoPickLiveScales()
             if (wave.x.size() >= 2)
                 span = std::max(span, wave.x.last() - wave.x.first());
         }
-        if (span < m_liveWindow * 0.5)
+        // 知道周期就至少看满一个周期：只看半截波形会把峰值估小，
+        // 选到偏小的档，后面真正的大信号反而被裁掉。
+        // 上限压到窗口本身：缓冲区最多留 2×窗口 的数据，要求超过它就永远等不到
+        const double period = estimateLivePeriod();
+        const double need = std::min(
+            m_liveWindow,
+            period > 0.0 ? std::max(period, m_liveWindow * 0.25) : m_liveWindow * 0.5);
+        if (span < need)
             return;
     }
     const bool voltageClipped = m_liveHasVoltage && voltPeak > m_liveVoltDiv * 2.9;
@@ -929,7 +936,9 @@ void WaveformWindow::restartLiveEngine()
         buffer.x.clear();
         buffer.y.clear();
     }
-    m_liveAutoScaled = false;
+    // 这里**不**重置 m_liveAutoScaled：改时基只是换时间窗，电压/电流量程
+    // 不该跟着重选一遍（否则用户刚点完「自动缩放」、再手动换时基，
+    // 电压档又被自动改掉）。真正需要重新自适应时由 startLive / autoScale 重置。
     updateLiveDecimation();
     for (QLineSeries* series : m_liveSeries)
         series->clear();
