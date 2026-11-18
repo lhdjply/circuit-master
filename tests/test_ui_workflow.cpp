@@ -3,6 +3,7 @@
 #include "csm_platform.h"
 #include "csm_version.h"
 #include "ui/ComponentItem.h"
+#include "ui/Dialogs.h"
 #include "ui/I18n.h"
 #include "ui/MainWindow.h"
 #include "ui/SingleInstance.h"
@@ -79,6 +80,7 @@ private slots:
     void runWithoutProbesStillRuns();
     void buildAndSimulate();
     void multipleDocumentsInTabs();
+    void changelogIsBuiltInAndReachable();
     void secondLaunchOpensInExistingWindow();
     void ledLightsUpAfterSimulation();
     void switchToggleUpdatesLedWhileRunning();
@@ -947,6 +949,50 @@ void UiWorkflowTest::secondLaunchOpensInExistingWindow()
     settle();
     QCOMPARE(tabs->count(), before + 1);
     QCOMPARE(currentScene(window)->componentItems().size(), 1);
+}
+
+void UiWorkflowTest::changelogIsBuiltInAndReachable()
+{
+    // 每个版本的更新日志编进程序里：「帮助 → 更新日志」能直接看，不依赖网络
+    QFile file(QStringLiteral(":/docs/CHANGELOG.md"));
+    QVERIFY2(file.open(QIODevice::ReadOnly | QIODevice::Text),
+             "更新日志应当被编进资源（:/docs/CHANGELOG.md）");
+    const QString markdown = QString::fromUtf8(file.readAll());
+    file.close();
+    QVERIFY(!markdown.trimmed().isEmpty());
+
+    // 里面必须有当前版本这一节
+    const QString heading = QStringLiteral("## [%1]").arg(QStringLiteral(CSM_VERSION_STRING));
+    QVERIFY2(markdown.contains(heading),
+             qPrintable(QStringLiteral("更新日志里找不到 %1 这一节").arg(heading)));
+
+    // 入口只在「关于」窗口里，帮助菜单里不再单列一项
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    for (QAction* action : window.findChildren<QAction*>()) {
+        QVERIFY2(action->text() != QStringLiteral("更新日志"),
+                 "帮助菜单里不该再有「更新日志」（入口在「关于」窗口里）");
+    }
+
+    // 「关于」窗口里的那颗按钮
+    int changelogButtons = 0;
+    QTimer::singleShot(150, [&changelogButtons] {
+        for (QWidget* widget : QApplication::topLevelWidgets()) {
+            auto* dialog = qobject_cast<QDialog*>(widget);
+            if (!dialog || !dialog->isVisible())
+                continue;
+            for (QPushButton* button : dialog->findChildren<QPushButton*>()) {
+                if (button->text() == QStringLiteral("更新日志"))
+                    ++changelogButtons;
+            }
+            dialog->accept(); // 结束 exec()
+        }
+    });
+    Dialogs::about(&window, QStringLiteral(CSM_VERSION_STRING));
+    QCOMPARE(changelogButtons, 1);
 }
 
 void UiWorkflowTest::multipleDocumentsInTabs()

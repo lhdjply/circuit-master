@@ -20,4 +20,8 @@
     <file alias="tab_close.svg">icons/tab_close.svg</file>
     <file alias="tab_close_active.svg">icons/tab_close_active.svg</file>
   </qresource>
+  <!-- 更新日志：编进程序，「关于 → 更新日志」能直接看 -->
+  <qresource prefix="/docs">
+    <file alias="CHANGELOG.md">../../CHANGELOG.md</file>
+  </qresource>
 </RCC>

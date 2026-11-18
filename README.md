@@ -55,6 +55,7 @@
 
 **检查更新**
 
+- 「关于」窗口里的「更新日志」按钮：`CHANGELOG.md` 编进程序，离线也能看每个版本改了什么
 - 菜单「帮助 → 检查更新…」手动检查，或启动 3 秒后自动检查一次（只在新版本出现时弹窗）
 - 数据来源是随 Release 上传的 `latest.json`，按「下载安装包」的实测速度依次尝试
   v4.gh-proxy.org / ghfast.top / gh-proxy.org / cdn.gh-proxy.org 几个镜像，

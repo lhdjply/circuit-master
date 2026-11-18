@@ -4,6 +4,7 @@
 #include <QApplication>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QFile>
 #include <QFont>
 #include <QHBoxLayout>
 #include <QKeyEvent>
@@ -11,6 +12,9 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QPushButton>
+#include <QTextBrowser>
+#include <QTextCursor>
+#include <QTextDocument>
 #include <QVBoxLayout>
 
 #include <cmath>
@@ -211,6 +215,69 @@ QMessageBox::StandardButton Dialogs::askSaveDiscardCancel(QWidget* parent, const
                       QMessageBox::Save);
 }
 
+void Dialogs::changelog(QWidget* parent)
+{
+    QDialog dialog(parent);
+    dialog.setWindowTitle(QObject::tr("更新日志"));
+    dialog.setModal(true);
+    dialog.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
+    dialog.setStyleSheet(dialogStyleSheet() + QStringLiteral(R"(
+QTextBrowser {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    selection-background-color: #2563eb;
+    selection-color: #ffffff;
+}
+)"));
+
+    auto* outer = new QVBoxLayout(&dialog);
+    outer->setContentsMargins(20, 18, 20, 14);
+    outer->setSpacing(14);
+
+    auto* viewer = new QTextBrowser(&dialog);
+    viewer->setOpenExternalLinks(true);
+
+    // 标题 / 列表的字号颜色统一成界面那套灰阶。必须在灌内容之前设，
+    // QTextDocument 会在灌入时就把默认样式表套上去。
+    viewer->document()->setDefaultStyleSheet(QStringLiteral(R"(
+h1 { font-size: 17px; color: #1e293b; margin: 2px 0 10px 0; }
+h2 { font-size: 15px; color: #1d4ed8; margin: 18px 0 6px 0; }
+h3 { font-size: 13px; color: #334155; margin: 12px 0 4px 0; }
+p, li { color: #334155; font-size: 12.5px; }
+code { color: #1e293b; background-color: #f1f5f9; }
+a { color: #2563eb; }
+)"));
+
+    QFile file(QStringLiteral(":/docs/CHANGELOG.md"));
+    const bool loaded = file.open(QIODevice::ReadOnly | QIODevice::Text);
+    if (loaded) {
+        const QString markdown = QString::fromUtf8(file.readAll());
+        file.close();
+        if (!markdown.trimmed().isEmpty())
+            viewer->setMarkdown(markdown); // Qt 自带 CommonMark 子集的渲染
+    }
+    if (!loaded || viewer->document()->isEmpty()) {
+        viewer->setHtml(QStringLiteral(
+            "<p style='color:#94a3b8'>这个构建里没有内置更新日志。</p>"));
+    }
+    viewer->moveCursor(QTextCursor::Start);
+
+    outer->addWidget(viewer, 1);
+
+    auto* buttonRow = new QHBoxLayout;
+    buttonRow->addStretch(1);
+    auto* close = new QPushButton(QObject::tr("关闭"), &dialog);
+    close->setDefault(true);
+    QObject::connect(close, &QPushButton::clicked, &dialog, &QDialog::accept);
+    buttonRow->addWidget(close);
+    outer->addLayout(buttonRow);
+
+    dialog.resize(660, 560);
+    dialog.exec();
+}
+
 void Dialogs::about(QWidget* parent, const QString& version)
 {
     QDialog dialog(parent);
@@ -301,6 +368,11 @@ QLabel#aboutFoot {
 
     auto* buttonRow = new QHBoxLayout;
     buttonRow->addStretch(1);
+    auto* changelogButton = new QPushButton(QObject::tr("更新日志"), &dialog);
+    changelogButton->setAutoDefault(false);
+    QObject::connect(changelogButton, &QPushButton::clicked, &dialog,
+                     [&dialog] { Dialogs::changelog(&dialog); });
+    buttonRow->addWidget(changelogButton);
     auto* ok = new QPushButton(QObject::tr("确定"), &dialog);
     ok->setDefault(true);
     QObject::connect(ok, &QPushButton::clicked, &dialog, &QDialog::accept);

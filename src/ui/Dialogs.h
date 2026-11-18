@@ -38,6 +38,9 @@ public:
 
     /// 「关于」窗口：左边应用图标，右边版本与简介
     static void about(QWidget* parent, const QString& version);
+
+    /// 「更新日志」窗口：把编进程序的 CHANGELOG.md 按 Markdown 渲染出来
+    static void changelog(QWidget* parent);
 };
 
 } // namespace csm
