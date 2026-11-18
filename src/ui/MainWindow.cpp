@@ -249,10 +249,10 @@ QVector<QPair<QString, QString>> probeSpecs(const Circuit& circuit, const Netlis
         } else if (comp.type == ComponentType::CurrentProbe) {
             probes.append({QStringLiteral("%1 (I)").arg(comp.refdes),
                            QStringLiteral("I(%1)").arg(comp.refdes)});
-        } else if (comp.type == ComponentType::Multimeter) {
-            const QString unit = multimeterModeLetter(comp.multimeterMode);
-            probes.append({QStringLiteral("%1 (%2)").arg(comp.refdes, unit), comp.refdes});
         }
+        // 万用表不进波形监控：读数由它自己的七段码窗口负责，波形页只画 TP / IP
+        if (comp.type == ComponentType::Multimeter)
+            continue;
     }
     return probes;
 }
@@ -285,11 +285,8 @@ bool applyProbeSignals(const Circuit& circuit, const Netlist& net, SimulationRes
         } else if (comp.type == ComponentType::CurrentProbe) {
             probes.append({QStringLiteral("I(%1)").arg(comp.refdes),
                            QStringLiteral("%1 (I)").arg(comp.refdes)});
-        } else if (comp.type == ComponentType::Multimeter) {
-            const QString unit = multimeterModeLetter(comp.multimeterMode);
-            probes.append({comp.refdes,
-                           QStringLiteral("%1 (%2)").arg(comp.refdes, unit)});
         }
+        // 万用表不列进波形页（读数走它自己的窗口），只保留 TP / IP
     }
     if (probes.isEmpty()) {
         result.waves.clear();
@@ -1582,9 +1579,16 @@ void MainWindow::runSimulation()
     applyLedStates(result);
     applyBlownCapacitors(result.blownCapacitors);
 
+    // 波形页只画测试点；万用表不进波形页，但它在实时仿真里要出读数，
+    // 所以「要不要启动实时引擎」得单独看有没有万用表
     const bool hasProbes = applyProbeSignals(circuit, net, result);
-    if (!hasProbes && result.kind != AnalysisKind::OperatingPoint)
-        appendLog(QStringLiteral("⚠ 电路中没有测试点，波形为空。请放置电压测试点（TP）、电流测试点（IP）或万用表（XMM）。"));
+    bool hasMeter = false;
+    for (const Component& comp : circuit.components) {
+        if (comp.type == ComponentType::Multimeter)
+            hasMeter = true;
+    }
+    if (!hasProbes && !hasMeter && result.kind != AnalysisKind::OperatingPoint)
+        appendLog(QStringLiteral("⚠ 电路中没有测试点，波形为空。请放置电压测试点（TP）或电流测试点（IP）。"));
 
     // 结果留着，由用户打开「波形监控」再看；面板开着就顺手刷新
     doc()->lastResult = result;
@@ -1598,7 +1602,7 @@ void MainWindow::runSimulation()
     // 有测试点就进入「运行中」状态（连续仿真），与「运行仿真 / 停止仿真」按钮语义一致。
     // 放在工作点分支之前：否则算完直流工作点就 return，按钮会停在「运行仿真」上，
     // 看起来像「点了就停」。
-    if (hasProbes && m_waveLive && !m_waveLive->isLive())
+    if ((hasProbes || hasMeter) && m_waveLive && !m_waveLive->isLive())
         startLiveScope();
 
     if (result.kind == AnalysisKind::OperatingPoint) {

@@ -65,6 +65,7 @@ class UiWaveformTest : public QObject {
 private slots:
     void initTestCase();
     void yAxisAlwaysCoversTheData();
+    void meterIsNotListedInWaveformMonitor();
     void liveScopeKeepsManualScale();
     void autoScaleAlsoPicksTimeBase();
     void changingTimeBaseKeepsVoltageScale();
@@ -171,6 +172,59 @@ void UiWaveformTest::initTestCase()
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     std::setvbuf(stderr, nullptr, _IONBF, 0);
     csm::installQtTranslations(qApp);
+}
+
+void UiWaveformTest::meterIsNotListedInWaveformMonitor()
+{
+    // 波形页只列电压测试点（TP）与电流测试点（IP）。万用表的读数交给它自己的
+    // 七段码窗口，不进波形列表 —— 否则一个 10 MΩ 内阻的支路混在时域曲线上，
+    // 既占地方又容易被误读。
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    auto* scene = window.findChild<SchematicScene*>();
+    QVERIFY(scene);
+
+    auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 300));
+    source->setRotationAngle(90);
+    Component src = source->component();
+    src.dcValue = 10.0;
+    source->setComponent(src);
+
+    scene->placeComponent(ComponentType::Resistor, QPointF(300, 200));
+    scene->placeComponent(ComponentType::Probe, QPointF(300, 120));   // TP1
+    scene->placeComponent(ComponentType::Multimeter, QPointF(300, 360));
+    scene->placeComponent(ComponentType::Ground, QPointF(100, 500));
+
+    scene->addWire({QPointF(100, 270), QPointF(100, 200), QPointF(270, 200)});
+    scene->addWire({QPointF(300, 150), QPointF(300, 200)});           // TP1 引脚接到 R1 左
+    scene->addWire({QPointF(270, 200), QPointF(270, 360)});           // 表 +
+    scene->addWire({QPointF(330, 200), QPointF(330, 460), QPointF(100, 460), QPointF(100, 500)});
+    scene->addWire({QPointF(100, 330), QPointF(100, 500)});
+    settle();
+
+    window.runSimulation();
+    settle();
+    openMonitor(window, 0);
+    settle();
+
+    auto* plot = plotPanel(window);
+    QVERIFY(plot);
+    auto* list = plot->findChild<QListWidget*>();
+    QVERIFY(list);
+    QVERIFY2(list->count() > 0, "波形页应当有信号");
+
+    bool hasProbe = false;
+    for (int i = 0; i < list->count(); ++i) {
+        const QString text = list->item(i)->text();
+        QVERIFY2(!text.contains(QStringLiteral("XMM")),
+                 qPrintable(QStringLiteral("万用表不该出现在波形页：%1").arg(text)));
+        if (text.contains(QStringLiteral("TP1")))
+            hasProbe = true;
+    }
+    QVERIFY2(hasProbe, "电压测试点应当出现在波形页");
 }
 
 void UiWaveformTest::yAxisAlwaysCoversTheData()
