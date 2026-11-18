@@ -36,6 +36,10 @@ public:
     /// 套接字名字（带用户名），测试里用来确认两个对象用的是同一个
     static QString socketName(const QString& key);
 
+    /// 本进程是否真的在监听。监听失败时 promote() 仍返回 true（宁可多开一个
+    /// 窗口也不能起不来），调用方可以据此判断「单实例」到底生效没有
+    bool listening() const { return m_server != nullptr; }
+
 signals:
     /// 另一个实例发来了「打开这些文件」的请求
     void filesReceived(const QStringList& files);

@@ -40,6 +40,17 @@ int envMs(const char* name, int fallback)
     return ok && v > 0 ? v : fallback;
 }
 
+
+/// 下载过程的跟踪输出。默认关闭，只有 CSM_DOWNLOAD_TRACE=1 时才打印 ——
+/// 走 qWarning 而不是 printf：它进 stderr，测试和 CI 都能原样收到，
+/// 不受 stdout 缓冲影响（出问题时正需要这个）。
+void trace(const QString& message)
+{
+    static const bool enabled = qEnvironmentVariableIsSet("CSM_DOWNLOAD_TRACE");
+    if (enabled)
+        qWarning("[download] %s", qPrintable(message));
+}
+
 int stallCheckMs() { return envMs("CSM_STALL_CHECK_MS", 2000); }
 int stallLimitMs() { return envMs("CSM_STALL_LIMIT_MS", 10000); }
 int slowGraceMs() { return envMs("CSM_SLOW_GRACE_MS", 8000); }
@@ -238,6 +249,7 @@ void UpdateDialog::startAttempt()
     }
 
     const QUrl url = m_urls.at(m_attempt++);
+    trace(QStringLiteral("尝试 %1/%2  %3").arg(m_attempt).arg(m_urls.size()).arg(url.toString()));
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::UserAgentHeader,
                       QStringLiteral("circuit-master/%1").arg(QLatin1String(CSM_VERSION_NUMBER)));
@@ -356,6 +368,10 @@ void UpdateDialog::onStallTick()
     if (!switchAway)
         return;
 
+    trace(QStringLiteral("放弃当前地址（%1）：已收 %2 字节，用时 %3 ms")
+              .arg(why)
+              .arg(m_attemptBytes)
+              .arg(m_attemptClock.elapsed()));
     m_status->setText(why);
     // abort() 会走 finished，那里已经有「换下一条、把已写的字节丢掉」的逻辑
     m_reply->abort();
@@ -373,6 +389,11 @@ void UpdateDialog::onFinished()
 
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     const bool ok = reply->error() == QNetworkReply::NoError && status >= 200 && status < 300;
+    trace(QStringLiteral("结束：HTTP %1，已收 %2 字节，错误 %3（%4）")
+              .arg(status)
+              .arg(m_attemptBytes)
+              .arg(int(reply->error()))
+              .arg(reply->errorString()));
     if (!ok) {
         // 这一条失败就换下一条，并把已写入的字节丢掉重来
         if (m_file) {

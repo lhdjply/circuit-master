@@ -55,6 +55,7 @@
 #include <QValueAxis>
 #include <QWidget>
 #include <cmath>
+#include <cstdio>
 
 using namespace csm;
 
@@ -107,6 +108,10 @@ private:
 void UiPanelTest::initTestCase()
 {
     // 和 main.cpp 一样装上 Qt 自带的中文翻译（输入框右键菜单等）
+    // 崩溃时缓冲区里的输出会丢：Windows 上 stdout 重定向到管道是全缓冲的，
+    // CI 上只会看到「Failed」却不知道停在哪一步。改成不缓冲，一行一行往外写。
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
+    std::setvbuf(stderr, nullptr, _IONBF, 0);
     csm::installQtTranslations(qApp);
 }
 
@@ -647,6 +652,33 @@ void UiPanelTest::libraryDragPixmapHasNoSelectionBackground()
     QVERIFY2(bluish < opaque / 2, "拖影仍带有蓝色选中背景");
 }
 
-QTEST_MAIN(UiPanelTest)
+int main(int argc, char* argv[])
+{
+    QApplication app(argc, argv);
+
+    // QTest 的日志默认写 stdout，而 Windows CI 上**这个进程的 stdout 收不到**
+    // （实测一行都没进 ctest 的日志，QTest 的 PASS/FAIL 和 qwarn 全丢）。
+    // 所以让它写到文件，跑完原样倒到 stderr —— stderr 各平台都通。
+    QStringList args;
+    for (int i = 0; i < argc; ++i)
+        args << QString::fromLocal8Bit(argv[i]);
+    const QString logPath = QDir(QCoreApplication::applicationDirPath())
+                                .filePath(QStringLiteral("panel-qtest.log"));
+    QFile::remove(logPath);
+    args << QStringLiteral("-o") << logPath + QStringLiteral(",txt");
+
+    UiPanelTest testCase;
+    const int failures = QTest::qExec(&testCase, args);
+
+    QFile logFile(logPath);
+    if (logFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        const QByteArray data = logFile.readAll();
+        logFile.close();
+        std::fwrite(data.constData(), 1, size_t(data.size()), stderr);
+        std::fflush(stderr);
+    }
+    QFile::remove(logPath);
+    return failures;
+}
 
 #include "test_ui_panel.moc"

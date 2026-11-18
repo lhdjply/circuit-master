@@ -25,9 +25,15 @@ SingleInstance::~SingleInstance()
 {
     if (!m_server)
         return;
+    // 先断开所有回调：close() 会掐断挂着的连接，socket 在析构时可能补发
+    // disconnected —— 那时本对象已经拆到一半，进去就是野指针
+    m_server->disconnect(this);
+    for (QLocalSocket* socket : m_server->findChildren<QLocalSocket*>())
+        socket->disconnect(this);
     m_server->close();
     QLocalServer::removeServer(m_socketName);
     delete m_server;
+    m_server = nullptr;
 }
 
 QString SingleInstance::socketName(const QString& key)
@@ -98,7 +104,7 @@ void SingleInstance::acceptConnection()
             socket->setProperty("buffer",
                                 socket->property("buffer").toByteArray() + socket->readAll());
         });
-        connect(socket, &QLocalSocket::disconnected, this, [this, socket] {
+        connect(socket, &QLocalSocket::disconnected, socket, [this, socket] {
             const QStringList lines =
                 QString::fromUtf8(socket->property("buffer").toByteArray())
                     .split(QLatin1Char('\n'));

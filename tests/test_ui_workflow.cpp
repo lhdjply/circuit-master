@@ -56,6 +56,7 @@
 #include <QValueAxis>
 #include <QWidget>
 #include <cmath>
+#include <cstdio>
 
 using namespace csm;
 
@@ -192,6 +193,10 @@ private:
 void UiWorkflowTest::initTestCase()
 {
     // 和 main.cpp 一样装上 Qt 自带的中文翻译（输入框右键菜单等）
+    // 崩溃时缓冲区里的输出会丢：Windows 上 stdout 重定向到管道是全缓冲的，
+    // CI 上只会看到「Failed」却不知道停在哪一步。改成不缓冲，一行一行往外写。
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
+    std::setvbuf(stderr, nullptr, _IONBF, 0);
     csm::installQtTranslations(qApp);
 }
 
@@ -324,19 +329,27 @@ void UiWorkflowTest::updateDownloadSkipsStalledMirror()
         }
     });
 
+    // 镜像表里只放「卡住的那个」，asset 直链本身就是正常服务器。
+    // 于是候选地址正好是：先走镜像（卡住 → 放弃），再走直链（成功）——
+    // 不去拼「http://host/http://host/pkg.bin」那种靠服务器忽略路径才成立的
+    // 怪地址，那种 URL 在不同平台上被规范化的方式不一定一样。
     const QUrl fastUrl(QStringLiteral("http://127.0.0.1:%1/pkg.bin").arg(fast.serverPort()));
     UpdateChecker::setBuiltinMirrors(
-        {QStringLiteral("http://127.0.0.1:%1").arg(slow.serverPort()),
-         QStringLiteral("http://127.0.0.1:%1").arg(fast.serverPort())});
+        {QStringLiteral("http://127.0.0.1:%1").arg(slow.serverPort())});
 
     // 把阈值压到毫秒级，测试不必等十秒
     qputenv("CSM_STALL_CHECK_MS", "100");
     qputenv("CSM_STALL_LIMIT_MS", "500");
     qputenv("CSM_SLOW_GRACE_MS", "600000"); // 关掉「太慢」那条，只测「没数据」
+    // 打开下载跟踪：这个用例依赖本地 TCP 的时序，出问题时必须能看到
+    // 到底试了哪些地址、每条为什么放弃。跟踪走 qWarning（stderr），
+    // 不受 stdout 缓冲影响
+    qputenv("CSM_DOWNLOAD_TRACE", "1");
     auto restoreEnv = qScopeGuard([] {
         qunsetenv("CSM_STALL_CHECK_MS");
         qunsetenv("CSM_STALL_LIMIT_MS");
         qunsetenv("CSM_SLOW_GRACE_MS");
+        qunsetenv("CSM_DOWNLOAD_TRACE");
     });
 
     ReleaseInfo release;
@@ -881,6 +894,11 @@ void UiWorkflowTest::secondLaunchOpensInExistingWindow()
 
     SingleInstance primary(key);
     QVERIFY2(primary.promote({}), "第一个实例应当拿到锁");
+    if (!primary.listening()) {
+        // 受限环境（某些 CI 沙箱、只读的临时目录）里建不了本地套接字。
+        // promote() 那时会退化成「不启用单实例」，这里跳过而不是误报失败。
+        QSKIP("本机无法创建本地套接字，单实例不可用");
+    }
 
     // 运行中的窗口接到请求就开标签（和 main.cpp 里的接线一致）
     int received = 0;
@@ -1339,6 +1357,33 @@ void UiWorkflowTest::captureMainWindow()
 }
 
 // 测试入口放在按文件名排序的最后一个文件里（原来那个只做入口的
-QTEST_MAIN(UiWorkflowTest)
+int main(int argc, char* argv[])
+{
+    QApplication app(argc, argv);
+
+    // QTest 的日志默认写 stdout，而 Windows CI 上**这个进程的 stdout 收不到**
+    // （实测一行都没进 ctest 的日志，QTest 的 PASS/FAIL 和 qwarn 全丢）。
+    // 所以让它写到文件，跑完原样倒到 stderr —— stderr 各平台都通。
+    QStringList args;
+    for (int i = 0; i < argc; ++i)
+        args << QString::fromLocal8Bit(argv[i]);
+    const QString logPath = QDir(QCoreApplication::applicationDirPath())
+                                .filePath(QStringLiteral("workflow-qtest.log"));
+    QFile::remove(logPath);
+    args << QStringLiteral("-o") << logPath + QStringLiteral(",txt");
+
+    UiWorkflowTest testCase;
+    const int failures = QTest::qExec(&testCase, args);
+
+    QFile logFile(logPath);
+    if (logFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        const QByteArray data = logFile.readAll();
+        logFile.close();
+        std::fwrite(data.constData(), 1, size_t(data.size()), stderr);
+        std::fflush(stderr);
+    }
+    QFile::remove(logPath);
+    return failures;
+}
 
 #include "test_ui_workflow.moc"
