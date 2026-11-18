@@ -112,6 +112,7 @@ private slots:
     void allPinsLandOnGrid();
     void groundRequired();
     void meterServesAsReferenceWithoutGround();
+    void anyGroundKindCanServeAsReference();
 };
 
 void CoreAnalysisTest::suggestedStepUsesPulseWidthNotEdge()
@@ -545,6 +546,84 @@ void CoreAnalysisTest::allPinsLandOnGrid()
             }
         }
     }
+}
+
+void CoreAnalysisTest::anyGroundKindCanServeAsReference()
+{
+    // 只画了 AGND、没画 GND 的电路也要能仿真：参考点取哪一个只影响读数基准，
+    // 不影响电路本身的方程。「五种地相互隔离」说的是它们各自成网，不是
+    // 「必须有 GND」。
+    Circuit c;
+
+    Component source;
+    source.id = 1;
+    source.type = ComponentType::VoltageSource;
+    source.pos = QPointF(300, 200);
+    source.refdes = QStringLiteral("V1");
+    source.dcValue = 10.0;
+    c.components.append(source);
+
+    // 源的两个引脚正好落在两个元件的位置上：不需要画线也算连接
+    Component probe;
+    probe.id = 2;
+    probe.type = ComponentType::Probe;
+    probe.pos = QPointF(270, 200); // 落在 V1 的 0 号引脚上
+    probe.refdes = QStringLiteral("TP1");
+    probe.groundKind = GroundKind::Agnd; // 以 AGND 为参考
+    c.components.append(probe);
+
+    Component agnd;
+    agnd.id = 3;
+    agnd.type = ComponentType::Ground;
+    agnd.pos = QPointF(330, 200); // 落在 V1 的 1 号引脚上
+    agnd.refdes = QStringLiteral("GND1");
+    agnd.groundKind = GroundKind::Agnd; // 只画了 AGND，没有 GND
+    c.components.append(agnd);
+
+    const Netlist net = c.buildNetlist();
+    QVERIFY2(net.valid, qPrintable(net.error));
+    // 参考节点是 AGND 那个根
+    QCOMPARE(net.nodeOf(agnd.id, 0), 0);
+    QVERIFY(net.nodeOf(source.id, 0) > 0);
+    // 应当说清楚参考点是怎么来的
+    bool told = false;
+    for (const QString& warning : net.warnings) {
+        if (warning.contains(QStringLiteral("AGND")) && warning.contains(QStringLiteral("参考节点")))
+            told = true;
+    }
+    QVERIFY2(told, "应当提示已把 AGND 当作参考节点");
+
+    SimulationOptions options;
+    options.kind = AnalysisKind::Transient;
+    options.tStop = 1e-3;
+    options.tStep = 1e-4;
+    const SimulationResult result = Simulator::run(c, options);
+    QVERIFY2(result.ok, qPrintable(result.error));
+    // AGND 是节点 0，源的正端就是 10 V
+    const Signal* reading = result.signal(QStringLiteral("V(%1)").arg(net.nodeOf(source.id, 0)));
+    QVERIFY(reading);
+    QVERIFY2(near(reading->y.last(), 10.0, 1e-6),
+             qPrintable(QString::number(reading->y.last())));
+
+    // 同时画了 GND 和 AGND 时，AGND 仍然是独立网络（原有行为不变）
+    Circuit mixed;
+    Component g;
+    g.id = 1;
+    g.type = ComponentType::Ground;
+    g.pos = QPointF(0, 0);
+    g.refdes = QStringLiteral("GND1");
+    mixed.components.append(g);
+    Component a;
+    a.id = 2;
+    a.type = ComponentType::Ground;
+    a.pos = QPointF(200, 0);
+    a.refdes = QStringLiteral("GND2");
+    a.groundKind = GroundKind::Agnd;
+    mixed.components.append(a);
+    const Netlist mixedNet = mixed.buildNetlist();
+    QVERIFY(mixedNet.valid);
+    QCOMPARE(mixedNet.nodeOf(g.id, 0), 0);
+    QVERIFY(mixedNet.nodeOf(a.id, 0) > 0); // AGND 不是 0
 }
 
 void CoreAnalysisTest::meterServesAsReferenceWithoutGround()

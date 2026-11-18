@@ -170,7 +170,30 @@ Netlist Netlist::build(const Circuit& circuit)
         }
     }
     if (!hasGround) {
-        // 没有 GND 但有万用表：拿它的负端（1 号引脚，真表上的 COM）当参考节点。
+        // 没有主接地（GND），但画了别的种类的地（AGND / DGND / PGND / EARTH）：
+        // 拿第一个当地参考节点。「五种地相互隔离」说的是它们各自成网，
+        // 不是「必须有 GND 才能仿真」—— 参考点取哪一个只影响读数基准，
+        // 不影响电路本身的方程。
+        const Component* groundReference = nullptr;
+        for (const Component& comp : circuit.components) {
+            if (comp.type == ComponentType::Ground) {
+                groundReference = &comp;
+                break;
+            }
+        }
+        if (groundReference) {
+            const int root = dsu.find(dsu.add(toKey(groundReference->pinPosition(0), grid)));
+            if (!groundRoots.contains(root))
+                groundRoots.append(root);
+            net.warnings << QStringLiteral(
+                                "电路里没有 GND，已把 %1 当作参考节点（0 V）。")
+                                .arg(groundKindName(groundReference->groundKind));
+            hasGround = true;
+        }
+    }
+
+    if (!hasGround) {
+        // 连地都没画，但有万用表：拿它的负端（1 号引脚，真表上的 COM）当参考节点。
         // 万用表本来就是两脚表，读数只看两端之差；把 COM 定成 0 V 之后，
         // 其余节点的电压都相对它 —— 和真表接在电路里的情形一致。
         const Component* reference = nullptr;
@@ -211,6 +234,8 @@ Netlist Netlist::build(const Circuit& circuit)
             continue;
         int node = 0;
         for (int root : kindRoots.value(kind)) {
+            if (rootToNode.contains(root))
+                continue; // 已经当参考节点（0 V）了，别再分配新号
             if (node == 0) {
                 node = nextNode++;
                 rootToNode.insert(root, node);
