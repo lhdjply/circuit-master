@@ -70,6 +70,7 @@ private slots:
     void dcMeterShowsMinusOnly();
     void sevenSegmentRoundsUpWithoutLosingADigit();
     void meterWindowFollowsMode();
+    void monitorNeedsGroundButMeterDoesNot();
     void netLabelFromPanelAndLibrary();
     void netLabelFollowsRotation();
 
@@ -88,7 +89,7 @@ private:
 
     /// 搭一个能跑实时仿真的最小电路：源 + 电阻 + 万用表（跨在电阻两端）+ 地。
     /// 读数窗口只在实时仿真运行时才允许打开，所以用例得先把仿真跑起来。
-    static ComponentItem* buildLiveCircuit(MainWindow& window)
+    static ComponentItem* buildLiveCircuit(MainWindow& window, bool withGround = true)
     {
         auto* scene = currentScene(window);
         if (!scene)
@@ -99,7 +100,8 @@ private:
         auto* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(260, 200));
         auto* meter = scene->placeComponent(ComponentType::Multimeter, QPointF(260, 340));
         meter->setRotationAngle(270);
-        scene->placeComponent(ComponentType::Ground, QPointF(100, 420));
+        if (withGround)
+            scene->placeComponent(ComponentType::Ground, QPointF(100, 420));
 
         scene->addWire({QPointF(100, 270), QPointF(100, 200), QPointF(230, 200)});
         scene->addWire({QPointF(290, 200), QPointF(360, 200), QPointF(360, 340),
@@ -417,6 +419,39 @@ void UiMeterTest::sevenSegmentRoundsUpWithoutLosingADigit()
                                 .arg(display.readoutText(), display.displayedUnit())
                                 .arg(shown)));
     }
+}
+
+void UiMeterTest::monitorNeedsGroundButMeterDoesNot()
+{
+    // 没有 GND 的电路（参考点由万用表负端顶替）：仿真照常能跑、万用表读数窗口
+    // 能开，但**波形监控不给开** —— 节点电压之间没有统一基准，画出来没意义。
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    ComponentItem* item = buildLiveCircuit(window, /*withGround=*/false);
+    QVERIFY(item);
+
+    window.runSimulation();
+    settle();
+    if (!livePanel(window) || !livePanel(window)->isLive())
+        QSKIP("本机没能进入实时仿真，跳过");
+
+    QAction* monitor = nullptr;
+    for (QAction* action : window.findChildren<QAction*>()) {
+        if (action->text() == QStringLiteral("波形监控"))
+            monitor = action;
+    }
+    QVERIFY(monitor);
+    QVERIFY2(!monitor->isEnabled(),
+             "没有 GND 时波形监控不应当可用（参考点由万用表负端顶替）");
+
+    // 但万用表读数窗口照常能开
+    item->setSelected(true);
+    settle();
+    QVERIFY2(window.findChild<MultimeterWindow*>() != nullptr,
+             "没有 GND 时万用表读数窗口仍应能打开");
 }
 
 void UiMeterTest::meterWindowFollowsMode()

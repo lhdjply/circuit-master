@@ -1260,6 +1260,17 @@ void MainWindow::onSelectionChanged()
     m_actRotate->setEnabled(item != nullptr && supportsRotation(item->component().type));
 }
 
+bool MainWindow::monitorAvailable() const
+{
+    if (!m_scene)
+        return false;
+    for (const Component& comp : m_scene->toCircuit().components) {
+        if (comp.type == ComponentType::Ground)
+            return true;
+    }
+    return false;
+}
+
 bool MainWindow::meterReadoutAvailable() const
 {
     // 只有实时仿真在跑的时候读数才有意义（静态结果那份留在波形页里看）
@@ -1701,6 +1712,20 @@ void MainWindow::createMonitorWindow()
         // 免得留在桌面上显示一堆不再更新的数字
         if (!running)
             closeMeterWindows();
+
+        // 没有 GND 的电路不开波形监控：参考点由万用表负端顶替，
+        // 节点电压之间没有统一基准，画出来也没意义。
+        if (m_actMonitor && running && !monitorAvailable()) {
+            m_actMonitor->setEnabled(false);
+            m_actMonitor->setToolTip(QStringLiteral(
+                "波形监控需要有接地符号（GND）。当前电路没有 GND，只能看万用表读数。"));
+            if (m_actMonitor->isChecked()) {
+                const QSignalBlocker blocker(m_actMonitor);
+                m_actMonitor->setChecked(false);
+            }
+            if (m_waveWindow)
+                m_waveWindow->hide();
+        }
     });
     // 刻度改动记进 doc()->options，保存工程时一并写入
     connect(m_waveLive, &WaveformWindow::liveScalesChanged, this,
@@ -1764,6 +1789,17 @@ void MainWindow::showMonitor(int tab)
 {
     if (!m_waveWindow)
         return;
+    if (!monitorAvailable()) {
+        // 没有 GND：参考点由万用表负端顶替，节点电压之间没有统一基准，
+        // 波形画出来也没有意义。万用表读数窗口照常可用。
+        appendLog(QStringLiteral(
+            "波形监控需要有接地符号（GND）。当前电路没有 GND，只能看万用表读数。"));
+        if (m_actMonitor) {
+            const QSignalBlocker blocker(m_actMonitor);
+            m_actMonitor->setChecked(false);
+        }
+        return;
+    }
     m_waveWindow->show();
     m_waveWindow->raise();
     m_waveWindow->activateWindow();
