@@ -124,6 +124,7 @@ target_compile_options(csm_core PRIVATE -Wall -Wextra -Wno-unused-parameter)
 # ---------------------------------------------------------------- 图形界面
 set(CSM_UI_SOURCES
     src/ui/I18n.cpp
+    src/ui/Dialogs.cpp
     src/ui/Symbols.cpp
     src/ui/ComponentItem.cpp
     src/ui/WireItem.cpp
@@ -137,6 +138,7 @@ set(CSM_UI_SOURCES
 )
 set(CSM_UI_HEADERS
     src/ui/I18n.h
+    src/ui/Dialogs.h
     src/ui/Symbols.h
     src/ui/ComponentItem.h
     src/ui/WireItem.h

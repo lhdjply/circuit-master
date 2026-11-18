@@ -3,6 +3,7 @@
 #include "core/Circuit.h"
 
 #include "core/Units.h"
+#include "ui/Dialogs.h"
 
 #include <QChart>
 #include <QCloseEvent>
@@ -1406,7 +1407,7 @@ void WaveformWindow::exportCsv()
 
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, QStringLiteral("导出失败"), file.errorString());
+        Dialogs::warn(this, QStringLiteral("导出失败"), file.errorString());
         return;
     }
     QTextStream out(&file);
@@ -1436,7 +1437,7 @@ void WaveformWindow::exportImage()
         return;
     const QPixmap shot = m_view->grab();
     if (!shot.save(path))
-        QMessageBox::warning(this, QStringLiteral("导出失败"), QStringLiteral("无法写入图片文件。"));
+        Dialogs::warn(this, QStringLiteral("导出失败"), QStringLiteral("无法写入图片文件。"));
 }
 
 } // namespace csm

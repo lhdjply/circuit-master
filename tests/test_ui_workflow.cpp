@@ -827,8 +827,10 @@ void UiWorkflowTest::runWithoutProbesStillRuns()
     QVERIFY2(live->isLive(), "没有测试点也应当启动仿真");
     QCOMPARE(run->text(), QStringLiteral("停止仿真"));
 
-    // 不应该弹模态提示框
-    for (QMessageBox* box : window.findChildren<QMessageBox*>())
+    // 不应该弹模态提示框。
+    // 提示框现在是自绘的 QDialog（见 ui/Dialogs.cpp），不再用 QMessageBox，
+    // 所以这里按「有没有可见的模态对话框」判断，而不是只找 QMessageBox。
+    for (QDialog* box : window.findChildren<QDialog*>())
         QVERIFY2(!box->isVisible(), "不应弹出提示框打断");
 
     // 面板里要有说明

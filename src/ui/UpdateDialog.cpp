@@ -1,6 +1,7 @@
 #include "ui/UpdateDialog.h"
 
 #include "csm_version.h"
+#include "ui/Dialogs.h"
 
 #include <QApplication>
 #include <QProcess>

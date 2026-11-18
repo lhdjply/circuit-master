@@ -15,6 +15,7 @@
 #include "ui/Symbols.h"
 #include "ui/UpdateDialog.h"
 #include "ui/WaveformWindow.h"
+#include "ui/Dialogs.h"
 
 #include <QAbstractItemView>
 #include <QAction>
@@ -1153,7 +1154,7 @@ bool MainWindow::saveCircuit()
     const Circuit circuit = m_scene->toCircuit();
     QFile file(m_filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, QStringLiteral("保存失败"), file.errorString());
+        Dialogs::warn(this, QStringLiteral("保存失败"), file.errorString());
         return false;
     }
     QJsonObject root = circuit.toJson();
@@ -1201,7 +1202,7 @@ bool MainWindow::openPath(const QString& path)
 {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, QStringLiteral("打开失败"), file.errorString());
+        Dialogs::warn(this, QStringLiteral("打开失败"), file.errorString());
         return false;
     }
     const QByteArray data = file.readAll();
@@ -1210,7 +1211,7 @@ bool MainWindow::openPath(const QString& path)
     QJsonParseError parseError;
     const QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
     if (doc.isNull()) {
-        QMessageBox::warning(this, QStringLiteral("打开失败"),
+        Dialogs::warn(this, QStringLiteral("打开失败"),
                              QStringLiteral("JSON 解析错误：%1").arg(parseError.errorString()));
         return false;
     }
@@ -1219,11 +1220,11 @@ bool MainWindow::openPath(const QString& path)
     const QJsonObject root = doc.object();
     const Circuit circuit = Circuit::fromJson(root, &error);
     if (!error.isEmpty()) {
-        QMessageBox::warning(this, QStringLiteral("打开失败"), error);
+        Dialogs::warn(this, QStringLiteral("打开失败"), error);
         return false;
     }
     if (circuit.components.isEmpty()) {
-        QMessageBox::warning(this, QStringLiteral("打开失败"),
+        Dialogs::warn(this, QStringLiteral("打开失败"),
                              QStringLiteral("文件中没有元件。"));
         return false;
     }
@@ -1246,14 +1247,14 @@ void MainWindow::runSimulation()
 {
     const Circuit circuit = m_scene->toCircuit();
     if (circuit.components.isEmpty()) {
-        QMessageBox::information(this, QStringLiteral("无法仿真"),
+        Dialogs::info(this, QStringLiteral("无法仿真"),
                                  QStringLiteral("请先放置元件并连接电路。"));
         return;
     }
 
     const Netlist net = circuit.buildNetlist();
     if (!net.valid) {
-        QMessageBox::warning(this, QStringLiteral("电路检查未通过"), net.error);
+        Dialogs::warn(this, QStringLiteral("电路检查未通过"), net.error);
         return;
     }
     for (const QString& warning : net.warnings)
@@ -1270,7 +1271,7 @@ void MainWindow::runSimulation()
 
     if (!result.ok) {
         appendLog(QStringLiteral("✘ 仿真失败：") + result.error);
-        QMessageBox::critical(this, QStringLiteral("仿真失败"), result.error);
+        Dialogs::error(this, QStringLiteral("仿真失败"), result.error);
         return;
     }
 
@@ -1506,7 +1507,7 @@ bool MainWindow::startLiveScope()
     const Circuit circuit = m_scene->toCircuit();
     const Netlist net = circuit.buildNetlist();
     if (!net.valid) {
-        QMessageBox::warning(this, QStringLiteral("无法运行示波器"), net.error);
+        Dialogs::warn(this, QStringLiteral("无法运行示波器"), net.error);
         return false;
     }
 
@@ -1558,7 +1559,7 @@ void MainWindow::loadExample(int index)
 
     QFile file(m_examplePaths.at(index));
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QMessageBox::warning(this, QStringLiteral("无法打开示例"), file.errorString());
+        Dialogs::warn(this, QStringLiteral("无法打开示例"), file.errorString());
         return;
     }
     const QByteArray data = file.readAll();
@@ -1567,7 +1568,7 @@ void MainWindow::loadExample(int index)
     QJsonParseError parseError;
     const QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
     if (doc.isNull()) {
-        QMessageBox::warning(this, QStringLiteral("示例损坏"),
+        Dialogs::warn(this, QStringLiteral("示例损坏"),
                              QStringLiteral("JSON 解析错误：%1").arg(parseError.errorString()));
         return;
     }
@@ -1576,7 +1577,7 @@ void MainWindow::loadExample(int index)
     const QJsonObject root = doc.object();
     const Circuit circuit = Circuit::fromJson(root, &circuitError);
     if (!circuitError.isEmpty() || circuit.components.isEmpty()) {
-        QMessageBox::warning(this, QStringLiteral("示例损坏"),
+        Dialogs::warn(this, QStringLiteral("示例损坏"),
                              circuitError.isEmpty() ? QStringLiteral("示例中没有元件。")
                                                     : circuitError);
         return;
@@ -1720,7 +1721,7 @@ void MainWindow::checkForUpdates(bool manual)
                 appendLog(QStringLiteral("检查更新失败：%1").arg(reason));
                 // 自动检查失败是后台的一次尝试，不打扰；手动检查必须给出可读原因
                 if (manual) {
-                    QMessageBox::warning(this, QStringLiteral("检查更新"),
+                    Dialogs::warn(this, QStringLiteral("检查更新"),
                                          QStringLiteral("无法检查更新：\n%1").arg(reason));
                 }
             });
@@ -1728,8 +1729,7 @@ void MainWindow::checkForUpdates(bool manual)
             [this, checker, manual](const QString& current) {
                 checker->deleteLater();
                 if (manual) {
-                    QMessageBox::information(
-                        this, QStringLiteral("检查更新"),
+                    Dialogs::info(this, QStringLiteral("检查更新"),
                         QStringLiteral("已是最新版本（v%1）。").arg(current));
                 }
             });
@@ -1741,37 +1741,22 @@ void MainWindow::checkForUpdates(bool manual)
 
 void MainWindow::showQuickGuide()
 {
-    QMessageBox box(this);
-    box.setWindowTitle(QStringLiteral("快速上手"));
-    box.setIcon(QMessageBox::Information);
-    box.setTextFormat(Qt::RichText);
-    box.setText(QStringLiteral(
+    Dialogs::guide(this, QStringLiteral("快速上手"), QStringLiteral(
         "<b>三步完成一次仿真</b>"
         "<ol>"
         "<li>从左侧<b>元件库</b>把元件拖到画布上；选中后按 <b>空格</b> 旋转。</li>"
         "<li>点击工具栏<b>连线</b>（W），在引脚处单击并拖出折线，双击结束。<br>"
         "导线端点吸附到引脚后会自动出现连接点。</li>"
         "<li>双击元件修改数值（可直接写 10kΩ、4.7µF、1mH，不写单位按默认单位），"
-        "按 <b>F5</b> 运行仿真，"
-        "波形会显示在查看器中。</li>"
+        "按 <b>F5</b> 运行仿真，波形显示在查看器中。</li>"
         "</ol>"
         "<b>注意</b>：电路必须包含接地符号（GND），否则无法确定参考电位。<br><br>"
-        "<span style='color:#64748b'>提示：菜单「仿真 → 示例电路」内置 6 个可直接运行的例子。</span>"));
-    box.exec();
+        "<span style='color:#64748b'>提示：菜单「仿真 → 示例电路」内置多个可直接运行的例子。</span>"));
 }
 
 void MainWindow::showAbout()
 {
-    QMessageBox::about(
-        this, QStringLiteral("关于电路仿真大师"),
-        QStringLiteral(
-            "<h3>电路仿真大师 %1</h3>"
-            "<p>基于 Qt6 / C++17 / CMake 的跨平台电路原理图与仿真软件。</p>"
-            "<p>求解器：改进节点法（MNA）+ 牛顿-拉夫逊迭代；<br>"
-            "支持直流工作点、后向欧拉瞬态分析与交流小信号扫频。</p>"
-            "<p>元件：电阻、电容、电感、二极管、运放、开关、电压/电流源、测试点、接地。</p>"
-            "<p style='color:#64748b'>本程序为自由软件，可作为 Multisim 在 Linux 上的替代方案。</p>")
-            .arg(QStringLiteral(CSM_VERSION_STRING)));
+    Dialogs::about(this, QStringLiteral(CSM_VERSION_STRING));
 }
 
 bool MainWindow::maybeSave()
@@ -1779,10 +1764,9 @@ bool MainWindow::maybeSave()
     if (!m_dirty)
         return true;
 
-    const QMessageBox::StandardButton button = QMessageBox::question(
+    const QMessageBox::StandardButton button = Dialogs::askSaveDiscardCancel(
         this, QStringLiteral("保存更改"),
-        QStringLiteral("「%1」有未保存的更改，是否保存？").arg(m_documentName),
-        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel, QMessageBox::Save);
+        QStringLiteral("「%1」有未保存的更改，是否保存？").arg(m_documentName));
 
     if (button == QMessageBox::Save)
         return saveCircuit();
