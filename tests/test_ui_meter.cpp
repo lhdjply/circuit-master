@@ -1,0 +1,486 @@
+#include "core/Circuit.h"
+#include "core/Netlist.h"
+#include "csm_platform.h"
+#include "csm_version.h"
+#include "ui/ComponentItem.h"
+#include "ui/I18n.h"
+#include "ui/MainWindow.h"
+#include "ui/MultimeterWindow.h"
+#include "ui/PropertyPanel.h"
+#include "ui/SchematicScene.h"
+#include "ui/SchematicView.h"
+#include "ui/Symbols.h"
+#include "ui/UpdateDialog.h"
+#include "ui/WaveformWindow.h"
+#include "ui/WireItem.h"
+
+#include <QAbstractAxis>
+#include <QAction>
+#include <QApplication>
+#include <QChart>
+#include <QChartView>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QDialog>
+#include <QDir>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QElapsedTimer>
+#include <QFile>
+#include <QFileInfo>
+#include <QGraphicsSceneMouseEvent>
+#include <QIcon>
+#include <QJsonDocument>
+#include <QLabel>
+#include <QLineEdit>
+#include <QLineSeries>
+#include <QListWidget>
+#include <QMenu>
+#include <QMessageBox>
+#include <QMimeData>
+#include <QPixmap>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QScopeGuard>
+#include <QSet>
+#include <QSignalSpy>
+#include <QStackedWidget>
+#include <QStandardPaths>
+#include <QTabWidget>
+#include <QTcpServer>
+#include <QTcpSocket>
+#include <QTemporaryDir>
+#include <QTest>
+#include <QTimer>
+#include <QValueAxis>
+#include <cmath>
+
+using namespace csm;
+
+class UiMeterTest : public QObject {
+    Q_OBJECT
+
+private slots:
+    void initTestCase();
+    void multimeterModeFromPanel();
+    void multimeterReadoutWindowOpensOnClick();
+    void sevenSegmentDigitsFillTheDisplay();
+    void sevenSegmentRangeDoesNotFlicker();
+    void dcMeterShowsMinusOnly();
+    void sevenSegmentRoundsUpWithoutLosingADigit();
+    void meterWindowFollowsModeAndGoesStale();
+    void netLabelFromPanelAndLibrary();
+    void netLabelFollowsRotation();
+
+private:
+    // 下面几个是本文件自用的界面操作辅助。为了每个测试文件彻底独立
+    // （删掉别的文件也不影响自己），各留一份，不再共用头文件。
+    static void settle(int rounds = 3)
+    {
+        for (int i = 0; i < rounds; ++i)
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+    }
+
+    static void waitShown(MainWindow& window)
+    {
+        QTRY_VERIFY_WITH_TIMEOUT(window.isVisible(), 3000);
+        settle();
+    }
+};
+
+void UiMeterTest::initTestCase()
+{
+    // 和 main.cpp 一样装上 Qt 自带的中文翻译（输入框右键菜单等）
+    csm::installQtTranslations(qApp);
+}
+
+void UiMeterTest::multimeterModeFromPanel()
+{
+    // 万用表：元件库有入口，属性面板能切换档位，符号文字跟着变
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    auto* scene = window.findChild<SchematicScene*>();
+    QVERIFY(scene);
+    auto* item = scene->placeComponent(ComponentType::Multimeter, QPointF(300, 300));
+    QVERIFY(item);
+    item->setSelected(true); // 属性面板跟随选中项
+    settle();
+    QCOMPARE(item->component().refdes, QStringLiteral("XMM1"));
+    QCOMPARE(item->component().multimeterMode, MultimeterMode::Voltage);
+
+    auto* panel = window.findChild<PropertyPanel*>();
+    QVERIFY(panel);
+    auto* mode = panel->findChild<QComboBox*>(
+        QStringLiteral("multimeterModeCombo"));
+    QVERIFY2(mode, "属性面板里应当有档位下拉框");
+    QCOMPARE(mode->currentData().toInt(), int(MultimeterMode::Voltage));
+
+    mode->setCurrentIndex(mode->findData(int(MultimeterMode::Current)));
+    settle();
+    QCOMPARE(item->component().multimeterMode, MultimeterMode::Current);
+
+    // 电流档串进回路后，工作点应当测到电流（波形页会有 XMM1 信号）
+    mode->setCurrentIndex(mode->findData(int(MultimeterMode::Resistance)));
+    settle();
+    QCOMPARE(item->component().multimeterMode, MultimeterMode::Resistance);
+}
+
+void UiMeterTest::multimeterReadoutWindowOpensOnClick()
+{
+    // 仿真时点击万用表应弹出七段码读数窗口；删掉元件窗口跟着关闭
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    auto* scene = window.findChild<SchematicScene*>();
+    QVERIFY(scene);
+    auto* item = scene->placeComponent(ComponentType::Multimeter, QPointF(300, 300));
+    QVERIFY(item);
+    settle();
+
+    // 选中 = 点击：读数窗口应当出现
+    item->setSelected(true);
+    settle();
+    auto* meterWindow = window.findChild<MultimeterWindow*>();
+    QVERIFY2(meterWindow, "点击万用表后应当弹出读数窗口");
+    QCOMPARE(meterWindow->refdes(), QStringLiteral("XMM1"));
+    QVERIFY(meterWindow->isVisible());
+
+    // 窗口里应当有七段码显示和位数选择
+    QVERIFY(meterWindow->findChild<SevenSegmentDisplay*>() != nullptr);
+
+    // 删掉元件，窗口自动关闭
+    QAction* deleteAction = nullptr;
+    for (QAction* action : window.findChildren<QAction*>()) {
+        if (action->text() == QStringLiteral("删除"))
+            deleteAction = action;
+    }
+    QVERIFY(deleteAction);
+    deleteAction->trigger();
+    // 测试用 processEvents 驱动事件循环，DeferredDelete 要显式冲一下才会销毁
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    settle();
+    QVERIFY2(window.findChild<MultimeterWindow*>() == nullptr,
+             "删除万用表后读数窗口应当关闭");
+}
+
+void UiMeterTest::sevenSegmentDigitsFillTheDisplay()
+{
+    // 回归：drawDigit 曾经漏加 pos.y()，除顶段以外的段全挤在控件顶部，
+    // 读数完全看不出是数字。这里用「亮段的包围盒」把位置和大小都盯住。
+    SevenSegmentDisplay display;
+    display.resize(420, 180);
+    // 不画单位：右下角的单位文字也是绿色，会把包围盒往下拽，干扰几何判断
+    display.setUnit(QString());
+    display.setDigits(MultimeterDigits::Half4);
+    display.setValue(2.4999);
+    display.show();
+    settle();
+
+    const QImage image = display.grab().toImage();
+    QVERIFY(!image.isNull());
+
+    int minX = image.width(), maxX = -1, minY = image.height(), maxY = -1;
+    for (int y = 0; y < image.height(); ++y) {
+        for (int x = 0; x < image.width(); ++x) {
+            const QColor c = image.pixelColor(x, y);
+            // 亮段是荧光绿：绿色明显高于红蓝
+            if (c.green() > 150 && c.green() > c.red() + 60 && c.green() > c.blue() + 60) {
+                minX = std::min(minX, x);
+                maxX = std::max(maxX, x);
+                minY = std::min(minY, y);
+                maxY = std::max(maxY, y);
+            }
+        }
+    }
+    QVERIFY2(maxX > minX && maxY > minY, "显示区里应当有亮段");
+
+    // 纵向必须上下对称：漏加 pos.y() 时所有横段挤在顶部，上半多下半少，
+    // 这个差值是 0 附近才对
+    const double centerY = (minY + maxY) / 2.0;
+    const double widgetCenterY = image.height() / 2.0;
+    QVERIFY2(std::abs(centerY - widgetCenterY) < image.height() * 0.1,
+             qPrintable(QStringLiteral("亮段纵向中心 %1 偏离控件中心 %2")
+                            .arg(centerY).arg(widgetCenterY)));
+    const double upper = centerY - minY;
+    const double lower = maxY - centerY;
+    QVERIFY2(std::abs(upper - lower) < image.height() * 0.1,
+             qPrintable(QStringLiteral("亮段上下不对称：上 %1、下 %2")
+                            .arg(upper).arg(lower)));
+
+    // 数字应当占满大部分高度，而不是挤成一条
+    const double inkHeight = maxY - minY;
+    QVERIFY2(inkHeight > image.height() * 0.35,
+             qPrintable(QStringLiteral("亮段高度只有 %1 / %2")
+                            .arg(inkHeight).arg(image.height())));
+
+    // 横向也要铺开（5 个数字位）
+    const double inkWidth = maxX - minX;
+    QVERIFY2(inkWidth > image.width() * 0.5,
+             qPrintable(QStringLiteral("亮段宽度只有 %1 / %2")
+                            .arg(inkWidth).arg(image.width())));
+}
+
+void UiMeterTest::sevenSegmentRangeDoesNotFlicker()
+{
+    // 读数在 1 V 附近抖动时，单位不能在「999.9 mV」和「1.000 V」之间来回跳
+    SevenSegmentDisplay display;
+    display.setUnit(QStringLiteral("V"));
+    display.setDigits(MultimeterDigits::Half4);
+
+    display.setValue(1.0000);
+    QCOMPARE(display.displayedUnit(), QStringLiteral("V"));
+    for (double v : {0.9995, 1.0002, 0.9998, 1.0001, 1.0000, 1.0003, 0.9999})
+        QCOMPARE(display.displayedUnit(), QStringLiteral("V"));
+
+    // 掉到 50 mV 以下才换到 mV
+    display.setValue(0.05);
+    QCOMPARE(display.displayedUnit(), QStringLiteral("mV"));
+    // 再涨回 1.5 V，按 1000 mV 的上限升回 V
+    display.setValue(1.5);
+    QCOMPARE(display.displayedUnit(), QStringLiteral("V"));
+    // 123 µV 应当落到 µV，而不是「0.0012 mV」
+    display.setValue(0.000123);
+    QCOMPARE(display.displayedUnit(), QStringLiteral("µV"));
+}
+
+void UiMeterTest::dcMeterShowsMinusOnly()
+{
+    // 真表的惯例：正数不显示符号，负数才显示「−」；
+    // 但直流档始终占着那一格，位数不会因为正负而左右跳
+    SevenSegmentDisplay display;
+    display.setUnit(QStringLiteral("V"));
+    display.setDigits(MultimeterDigits::Half4);
+    display.setSignSlot(true);
+    display.resize(420, 180);
+    display.show();
+    settle();
+
+    auto leftmostInk = [&](double value) {
+        display.setValue(value);
+        settle();
+        const QImage image = display.grab().toImage();
+        for (int x = 0; x < image.width(); ++x) {
+            for (int y = 0; y < image.height(); ++y) {
+                const QColor c = image.pixelColor(x, y);
+                if (c.green() > 150 && c.green() > c.red() + 60 && c.green() > c.blue() + 60)
+                    return x;
+            }
+        }
+        return -1;
+    };
+
+    const int positive = leftmostInk(5.0);
+    const int negative = leftmostInk(-5.0);
+    QVERIFY2(positive > 0 && negative > 0, "两种极性都应当有亮段");
+    // 负数多画一条负号，亮段的最左位置明显更靠左
+    QVERIFY2(negative < positive - 8,
+             qPrintable(QStringLiteral("正数最左 %1、负数最左 %2").arg(positive).arg(negative)));
+
+    // 交流档不占符号位：正数的最左位置应当和直流档正数接近（只差负号那格）
+    SevenSegmentDisplay ac;
+    ac.setUnit(QStringLiteral("V"));
+    ac.setDigits(MultimeterDigits::Half4);
+    ac.setSignSlot(false);
+    ac.resize(420, 180);
+    ac.show();
+    settle();
+    ac.setValue(5.0);
+    settle();
+    const QImage acImage = ac.grab().toImage();
+    int acLeft = -1;
+    for (int x = 0; x < acImage.width() && acLeft < 0; ++x)
+        for (int y = 0; y < acImage.height(); ++y) {
+            const QColor c = acImage.pixelColor(x, y);
+            if (c.green() > 150 && c.green() > c.red() + 60 && c.green() > c.blue() + 60) {
+                acLeft = x;
+                break;
+            }
+        }
+    QVERIFY2(acLeft > 0 && acLeft < positive,
+             qPrintable(QStringLiteral("交流档最左 %1、直流档正数最左 %2")
+                            .arg(acLeft).arg(positive)));
+}
+
+void UiMeterTest::sevenSegmentRoundsUpWithoutLosingADigit()
+{
+    // 999.9999 按 5 位有效数字舍入是 1000.0，整数位从 3 位变 4 位。
+    // 之前按原位数插小数点，会写成「100.00」—— 整整差 10 倍。
+    SevenSegmentDisplay display;
+    display.setUnit(QStringLiteral("Ω"));
+    display.setDigits(MultimeterDigits::Half4);
+
+    const auto prefixScale = [](const QString& unit) {
+        const QString base = unit.right(1);
+        const QString prefix = unit.left(unit.size() - 1);
+        if (prefix == QStringLiteral("k"))
+            return 1e3;
+        if (prefix == QStringLiteral("M"))
+            return 1e6;
+        if (prefix == QStringLiteral("G"))
+            return 1e9;
+        if (prefix == QStringLiteral("m"))
+            return 1e-3;
+        if (prefix == QStringLiteral("µ"))
+            return 1e-6;
+        if (prefix == QStringLiteral("n"))
+            return 1e-9;
+        if (prefix == QStringLiteral("p"))
+            return 1e-12;
+        Q_UNUSED(base);
+        return 1.0;
+    };
+
+    // 一串「刚好在进位边缘」的值：读回来的数必须和输入对上
+    for (double v : {999.9999, 99.99999, 9.999999, 0.9999999, 1.0, 100.0, 1000.0,
+                     9999.999, 0.0001234, 123.45}) {
+        display.setValue(v);
+        bool ok = false;
+        const double shown = display.readoutText().toDouble(&ok) * prefixScale(display.displayedUnit());
+        QVERIFY2(ok, qPrintable(display.readoutText()));
+        QVERIFY2(std::abs(shown - v) <= v * 5e-4 + 1e-12,
+                 qPrintable(QStringLiteral("输入 %1，显示 %2 %3（读回 %4）")
+                                .arg(v)
+                                .arg(display.readoutText(), display.displayedUnit())
+                                .arg(shown)));
+    }
+}
+
+void UiMeterTest::meterWindowFollowsModeAndGoesStale()
+{
+    // 1) 属性面板改了档位，读数窗口的表头/单位要跟着变
+    // 2) 改了电路之后，上一次静态仿真的读数不能继续摆在窗口里
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    auto* scene = window.findChild<SchematicScene*>();
+    QVERIFY(scene);
+    auto* item = scene->placeComponent(ComponentType::Multimeter, QPointF(300, 300));
+    QVERIFY(item);
+    item->setSelected(true);
+    settle();
+
+    QList<MultimeterWindow*> windows = window.findChildren<MultimeterWindow*>();
+    QCOMPARE(windows.size(), 1);
+    MultimeterWindow* meter = windows.first();
+    QCOMPARE(meter->mode(), MultimeterMode::Voltage);
+
+    // 改成电阻档
+    Component c = item->component();
+    QCOMPARE(c.type, ComponentType::Multimeter);
+    c.multimeterMode = MultimeterMode::Resistance;
+    item->setComponent(c);
+    settle();
+    QCOMPARE(meter->mode(), MultimeterMode::Resistance);
+    auto* display = meter->findChild<SevenSegmentDisplay*>();
+    QVERIFY(display);
+    QCOMPARE(display->displayedUnit(), QStringLiteral("Ω"));
+
+    // 给一个读数，再改电路：读数应当作废成横杠（NaN）
+    display->setValue(1000.0);
+    QCOMPARE(display->value(), 1000.0);
+    c.value = 2200.0;
+    item->setComponent(c);
+    scene->commitEdit();
+    settle();
+    QVERIFY2(std::isnan(display->value()), "改电路后旧读数应当作废");
+}
+
+void UiMeterTest::netLabelFromPanelAndLibrary()
+{
+    // 元件库有入口；新建时没有编号、只有网络名；属性面板能改名
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    auto* scene = window.findChild<SchematicScene*>();
+    QVERIFY(scene);
+
+    auto* first = scene->placeComponent(ComponentType::NetLabel, QPointF(300, 300));
+    QVERIFY(first);
+    QCOMPARE(first->component().type, ComponentType::NetLabel);
+    QVERIFY2(first->component().refdes.isEmpty(), "网络标签不该有编号");
+    QCOMPARE(first->component().netLabel, QStringLiteral("N1"));
+
+    // 再放一个，默认名字不能撞车（撞了会直接并成一个网络）
+    auto* second = scene->placeComponent(ComponentType::NetLabel, QPointF(500, 300));
+    QVERIFY(second);
+    QCOMPARE(second->component().netLabel, QStringLiteral("N2"));
+
+    // 属性面板改名
+    first->setSelected(true);
+    settle();
+    auto* labelEdit = window.findChild<QLineEdit*>(QStringLiteral("netLabelEdit"));
+    QVERIFY2(labelEdit, "属性面板里应当有「网络名」输入框");
+    QCOMPARE(labelEdit->text(), QStringLiteral("N1"));
+    labelEdit->setText(QStringLiteral("VCC"));
+    emit labelEdit->editingFinished();
+    settle();
+    QCOMPARE(first->component().netLabel, QStringLiteral("VCC"));
+}
+
+void UiMeterTest::netLabelFollowsRotation()
+{
+    // 旗标跟着元件转，但文字不能倒着写；四个角度要有四种不同画法
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    auto* scene = window.findChild<SchematicScene*>();
+    QVERIFY(scene);
+
+    // 用场景渲染出单个元件的画面，再算深色像素的包围盒
+    auto ink = [scene](ComponentItem* item) {
+        const QRectF src = item->sceneBoundingRect().adjusted(-6, -6, 6, 6);
+        const int side = 240;
+        QImage image(side, side, QImage::Format_ARGB32_Premultiplied);
+        image.fill(Qt::white);
+        QPainter painter(&image);
+        painter.setRenderHint(QPainter::Antialiasing);
+        scene->render(&painter, QRectF(0, 0, side, side), src);
+        painter.end();
+
+        int minX = side, maxX = -1, minY = side, maxY = -1;
+        for (int y = 0; y < side; ++y)
+            for (int x = 0; x < side; ++x) {
+                const QColor c = image.pixelColor(x, y);
+                if (c.lightness() < 170) { // 旗标与文字都是深色
+                    minX = std::min(minX, x);
+                    maxX = std::max(maxX, x);
+                    minY = std::min(minY, y);
+                    maxY = std::max(maxY, y);
+                }
+            }
+        return QSize(maxX - minX, maxY - minY);
+    };
+
+    QVector<QSize> shapes;
+    for (int rot : {0, 90, 180, 270}) {
+        auto* item = scene->placeComponent(ComponentType::NetLabel,
+                                           QPointF(300 + rot * 2, 300));
+        QVERIFY(item);
+        Component c = item->component();
+        c.netLabel = QStringLiteral("VCC");
+        c.rotation = rot;
+        item->setComponent(c);
+        settle();
+        shapes.append(ink(item));
+    }
+
+    QVERIFY2(shapes.at(0).width() > shapes.at(0).height(), "0° 应当横着");
+    QVERIFY2(shapes.at(1).height() > shapes.at(1).width(), "90° 应当竖着");
+    QVERIFY2(shapes.at(2).width() > shapes.at(2).height(), "180° 应当横着");
+    QVERIFY2(shapes.at(3).height() > shapes.at(3).width(), "270° 应当竖着");
+}
+
+QTEST_MAIN(UiMeterTest)
+
+#include "test_ui_meter.moc"

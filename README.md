@@ -317,7 +317,10 @@ ctest --test-dir build --output-on-failure
 │   │   └── Simulator.{h,cpp}       MNA 装配、牛顿迭代、瞬态/交流
 │   ├── ui/                         原理图编辑器与波形查看器
 │   └── main.cpp
-├── tests/                          test_core / test_ui
+├── tests/                          单元测试：一个文件 = 一个可执行文件，
+│                                  每个文件自成一体（辅助函数也各留一份）
+│   ├── test_core_*.cpp             分析 / 器件 / 数据模型 / 更新检查（4 个）
+│   └── test_ui_*.cpp               画布编辑 / 面板 / 万用表 / 波形 / 工作流（5 个）
 └── docs/architecture.md            求解器与实现细节
 ```
 

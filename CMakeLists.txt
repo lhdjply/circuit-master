@@ -199,21 +199,35 @@ option(CSM_BUILD_TESTS "构建单元测试（需要 Qt6::Test）" ON)
 if (CSM_BUILD_TESTS AND TARGET Qt6::Test)
     enable_testing()
 
-    add_executable(test_core tests/test_core.cpp)
-    target_link_libraries(test_core PRIVATE csm_core Qt6::Test)
-    # 让用例能直接读仓库里的示例文件（校验内置示例可用）
-    target_compile_definitions(test_core PRIVATE
-        CSM_EXAMPLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/resources/examples")
-    add_test(NAME core COMMAND test_core)
+    # 每个源文件一个独立的可执行文件（也就一个独立的测试类）：
+    # 编译/链接互不影响，ctest 里自然就是 9 条，名字就是文件名。
+    set(CSM_CORE_TEST_GROUPS analysis device model update)
+    foreach(group ${CSM_CORE_TEST_GROUPS})
+        add_executable(test_core_${group}
+            tests/test_core_${group}.cpp)
+        target_include_directories(test_core_${group} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+        target_link_libraries(test_core_${group} PRIVATE csm_core Qt6::Test)
+        # 让用例能直接读仓库里的示例文件（校验内置示例可用）
+        target_compile_definitions(test_core_${group} PRIVATE
+            CSM_EXAMPLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/resources/examples")
+        add_test(NAME test_core_${group} COMMAND test_core_${group})
+    endforeach()
 
-    add_executable(test_ui tests/test_ui.cpp ${CSM_RESOURCES})
-    target_compile_definitions(test_ui PRIVATE
-        CSM_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
-    target_link_libraries(test_ui PRIVATE csm_ui csm_core Qt6::Test)
-    add_test(NAME ui COMMAND test_ui)
-    # 关掉启动时的更新检查：用例不该依赖网络
-    set_tests_properties(ui PROPERTIES ENVIRONMENT
-        "QT_QPA_PLATFORM=offscreen;CSM_NO_UPDATE_CHECK=1")
+    set(CSM_UI_TEST_GROUPS editor meter panel waveform workflow)
+    foreach(group ${CSM_UI_TEST_GROUPS})
+        add_executable(test_ui_${group}
+            tests/test_ui_${group}.cpp
+            ${CSM_RESOURCES})
+        target_include_directories(test_ui_${group} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+        target_compile_definitions(test_ui_${group} PRIVATE
+            CSM_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
+        target_link_libraries(test_ui_${group} PRIVATE csm_ui csm_core Qt6::Test)
+        add_test(NAME test_ui_${group} COMMAND test_ui_${group})
+        # 关掉启动时的更新检查：用例不该依赖网络；界面用例跑在 offscreen 上
+        set_tests_properties(test_ui_${group} PROPERTIES ENVIRONMENT
+            "QT_QPA_PLATFORM=offscreen;CSM_NO_UPDATE_CHECK=1")
+    endforeach()
+
 endif()
 
 # ---------------------------------------------------------------- 安装
