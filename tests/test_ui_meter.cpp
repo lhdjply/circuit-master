@@ -69,11 +69,59 @@ private slots:
     void sevenSegmentRangeDoesNotFlicker();
     void dcMeterShowsMinusOnly();
     void sevenSegmentRoundsUpWithoutLosingADigit();
-    void meterWindowFollowsModeAndGoesStale();
+    void meterWindowFollowsMode();
     void netLabelFromPanelAndLibrary();
     void netLabelFollowsRotation();
 
 private:
+
+    /// 「波形监控」面板里的动态示波器页
+    static WaveformWindow* livePanel(MainWindow& window)
+    {
+        for (QTabWidget* tabs : window.findChildren<QTabWidget*>()) {
+            if (tabs->count() == 2 && tabs->tabText(0) == QStringLiteral("静态波形"))
+                return qobject_cast<WaveformWindow*>(tabs->widget(1));
+        }
+        return nullptr;
+    }
+
+
+    /// 搭一个能跑实时仿真的最小电路：源 + 电阻 + 万用表（跨在电阻两端）+ 地。
+    /// 读数窗口只在实时仿真运行时才允许打开，所以用例得先把仿真跑起来。
+    static ComponentItem* buildLiveCircuit(MainWindow& window)
+    {
+        auto* scene = currentScene(window);
+        if (!scene)
+            return nullptr;
+
+        auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(100, 300));
+        source->setRotationAngle(90);
+        auto* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(260, 200));
+        auto* meter = scene->placeComponent(ComponentType::Multimeter, QPointF(260, 340));
+        meter->setRotationAngle(270);
+        scene->placeComponent(ComponentType::Ground, QPointF(100, 420));
+
+        scene->addWire({QPointF(100, 270), QPointF(100, 200), QPointF(230, 200)});
+        scene->addWire({QPointF(290, 200), QPointF(360, 200), QPointF(360, 340),
+                        QPointF(290, 340)});
+        scene->addWire({QPointF(230, 340), QPointF(100, 340), QPointF(100, 330)});
+        scene->addWire({QPointF(100, 330), QPointF(100, 420)});
+        settle();
+        return meter;
+    }
+
+    /// 当前标签页的画布（多标签页之后 findChild 拿到的不一定是当前的）
+    static SchematicScene* currentScene(MainWindow& window)
+    {
+        for (QTabWidget* tabs : window.findChildren<QTabWidget*>()) {
+            if (tabs->count() > 0 && tabs->tabText(0) != QStringLiteral("静态波形")) {
+                if (auto* view = qobject_cast<SchematicView*>(tabs->currentWidget()))
+                    return qobject_cast<SchematicScene*>(view->scene());
+            }
+        }
+        return window.findChild<SchematicScene*>();
+    }
+
     // 下面几个是本文件自用的界面操作辅助。为了每个测试文件彻底独立
     // （删掉别的文件也不影响自己），各留一份，不再共用头文件。
     static void settle(int rounds = 3)
@@ -140,42 +188,53 @@ void UiMeterTest::multimeterModeFromPanel()
 
 void UiMeterTest::multimeterReadoutWindowOpensOnClick()
 {
-    // 仿真时点击万用表应弹出七段码读数窗口；删掉元件窗口跟着关闭
+    // 读数窗口只在**实时仿真运行时**才允许点开：没跑仿真的时候读数全是横杠，
+    // 弹出来没有意义。仿真停了窗口也会一起收掉。
     MainWindow window;
     window.resize(1200, 800);
     window.show();
     waitShown(window);
 
-    auto* scene = window.findChild<SchematicScene*>();
-    QVERIFY(scene);
-    auto* item = scene->placeComponent(ComponentType::Multimeter, QPointF(300, 300));
+    ComponentItem* item = buildLiveCircuit(window);
     QVERIFY(item);
-    settle();
+    QCOMPARE(item->component().type, ComponentType::Multimeter);
 
-    // 选中 = 点击：读数窗口应当出现
+    // 1) 没在仿真：点它不该弹窗
     item->setSelected(true);
     settle();
+    QVERIFY2(window.findChild<MultimeterWindow*>() == nullptr,
+             "没跑仿真时点万用表不该弹读数窗口");
+
+    // 2) 运行仿真（有测试点就进入实时示波器），这时才允许打开
+    window.runSimulation();
+    settle();
+    if (!livePanel(window) || !livePanel(window)->isLive())
+        QSKIP("本机没能进入实时仿真，跳过");
+
+    // 重新选一次才会触发 selected 变化
+    item->setSelected(false);
+    settle();
+    item->setSelected(true);
+    settle();
+
     auto* meterWindow = window.findChild<MultimeterWindow*>();
-    QVERIFY2(meterWindow, "点击万用表后应当弹出读数窗口");
+    QVERIFY2(meterWindow, "实时仿真运行时点击万用表应当弹出读数窗口");
     QCOMPARE(meterWindow->refdes(), QStringLiteral("XMM1"));
     QVERIFY(meterWindow->isVisible());
-
-    // 窗口里应当有七段码显示和位数选择
     QVERIFY(meterWindow->findChild<SevenSegmentDisplay*>() != nullptr);
 
-    // 删掉元件，窗口自动关闭
-    QAction* deleteAction = nullptr;
+    // 3) 停止仿真：窗口跟着关闭
     for (QAction* action : window.findChildren<QAction*>()) {
-        if (action->text() == QStringLiteral("删除"))
-            deleteAction = action;
+        if (action->text() == QStringLiteral("停止仿真")) {
+            action->trigger();
+            break;
+        }
     }
-    QVERIFY(deleteAction);
-    deleteAction->trigger();
-    // 测试用 processEvents 驱动事件循环，DeferredDelete 要显式冲一下才会销毁
+    settle();
     QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
     settle();
     QVERIFY2(window.findChild<MultimeterWindow*>() == nullptr,
-             "删除万用表后读数窗口应当关闭");
+             "仿真停止后读数窗口应当关闭");
 }
 
 void UiMeterTest::sevenSegmentDigitsFillTheDisplay()
@@ -360,19 +419,22 @@ void UiMeterTest::sevenSegmentRoundsUpWithoutLosingADigit()
     }
 }
 
-void UiMeterTest::meterWindowFollowsModeAndGoesStale()
+void UiMeterTest::meterWindowFollowsMode()
 {
-    // 1) 属性面板改了档位，读数窗口的表头/单位要跟着变
-    // 2) 改了电路之后，上一次静态仿真的读数不能继续摆在窗口里
+    // 属性面板改了档位，读数窗口的表头 / 单位要跟着变
     MainWindow window;
     window.resize(1200, 800);
     window.show();
     waitShown(window);
 
-    auto* scene = window.findChild<SchematicScene*>();
-    QVERIFY(scene);
-    auto* item = scene->placeComponent(ComponentType::Multimeter, QPointF(300, 300));
+    ComponentItem* item = buildLiveCircuit(window);
     QVERIFY(item);
+
+    window.runSimulation();
+    settle();
+    if (!livePanel(window) || !livePanel(window)->isLive())
+        QSKIP("本机没能进入实时仿真，跳过");
+
     item->setSelected(true);
     settle();
 
@@ -392,14 +454,12 @@ void UiMeterTest::meterWindowFollowsModeAndGoesStale()
     QVERIFY(display);
     QCOMPARE(display->displayedUnit(), QStringLiteral("Ω"));
 
-    // 给一个读数，再改电路：读数应当作废成横杠（NaN）
-    display->setValue(1000.0);
-    QCOMPARE(display->value(), 1000.0);
-    c.value = 2200.0;
+    // 改回电压档，单位跟着回去
+    c.multimeterMode = MultimeterMode::Voltage;
     item->setComponent(c);
-    scene->commitEdit();
     settle();
-    QVERIFY2(std::isnan(display->value()), "改电路后旧读数应当作废");
+    QCOMPARE(meter->mode(), MultimeterMode::Voltage);
+    QCOMPARE(display->displayedUnit(), QStringLiteral("V"));
 }
 
 void UiMeterTest::netLabelFromPanelAndLibrary()

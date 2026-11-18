@@ -87,6 +87,8 @@ private:
     void onEditRequested(ComponentItem* item);
     /// 点击万用表时打开（或置前）它的读数窗口
     void openMeterWindow(ComponentItem* item);
+    /// 万用表读数窗口只在实时仿真运行时才有意义（其余时候读数全是横杠）
+    bool meterReadoutAvailable() const;
     /// 按当前仿真状态刷新所有打开的万用表读数窗口
     void refreshMeterWindows();
     /// 关闭所有万用表读数窗口（新建 / 打开电路时调用）
@@ -132,6 +134,8 @@ private:
     WaveformWindow* m_wavePlot = nullptr;   // 静态波形
     WaveformWindow* m_waveLive = nullptr;   // 动态示波器
     QHash<QString, MultimeterWindow*> m_meterWindows; // 万用表读数窗口（按参考编号）
+    /// 「只在仿真时能点开」这个提示只提示一次，免得每次选中都刷一条日志
+    bool m_meterHintShown = false;
     QPlainTextEdit* m_log = nullptr;
     QListWidget* m_library = nullptr;
     QComboBox* m_libraryCategory = nullptr;

@@ -1243,13 +1243,27 @@ void MainWindow::onSelectionChanged()
         }
     }
     m_props->setComponent(item);
-    if (item && item->component().type == ComponentType::Multimeter)
-        openMeterWindow(item);
+    if (item && item->component().type == ComponentType::Multimeter) {
+        if (meterReadoutAvailable()) {
+            openMeterWindow(item);
+        } else if (!m_meterHintShown) {
+            // 只说一次：读数窗口在没跑仿真时全是横杠，开了也没用
+            m_meterHintShown = true;
+            appendLog(QStringLiteral(
+                "提示：万用表读数窗口只在实时仿真运行时打开。按 F5 运行仿真后再点它。"));
+        }
+    }
     m_actDelete->setEnabled(!selected.isEmpty());
     m_actCut->setEnabled(!selected.isEmpty());
     m_actCopy->setEnabled(!selected.isEmpty());
     m_actPaste->setEnabled(m_scene->hasClipboard());
     m_actRotate->setEnabled(item != nullptr && supportsRotation(item->component().type));
+}
+
+bool MainWindow::meterReadoutAvailable() const
+{
+    // 只有实时仿真在跑的时候读数才有意义（静态结果那份留在波形页里看）
+    return m_waveLive && m_waveLive->isLive();
 }
 
 void MainWindow::openMeterWindow(ComponentItem* item)
@@ -1681,8 +1695,12 @@ void MainWindow::createMonitorWindow()
                 runSimulation();
             });
 
-    connect(m_waveLive, &WaveformWindow::liveStateChanged, this, [this](bool) {
+    connect(m_waveLive, &WaveformWindow::liveStateChanged, this, [this](bool running) {
         updateRunAction();
+        // 读数窗口只在仿真运行时可用，停了就一起收掉，
+        // 免得留在桌面上显示一堆不再更新的数字
+        if (!running)
+            closeMeterWindows();
     });
     // 刻度改动记进 doc()->options，保存工程时一并写入
     connect(m_waveLive, &WaveformWindow::liveScalesChanged, this,
