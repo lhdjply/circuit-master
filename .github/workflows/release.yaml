@@ -795,10 +795,129 @@ jobs:
           path: dist/*-macos-*.dmg
           if-no-files-found: error
 
+  # Android：只出 arm64-v8a 的 APK。侧载分发，不走应用商店。
+  # 打包链和 build.yaml 里的 Build (Android) 一样，区别是这里产物要落到
+  # dist/ 并按「<名字>-<版本>-android-arm64.apk」命名 —— 客户端的更新器
+  # 就是按这个后缀挑包的（见 UpdateChecker::suffixFor）。
+  build-android:
+    name: Package (Android)
+    runs-on: ubuntu-26.04
+    continue-on-error: true
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up the Android SDK and NDK
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
+
+          sdkmanager=$(command -v sdkmanager || true)
+          if [ -z "$sdkmanager" ]; then
+            sdkmanager=$(find "$sdk" -maxdepth 5 -name sdkmanager -type f -print -quit)
+          fi
+          if [ -z "$sdkmanager" ]; then
+            echo "::error::没有找到 sdkmanager"
+            exit 1
+          fi
+
+          yes | "$sdkmanager" --licenses > /dev/null || true
+
+          version=26.1.10909125
+          if ! "$sdkmanager" --install "ndk;$version" > /dev/null 2>&1; then
+            version=$("$sdkmanager" --list 2>/dev/null \
+              | sed -n 's/^ *ndk;\(2[67]\.[0-9.]*\).*/\1/p' | sort -V | tail -1)
+            if [ -z "$version" ]; then
+              echo "::error::仓库里找不到可用的 NDK"
+              exit 1
+            fi
+            "$sdkmanager" --install "ndk;$version" > /dev/null
+          fi
+          echo "ANDROID_NDK_ROOT=$sdk/ndk/$version" >> "$GITHUB_ENV"
+
+          # 平台固定 34：androiddeployqt 会挑 SDK 里最高的平台，而镜像里带有
+          # android-36-ext19 这类预览版，它的 android.jar 资源表 Qt 6.7 的
+          # aapt2 读不了（RES_TABLE_TYPE_TYPE entry offsets overlap）
+          "$sdkmanager" --install "platforms;android-34" > /dev/null
+          find "$sdk/platforms" -mindepth 1 -maxdepth 1 -type d \
+            \( -name 'android-3[5-9]*' -o -name '*-ext*' -o -name '*-preview*' \) \
+            -exec rm -rf {} +
+
+      - name: Install Qt for Android
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.7.3'
+          host: linux
+          target: android
+          arch: android_arm64_v8a
+          modules: 'qtcharts'
+          cache: true
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build
+
+      - name: Configure
+        run: |
+          set -euo pipefail
+          "$QT_ROOT_DIR/bin/qt-cmake" -S . -B build-android -G Ninja -Wno-deprecated \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DANDROID_SDK_ROOT="$ANDROID_SDK_ROOT" \
+            -DANDROID_NDK_ROOT="$ANDROID_NDK_ROOT" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-23 \
+            -DCSM_BUILD_TESTS=OFF
+
+      - name: Build the APK
+        run: |
+          set -euo pipefail
+          cmake --build build-android --parallel
+          cmake --build build-android --target apk --parallel
+
+      - name: Stage the package
+        run: |
+          set -euo pipefail
+          version=$(sed 's/^[vV]//' VERSION | tr -d '[:space:]')
+          mkdir -p dist
+
+          # apk 目标产出的名字是 CircuitMaster.apk，按发布命名规则改掉
+          src=$(find build-android -name '*.apk' -print -quit)
+          if [ -z "$src" ]; then
+            echo "::error::no APK was produced"
+            exit 1
+          fi
+          name="circuit-master-${version}-android-arm64.apk"
+          cp "$src" "dist/$name"
+          ls -lh "dist/$name"
+          # 和 Windows / macOS 一样卡一下体积：太小说明没把 Qt 库打进去
+          if [ "$(stat -c%s "dist/$name")" -lt 10485760 ]; then
+            echo "::error::APK is suspiciously small"
+            exit 1
+          fi
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-apk
+          path: dist/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
   create-release:
     name: Publish release
     runs-on: ubuntu-26.04
-    needs: [build-deb, build-windows, build-macos]
+    needs: [build-deb, build-windows, build-macos, build-android]
     # PR 只验证各平台能不能打包（Linux amd64/arm64/loong64/riscv64 + Windows x64/arm64
     # + macOS arm64），不建 Release
     if: github.event_name != 'pull_request'
@@ -827,7 +946,7 @@ jobs:
           cd artifacts
           > hashes.sha256
           # 格式统一为「哈希 *文件名」，Linux 侧可直接 sha256sum -c 校验
-          for file in $(find . -type f \( -name "*.deb" -o -name "*.tar.gz" -o -name "*.zip" -o -name "*-setup.exe" -o -name "*.dmg" \)); do
+          for file in $(find . -type f \( -name "*.deb" -o -name "*.tar.gz" -o -name "*.zip" -o -name "*-setup.exe" -o -name "*.dmg" -o -name "*.apk" \)); do
             filename=$(basename "$file")
             sha256sum "$file" | awk -v fname="$filename" '{print $1 " *" fname}' >> hashes.sha256
           done
@@ -932,7 +1051,7 @@ jobs:
           assets = []
           for root, _dirs, files in os.walk("artifacts"):
               for name in sorted(files):
-                  if not name.endswith((".deb", ".tar.gz", ".zip", "-setup.exe", ".dmg")):
+                  if not name.endswith((".deb", ".tar.gz", ".zip", "-setup.exe", ".dmg", ".apk")):
                       continue
                   if name.endswith((".sha256", ".dbgsym.deb", ".build-deps.deb")):
                       continue
@@ -1041,6 +1160,18 @@ jobs:
             fi
           fi
 
+          # Android 只有 arm64 一种 APK。正式版缺了要失败（一条 Release 不该少平台），
+          # 持续构建只警告
+          apk_files=$(find artifacts -name "*-android-arm64.apk" -print0 | xargs -0 echo)
+          if [ -z "$apk_files" ]; then
+            if [ "${{ github.ref_type }}" == "tag" ]; then
+              echo "::error::The Android APK is missing from a tagged release; check the 'Package (Android)' job."
+              exit 1
+            else
+              echo "::warning::The Android APK is missing; publishing the other platforms only."
+            fi
+          fi
+
           # 清单只有正式版才生成；持续构建时为空，展开成空参数不影响命令
           manifest_file=""
           if [ -f "$RUNNER_TEMP/latest.json" ]; then
@@ -1063,6 +1194,7 @@ jobs:
                             $zip_files \
                             $setup_files \
                             $dmg_files \
+                            $apk_files \
                             $hash_files \
                             $manifest_file \
                             ${{ env.PRERELEASE }} \
@@ -1076,6 +1208,8 @@ jobs:
           echo "$tar_files"
           echo "$zip_files"
           echo "$setup_files"
+          echo "$dmg_files"
+          echo "$apk_files"
           echo "$hash_files"
           echo "$manifest_file"
         env:

@@ -9,6 +9,7 @@ enum class HostPlatform {
     Linux,
     Windows,
     MacOS,
+    Android,  ///< 安装包形态是 APK，更新走侧载（不经过应用商店）
     Other,
 };
 

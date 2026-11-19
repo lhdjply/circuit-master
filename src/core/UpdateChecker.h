@@ -47,6 +47,7 @@ enum class PackageFormat {
     SetupExe,     // Windows 安装程序
     PortableZip,  // Windows 便携包，解压即用
     MacDmg,       // macOS 磁盘映像，里面是 .app，挂载后拖进「应用程序」
+    AndroidApk,   // Android 安装包，侧载安装（不需要应用商店）
 };
 
 /// 当前这份程序是怎么装的。分「系统安装」与「便携解压」两种，
