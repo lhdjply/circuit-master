@@ -56,7 +56,9 @@
 #include <QTextStream>
 #include <QTimer>
 #include <QToolBar>
+#if defined(Q_OS_ANDROID)
 #include <QToolButton>
+#endif
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -382,6 +384,36 @@ QTabBar::close-button:hover {
     createDocks();
     createMonitorWindow();
     createStatusBar();
+
+    // 面板开关：三块面板的标题栏上都有 ✕，关掉之后原本没有任何入口能再打开，
+    // 所以菜单里补一份（视图 → 元件库 / 属性 / 消息）。
+    // 这一份与平台无关：桌面直接用菜单；Android 上菜单栏是隐藏的，但
+    // setupMobileChrome() 会把菜单栏里的菜单原样搬进「⋮」溢出菜单。
+    if (QMenu* viewMenu = menuBar()->findChild<QMenu*>(QStringLiteral("menuView"))) {
+        for (QDockWidget* dock : {m_libraryDock, m_propsDock, m_logDock}) {
+            if (!dock)
+                continue;
+            QAction* toggle = dock->toggleViewAction();
+            viewMenu->addAction(toggle);
+        }
+    }
+
+#if defined(Q_OS_ANDROID)
+    // 手机：换成底部图标栏，并收起两侧面板
+    setupMobileChrome();
+    applyResponsiveLayout();
+#else
+    // 桌面：顶部工具栏上也挂一份面板开关。
+    // Android 不挂 —— 那条工具栏被藏起来了，动作已经挂到底部图标栏上
+    if (QToolBar* bar = findChild<QToolBar*>(QStringLiteral("mainToolBar"))) {
+        bar->addSeparator();
+        for (QDockWidget* dock : {m_libraryDock, m_propsDock}) {
+            if (!dock)
+                continue;
+            bar->addAction(dock->toggleViewAction());
+        }
+    }
+#endif
 
     appendLog(QStringLiteral("电路仿真大师 %1  —  Qt6 / MNA 求解器")
                   .arg(QStringLiteral(CSM_VERSION_STRING)));
@@ -974,6 +1006,7 @@ void MainWindow::createMenus()
     editMenu->addAction(m_actSnapWires);
 
     QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("视图(&V)"));
+    viewMenu->setObjectName(QStringLiteral("menuView"));
     viewMenu->addAction(m_actNextTab);
     viewMenu->addAction(m_actPrevTab);
     viewMenu->addSeparator();
@@ -982,6 +1015,9 @@ void MainWindow::createMenus()
     viewMenu->addAction(m_actZoomFit);
     viewMenu->addSeparator();
     viewMenu->addAction(m_actGrid);
+    // 面板开关放在菜单里，手机上空出来的宽度全给画布，需要时再叫出来。
+    // 这三个 QAction 由 QDockWidget 自己提供，标题就是面板名。
+    viewMenu->addSeparator();
 
     QMenu* simMenu = menuBar()->addMenu(QStringLiteral("仿真(&S)"));
     simMenu->addAction(m_actRun);
@@ -1004,6 +1040,7 @@ void MainWindow::createMenus()
 void MainWindow::createToolBar()
 {
     QToolBar* bar = addToolBar(QStringLiteral("主工具栏"));
+    bar->setObjectName(QStringLiteral("mainToolBar"));
     bar->setMovable(false);
     bar->setIconSize(QSize(22, 22));
     bar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
@@ -1105,6 +1142,7 @@ void MainWindow::createDocks()
 {
     auto* libraryDock = new QDockWidget(QStringLiteral("元件库"), this);
     libraryDock->setObjectName(QStringLiteral("libraryDock"));
+    m_libraryDock = libraryDock;
     libraryDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 
     auto* libraryContainer = new QWidget(libraryDock);
@@ -1146,6 +1184,7 @@ void MainWindow::createDocks()
 
     auto* propsDock = new QDockWidget(QStringLiteral("属性"), this);
     propsDock->setObjectName(QStringLiteral("propsDock"));
+    m_propsDock = propsDock;
     m_props = new PropertyPanel(propsDock);
     auto* propsScroll = new QScrollArea(propsDock);
     propsScroll->setWidgetResizable(true);
@@ -1171,6 +1210,114 @@ void MainWindow::createDocks()
     addDockWidget(Qt::BottomDockWidgetArea, logDock);
     logDock->setMaximumHeight(170);
 }
+
+#if defined(Q_OS_ANDROID)
+
+void MainWindow::setupMobileChrome()
+{
+    // 手机上不要菜单栏（桌面形态，白白吃掉一行高度），也不要顶部那条
+    // 带文字的工具栏。把动作搬到底部一条图标栏里，退出来的宽度给画布。
+    menuBar()->hide();
+    if (QToolBar* top = findChild<QToolBar*>(QStringLiteral("mainToolBar")))
+        top->hide();
+    // 状态栏那两行是桌面信息（「选择模式：拖动元件移动…」），手机上纯占地方
+    if (statusBar())
+        statusBar()->hide();
+
+    // 面板开关原本没有图标，文字模式在底部栏里会把整条挤爆 —— 补两个
+    // 标准图标，图标模式下才排得下
+    if (m_libraryDock) {
+        QAction* toggle = m_libraryDock->toggleViewAction();
+        toggle->setIcon(style()->standardIcon(QStyle::SP_DirIcon));
+    }
+    if (m_propsDock) {
+        QAction* toggle = m_propsDock->toggleViewAction();
+        toggle->setIcon(style()->standardIcon(QStyle::SP_FileDialogDetailedView));
+    }
+
+    m_mobileBar = new QToolBar(QStringLiteral("手机工具栏"), this);
+    m_mobileBar->setObjectName(QStringLiteral("mobileBar"));
+    m_mobileBar->setMovable(false);
+    m_mobileBar->setFloatable(false);
+    // 26 是试出来的：30 时 393 宽的机器上最后那个「⋮」会被挤进溢出箭头里
+    m_mobileBar->setIconSize(QSize(26, 26));
+    m_mobileBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    addToolBar(Qt::BottomToolBarArea, m_mobileBar);
+
+    // 常用动作只留图标：393 逻辑像素宽最多摆得下七八个
+    m_mobileBar->addAction(m_actNew);
+    m_mobileBar->addAction(m_actOpen);
+    m_mobileBar->addAction(m_actSave);
+    m_mobileBar->addAction(m_actUndo);
+    m_mobileBar->addAction(m_actRedo);
+    m_mobileBar->addSeparator();
+    m_mobileBar->addAction(m_actRun);
+    m_mobileBar->addAction(m_actMonitor);
+    m_mobileBar->addSeparator();
+    if (m_libraryDock)
+        m_mobileBar->addAction(m_libraryDock->toggleViewAction());
+    if (m_propsDock)
+        m_mobileBar->addAction(m_propsDock->toggleViewAction());
+
+    // 溢出菜单：把菜单栏里那几个菜单原样搬进来。动作可以在多个菜单里出现，
+    // 所以不需要动原来的菜单结构。
+    auto* overflowButton = new QToolButton(m_mobileBar);
+    overflowButton->setObjectName(QStringLiteral("overflowButton"));
+    overflowButton->setText(QStringLiteral("⋮"));
+    overflowButton->setAutoRaise(true);
+    overflowButton->setPopupMode(QToolButton::InstantPopup);
+    auto* overflow = new QMenu(overflowButton);
+    overflow->setObjectName(QStringLiteral("overflowMenu"));
+    for (QAction* menuAction : menuBar()->actions()) {
+        QMenu* source = menuAction->menu();
+        if (!source || source->actions().isEmpty())
+            continue;
+        QMenu* copy = overflow->addMenu(menuAction->text());
+        for (QAction* action : source->actions()) {
+            if (action->isSeparator())
+                copy->addSeparator();
+            else
+                copy->addAction(action);
+        }
+    }
+    overflowButton->setMenu(overflow);
+    m_mobileBar->addWidget(overflowButton);
+}
+
+
+void MainWindow::resizeEvent(QResizeEvent* event)
+{
+    QMainWindow::resizeEvent(event);
+    applyResponsiveLayout();
+}
+
+void MainWindow::applyResponsiveLayout()
+{
+    // 只在 Android 上存在，进了就是手机：三栏并排放不下
+    //（实测 1080×2400、dpr 2.75 的机器，三栏挤完画布只剩 280 px）。
+    if (m_compactLayout)
+        return;
+    m_compactLayout = true;
+
+    if (!m_libraryDock || !m_propsDock)
+        return;
+
+    // 收起两侧面板，把宽度全给画布；需要时从底部工具栏再叫出来。
+    // 叫出来时停到底部（手机上的「上滑面板」），不要占侧边 ——
+    // 手机上侧边只剩一条，什么也放不下。
+    for (QDockWidget* dock : {m_libraryDock, m_propsDock, m_logDock}) {
+        if (!dock)
+            continue;
+        if (dock->isFloating())
+            dock->setFloating(false);
+        addDockWidget(Qt::BottomDockWidgetArea, dock);
+        dock->hide();
+    }
+    if (m_waveWindow)
+        m_waveWindow->resize(qMin(760, width()), qMin(560, height()));
+}
+
+#endif // Q_OS_ANDROID
 
 void MainWindow::createStatusBar()
 {
@@ -1821,7 +1968,12 @@ void MainWindow::createMonitorWindow()
     m_waveWindow = new QWidget(this, Qt::Window);
     m_waveWindow->setObjectName(QStringLiteral("waveMonitorWindow"));
     m_waveWindow->setWindowTitle(QStringLiteral("波形监控 — 电路仿真大师"));
+#if defined(Q_OS_ANDROID)
+    // 手机上 1040 宽放不下，直接铺满屏幕
+    m_waveWindow->resize(screen()->availableGeometry().size());
+#else
     m_waveWindow->resize(1040, 620);
+#endif
     auto* windowLayout = new QVBoxLayout(m_waveWindow);
     windowLayout->setContentsMargins(0, 0, 0, 0);
 

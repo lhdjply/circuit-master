@@ -264,15 +264,30 @@ adb install -r build-android/android-build/build/outputs/apk/debug/*.apk
 
 | 已经适配 | 还没做 |
 | --- | --- |
-| 单实例退化为空实现（系统本就只有一份前台进程） | 右键菜单 → 长按菜单 |
+| `Q_OS_ANDROID` 时用手机外壳：无菜单栏、底部图标工具栏、无状态栏 | 右键菜单 → 长按菜单 |
+| 窄屏自动收起两侧面板，画布占满 + 双指捏合缩放 | 快捷键（空格旋转、Ctrl+Z、F5）→ 屏幕按钮 |
+| 面板叫出来时停到底部，像上滑面板 | 字号与点击区按手指尺寸放大 |
+| 单指拖动、框选、连线仍走鼠标那套 | |
 | 更新检查照常可用；下载完把 APK 交给**系统安装器** | 滚轮缩放 → 双指捏合 |
 | 桌面的 `.desktop` / MIME / 安装规则跳过 | 悬停高亮（触摸屏没有悬停） |
 | 测试默认不建（Android 上跑不了 ctest） | 30 处快捷键 → 屏幕按钮 |
 | 包名与 versionCode 由 `VERSION` 推出 | 多窗口 → 单窗口（波形监控 / 万用表是独立窗口） |
 | | 手机尺寸的三栏布局（当前按 1400×880 排） |
 
-换句话说：**能跑，但要用鼠标键盘才顺手**。平板 + 手写笔的方向是成立的，
-手机竖屏目前不可用。
+换句话说：**能跑、也像手机应用了，但还不够顺手** —— 字和按钮仍是桌面尺寸。
+平板 + 手写笔的方向是成立的，手机竖屏还要继续做触控化。
+
+手机端的功能（外壳、紧凑布局、双指捏合、对话框收窄）全部用
+`#if defined(Q_OS_ANDROID)` 整个包起来：桌面版**不编译**这些代码，既不占体积
+也不留死代码。验证方式：
+
+```bash
+nm -C build/CircuitMaster | grep -c applyResponsiveLayout   # 0
+nm -C build/CircuitMaster | grep -c "SchematicView::viewportEvent"  # 0
+strings -e l build/CircuitMaster | grep -c mobileBar        # 0
+```
+
+桌面把窗口拉窄不会收起侧栏 —— 那些行为只在 Android 构建里存在。
 
 Android 版不走应用商店，安装包直接分发（侧载）：更新时程序自己下载 APK，
 再交给系统安装器 —— 需要在系统设置里允许「安装未知应用」。

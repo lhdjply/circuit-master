@@ -26,6 +26,11 @@ SchematicView::SchematicView(SchematicScene* scene, QWidget* parent)
     : QGraphicsView(scene, parent)
     , m_scene(scene)
 {
+#if defined(Q_OS_ANDROID)
+    // 要收 QTouchEvent 才能做双指缩放；单指仍交给 Qt 合成鼠标事件
+    viewport()->setAttribute(Qt::WA_AcceptTouchEvents, true);
+    viewport()->setAttribute(Qt::WA_Hover, false);
+#endif
     setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing
                    | QPainter::SmoothPixmapTransform);
     setDragMode(QGraphicsView::RubberBandDrag);
@@ -169,6 +174,79 @@ void SchematicView::mouseReleaseEvent(QMouseEvent* event)
     if (event->button() == Qt::LeftButton && m_tool == Tool::Select)
         m_scene->commitEdit();
 }
+
+#if defined(Q_OS_ANDROID)
+
+bool SchematicView::viewportEvent(QEvent* event)
+{
+    // 手机上唯一能缩放的手势。单指触摸要放过去 —— 让 Qt 合成鼠标事件，
+    // 否则拖动元件、画线全都会失灵。
+    switch (event->type()) {
+    case QEvent::TouchBegin:
+    case QEvent::TouchUpdate:
+    case QEvent::TouchEnd: {
+        auto* touch = static_cast<QTouchEvent*>(event);
+        const QList<QTouchEvent::TouchPoint>& points = touch->points();
+
+        int active = 0;
+        QPointF center;
+        for (const QTouchEvent::TouchPoint& point : points) {
+            if (point.state() == QEventPoint::State::Released)
+                continue;
+            ++active;
+            center += point.position();
+        }
+
+        if (active < 2) {
+            // 单指：交回给基类，继续按鼠标处理（拖动、框选、连线都靠它）
+            m_pinching = false;
+            return QGraphicsView::viewportEvent(event);
+        }
+
+        if (active == 2) {
+            QPointF a;
+            QPointF b;
+            bool first = true;
+            for (const QTouchEvent::TouchPoint& point : points) {
+                if (point.state() == QEventPoint::State::Released)
+                    continue;
+                if (first) { a = point.position(); first = false; }
+                else       { b = point.position(); }
+            }
+            const double distance = QLineF(a, b).length();
+            const QPointF pinchCenter = (a + b) / 2.0;
+
+            if (!m_pinching) {
+                m_pinching = true;
+                m_pinchDistance = distance;
+                m_pinchCenter = pinchCenter;
+                return true;
+            }
+
+            if (m_pinchDistance > 1.0 && distance > 1.0) {
+                zoomBy(distance / m_pinchDistance);
+                // 两指整体移动当平移用
+                const QPointF delta = pinchCenter - m_pinchCenter;
+                horizontalScrollBar()->setValue(horizontalScrollBar()->value()
+                                                - int(delta.x()));
+                verticalScrollBar()->setValue(verticalScrollBar()->value()
+                                              - int(delta.y()));
+            }
+            m_pinchDistance = distance;
+            m_pinchCenter = pinchCenter;
+            if (event->type() == QEvent::TouchEnd)
+                m_pinching = false;
+            return true;
+        }
+        break;
+    }
+    default:
+        break;
+    }
+    return QGraphicsView::viewportEvent(event);
+}
+
+#endif // Q_OS_ANDROID
 
 void SchematicView::mouseDoubleClickEvent(QMouseEvent* event)
 {
