@@ -38,6 +38,7 @@ QString typeToTag(ComponentType type)
     case ComponentType::Probe:         return QStringLiteral("TP");
     case ComponentType::Multimeter:    return QStringLiteral("XMM");
     case ComponentType::NetLabel:      return QStringLiteral("NET");
+    case ComponentType::LogicGate:     return QStringLiteral("GATE");
     case ComponentType::CurrentProbe:  return QStringLiteral("IP");
     case ComponentType::Ground:        return QStringLiteral("GND");
     }
@@ -66,6 +67,7 @@ ComponentType tagToType(const QString& tag)
     if (tag == QLatin1String("TP")) return ComponentType::Probe;
     if (tag == QLatin1String("XMM")) return ComponentType::Multimeter;
     if (tag == QLatin1String("NET")) return ComponentType::NetLabel;
+    if (tag == QLatin1String("GATE")) return ComponentType::LogicGate;
     if (tag == QLatin1String("IP")) return ComponentType::CurrentProbe;
     if (tag == QLatin1String("GND")) return ComponentType::Ground;
     return ComponentType::Resistor;
@@ -181,6 +183,8 @@ QJsonObject Circuit::toJson() const
         o.insert(QStringLiteral("auxRatio"), c.auxRatio);
         o.insert(QStringLiteral("groundKind"), int(c.groundKind));
         o.insert(QStringLiteral("multimeterMode"), int(c.multimeterMode));
+        o.insert(QStringLiteral("gateKind"), int(c.gateKind));
+        o.insert(QStringLiteral("logicHigh"), c.logicHigh);
         if (!c.netLabel.isEmpty())
             o.insert(QStringLiteral("netLabel"), c.netLabel);
         if (!c.refLabelOffset.isNull()) {
@@ -275,6 +279,8 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
         c.multimeterMode = static_cast<MultimeterMode>(
             o.value(QStringLiteral("multimeterMode")).toInt(0));
         c.netLabel = o.value(QStringLiteral("netLabel")).toString();
+        c.gateKind = static_cast<GateKind>(o.value(QStringLiteral("gateKind")).toInt(0));
+        c.logicHigh = o.value(QStringLiteral("logicHigh")).toDouble(3.3);
         c.refLabelOffset = QPointF(o.value(QStringLiteral("refLabelDx")).toDouble(),
                                    o.value(QStringLiteral("refLabelDy")).toDouble());
         c.valueLabelOffset = QPointF(o.value(QStringLiteral("valueLabelDx")).toDouble(),

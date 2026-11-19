@@ -24,6 +24,12 @@ constexpr double kElectron = 1.602176634e-19;
 constexpr double kPi = 3.14159265358979323846;
 constexpr int kMaxPoints = 200000;
 
+/// 逻辑门输出级的内阻：输出按「理想电平 + 串一个电阻」等效
+constexpr double kGateRout = 100.0;
+/// 逻辑门的输入回差（相对输出高电平）：高于 0.55·VOH 判 1，低于 0.45·VOH 判 0。
+/// 回差是必需的 —— 没有它，输入恰好压在阈值上时牛顿迭代会在两个状态之间来回跳
+constexpr double kGateHysteresis = 0.05;
+
 using Cx = std::complex<double>;
 
 // ---------------------------------------------------------------- 器件模型
@@ -99,6 +105,9 @@ struct ElementState {
     QHash<int, double> obCs;     // OB2362：上一步的 CS 电压
     QHash<int, double> obVcc;    // OB2362：上一步的 VCC 电压
     QHash<int, double> obUvloOn; // OB2362：UVLO 锁存状态（0 关 / 1 开）
+    /// 逻辑门：上一轮迭代决定的输出电平（0 或 logicHigh）。
+    /// 输入按阈值 + 回差判定，输出用戴维南等效（源内阻 kGateRout）打进矩阵。
+    QHash<int, double> gateLevel;
 
     /// 万用表交流档的滑动窗口：存「正好一个周期」的采样，算交流有效值。
     /// 窗口样本数 = round(period / (decim·h))，所以窗口跨度正好是一个整周期，
@@ -430,6 +439,37 @@ Problem buildProblem(const Circuit& circuit, const Netlist& net)
     return p;
 }
 
+/// 逻辑门的输出电平：按回差判定每个输入是高还是低，再按门类型算布尔函数。
+/// 返回 0 或 comp.logicHigh。
+double gateLevelFor(const Problem& p, const Component& comp, const std::vector<double>& x,
+                    const ElementState& st)
+{
+    const double vhigh = comp.logicHigh > 0.0 ? comp.logicHigh : 3.3;
+    const double vUp = (0.5 + kGateHysteresis) * vhigh;   // 判 1 的阈值
+    const double vDown = (0.5 - kGateHysteresis) * vhigh; // 判 0 的阈值
+    const bool wasHigh = st.gateLevel.value(comp.id, 0.0) > 0.5 * vhigh;
+
+    auto isHigh = [&](int pin) {
+        const double v = p.voltage(x, p.nodeOf(comp.id, pin));
+        // 当前是高就按低阈值判（保持），当前是低就按高阈值判（翻转）
+        return v >= (wasHigh ? vDown : vUp);
+    };
+
+    const int inputs = gateInputCount(comp.gateKind);
+    const bool in0 = isHigh(0);
+    const bool in1 = inputs > 1 ? isHigh(1) : false;
+
+    bool on = false;
+    switch (comp.gateKind) {
+    case GateKind::And:  on = in0 && in1; break;
+    case GateKind::Or:   on = in0 || in1; break;
+    case GateKind::Not:  on = !in0; break;
+    case GateKind::Xor:  on = in0 != in1; break;
+    case GateKind::Xnor: on = in0 == in1; break;
+    }
+    return on ? vhigh : 0.0;
+}
+
 // ---------------------------------------------------------------- 直流 / 瞬态装配
 void assembleReal(const Problem& p, const ElementState& st, bool transient, double h, double t,
                   Matrix<double>& a, std::vector<double>& b, const DiodeModel& dm)
@@ -440,6 +480,16 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
         const int n2 = p.nodeOf(comp.id, 1);
 
         switch (comp.type) {
+        case ComponentType::LogicGate: {
+            // 输出端：戴维南等效「电平源 + 100 Ω 内阻」，输入引脚是高阻（不贡献矩阵）
+            const int outPin = gateInputCount(comp.gateKind);
+            const int nout = p.nodeOf(comp.id, outPin);
+            const double g = 1.0 / kGateRout;
+            const double level = st.gateLevel.value(comp.id, 0.0);
+            addG(a, nout, 0, g);
+            addI(b, nout, 0, -g * level);
+            break;
+        }
         case ComponentType::Resistor: {
             const double r = std::max(comp.value, 1e-9);
             addG(a, n1, n2, 1.0 / r);
@@ -927,9 +977,23 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
             st.mosVds.insert(cp->id, vds);
         }
 
+        // 逻辑门：按当前解重新判定每个门的输出电平。数字状态必须进迭代，
+        // 否则直流工作点会停在「所有门都是低电平」上。
+        double gateDelta = 0.0;
+        for (const Component* cp : p.elements) {
+            if (cp->type != ComponentType::LogicGate)
+                continue;
+            const double oldLevel = st.gateLevel.value(cp->id, 0.0);
+            const double level = gateLevelFor(p, *cp, x, st);
+            gateDelta = std::max(gateDelta, std::abs(level - oldLevel));
+            st.gateLevel.insert(cp->id, level);
+        }
+
         const bool nodeConverged = maxDelta <= reltol * (1.0 + maxAbs) + abstol;
         const bool diodeConverged = !hasDiode || diodeDelta <= 1e-7;
-        if (nodeConverged && diodeConverged && iter >= 1) {
+        // 门电平只要还在翻转就说明逻辑还没稳定，接着迭代
+        const bool gateConverged = gateDelta <= 1e-9;
+        if (nodeConverged && diodeConverged && gateConverged && iter >= 1) {
             if (maxAbs > 1e9) {
                 if (error)
                     *error = QStringLiteral("节点电压超出合理范围（>1 GV），请检查电路连接。");
@@ -962,6 +1026,14 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
         double current = 0.0;
 
         switch (comp.type) {
+        case ComponentType::LogicGate: {
+            // 输出端灌进负载的电流（正号表示往外送）
+            const int outPin = gateInputCount(comp.gateKind);
+            const int nout = p.nodeOf(comp.id, outPin);
+            const double level = st.gateLevel.value(comp.id, 0.0);
+            current = (level - p.voltage(x, nout)) / kGateRout;
+            break;
+        }
         case ComponentType::Resistor:
             current = v / std::max(comp.value, 1e-9);
             break;
@@ -1281,6 +1353,13 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
         const int n2 = p.nodeOf(comp.id, 1);
 
         switch (comp.type) {
+        case ComponentType::LogicGate: {
+            // 小信号下门的输出电平是固定的（对交流就是地），只有内阻在矩阵里
+            const int outPin = gateInputCount(comp.gateKind);
+            const int nout = p.nodeOf(comp.id, outPin);
+            addG(a, nout, 0, Cx(1.0 / kGateRout, 0.0));
+            break;
+        }
         case ComponentType::Resistor:
             addG(a, n1, n2, Cx(1.0 / std::max(comp.value, 1e-9), 0.0));
             break;

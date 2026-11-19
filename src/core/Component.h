@@ -29,6 +29,7 @@ enum class ComponentType {
     CurrentProbe,
     Multimeter,   ///< 万用表：两引脚仪器，按档位测电压 / 电流 / 电阻
     NetLabel,     ///< 网络标签：单引脚，同名标签在网表里并成一个网络
+    LogicGate,    ///< 逻辑门：与 / 或 / 非 / 异或 / 同或，数字电平进出
     Ground,
 };
 
@@ -48,6 +49,15 @@ enum class GroundKind {
     Dgnd,    ///< 数字地
     Pgnd,    ///< 功率地
     Earth,   ///< 保护地 / 大地
+};
+
+/// 逻辑门的种类
+enum class GateKind {
+    And,   ///< 与门
+    Or,    ///< 或门
+    Not,   ///< 非门（一个输入）
+    Xor,   ///< 异或门
+    Xnor,  ///< 同或门
 };
 
 /// 变压器的绕组形式
@@ -73,6 +83,9 @@ int pinCount(const struct Component& comp);
 QString typeName(ComponentType type);      // 中文显示名
 /// 接地种类的显示名（GND / AGND / DGND / PGND / EARTH）
 QString groundKindName(GroundKind kind);
+QString gateKindName(GateKind kind);
+/// 逻辑门的输入引脚数（非门 1 个，其余 2 个）
+int gateInputCount(GateKind kind);
 /// 万用表档位的显示名（电压档 / 电流档 / 电阻档）
 QString multimeterModeName(MultimeterMode mode);
 /// 万用表档位画在符号里的字母（V / A / Ω / V~ / A~）
@@ -123,6 +136,10 @@ struct Component {
     GroundKind groundKind = GroundKind::Gnd;
     /// 网络标签的名字（NetLabel）：同名标签在网表里并成一个网络
     QString netLabel;
+    /// 逻辑门的种类（LogicGate）
+    GateKind gateKind = GateKind::And;
+    /// 逻辑门输出的高电平（V）；低电平固定 0 V，输入阈值取它的一半
+    double logicHigh = 3.3;
     /// 标号 / 数值标签相对默认位置的偏移（画布上拖动标签时写入）
     QPointF refLabelOffset;
     QPointF valueLabelOffset;

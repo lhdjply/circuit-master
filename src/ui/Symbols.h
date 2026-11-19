@@ -44,5 +44,8 @@ QIcon svgIcon(const QString& path, bool forceFallback = false);
 
 /// 元件库图标。
 QIcon componentIcon(ComponentType type, const QSize& size = QSize(60, 42));
+/// 按一个具体元件画图标：用来区分「同类型但不同花样」的条目
+/// （比如五种逻辑门、五种接地符号）
+QIcon componentIcon(const Component& comp, const QSize& size = QSize(60, 42));
 
 } // namespace csm

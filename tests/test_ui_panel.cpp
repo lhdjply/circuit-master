@@ -20,6 +20,8 @@
 #include <QChart>
 #include <QChartView>
 #include <QCheckBox>
+#include <QDataStream>
+#include <QImage>
 #include <QComboBox>
 #include <QDialog>
 #include <QDir>
@@ -75,6 +77,8 @@ private slots:
     void transistorSymbolsRender();
     void editPropertiesAndRotate();
     void libraryFiltersByCategory();
+    void logicGateRowsInPanel();
+    void logicGateIconsDiffer();
     void libraryDragPixmapHasNoSelectionBackground();
 
 private:
@@ -557,6 +561,88 @@ void UiPanelTest::editPropertiesAndRotate()
     QCOMPARE(resistor->component().rotation, 270);
 }
 
+void UiPanelTest::logicGateIconsDiffer()
+{
+    // 元件库里五种门各占一条，图标必须按「具体是哪个门」画。
+    // 之前只把 ComponentType 传给 componentIcon，五条全画成同一个与门
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    QComboBox* category = nullptr;
+    for (QComboBox* box : window.findChildren<QComboBox*>()) {
+        if (box->count() > 0 && box->itemText(0) == QStringLiteral("全部"))
+            category = box;
+    }
+    QVERIFY(category);
+    const int logicIndex = category->findText(QStringLiteral("数字逻辑"));
+    QVERIFY(logicIndex > 0);
+    category->setCurrentIndex(logicIndex);
+    settle();
+
+    QListWidget* library = nullptr;
+    for (QListWidget* list : window.findChildren<QListWidget*>()) {
+        if (list->count() > 0 && list->count() <= 8)
+            library = list;
+    }
+    QVERIFY(library);
+    QCOMPARE(library->count(), 5);
+
+    QSet<QByteArray> seen;
+    for (int i = 0; i < library->count(); ++i) {
+        const QImage image = library->item(i)->icon().pixmap(QSize(60, 42)).toImage();
+        QByteArray bytes;
+        QDataStream stream(&bytes, QIODevice::WriteOnly);
+        stream << image;
+        seen.insert(bytes);
+    }
+    QCOMPARE(seen.size(), 5); // 五个门的图标互不相同
+}
+
+void UiPanelTest::logicGateRowsInPanel()
+{
+    // 逻辑门在属性面板里只有一行可调的参数：输出高电平。
+    // 门类型不放面板 —— 元件库里与门 / 或门 / 非门…各占一条，换门就重放一个
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    SchematicScene* scene = window.findChild<SchematicScene*>();
+    QVERIFY(scene);
+    auto* item = scene->placeComponent(ComponentType::LogicGate, QPointF(300, 300));
+    QVERIFY(item);
+    QCOMPARE(item->component().gateKind, GateKind::And);
+
+    item->setSelected(true);
+    settle();
+
+    QVERIFY2(window.findChild<QComboBox*>(QStringLiteral("gateKindCombo")) == nullptr,
+             "面板里不该再有门类型下拉框（元件库已经按门分类了）");
+
+    // 输出高电平：默认 3.3 V，改成 5
+    QLineEdit* high = nullptr;
+    for (QLineEdit* edit : window.findChildren<QLineEdit*>()) {
+        if (edit->placeholderText().contains(QStringLiteral("3.3")))
+            high = edit;
+    }
+    QVERIFY2(high, "属性面板里应当有高电平输入框");
+    high->setText(QStringLiteral("5"));
+    high->editingFinished();
+    settle();
+    QVERIFY2(std::abs(item->component().logicHigh - 5.0) < 1e-9,
+             qPrintable(QString::number(item->component().logicHigh)));
+
+    // 电阻不该显示这一行（先清掉门的选择，否则面板还在显示门）
+    item->setSelected(false);
+    auto* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(600, 300));
+    QVERIFY(resistor);
+    resistor->setSelected(true);
+    settle();
+    QVERIFY2(!high->isVisible(), "非逻辑门不该显示高电平输入框");
+}
+
 void UiPanelTest::libraryFiltersByCategory()
 {
     MainWindow window;
@@ -579,7 +665,7 @@ void UiPanelTest::libraryFiltersByCategory()
             category = box;
     }
     QVERIFY(category);
-    QCOMPARE(category->count(), 7); // 「全部」+ 6 个分类
+    QCOMPARE(category->count(), 8); // 「全部」+ 7 个分类
 
     // 每个分类都应当有内容，且加起来不超过全部
     QMap<QString, int> counts;
@@ -595,6 +681,7 @@ void UiPanelTest::libraryFiltersByCategory()
     QCOMPARE(counts.value(QStringLiteral("基础")), 4);        // R / C / L / 变压器
     QCOMPARE(counts.value(QStringLiteral("半导体")), 7);      // 二极管、LED、三极管、MOS、IGBT
     QCOMPARE(counts.value(QStringLiteral("模拟 IC")), 4);     // 运放 / TL431 / 光耦 / OB2362
+    QCOMPARE(counts.value(QStringLiteral("数字逻辑")), 5);     // 与 / 或 / 非 / 异或 / 同或
     QCOMPARE(counts.value(QStringLiteral("电源")), 2);        // 电压源 / 电流源
     QCOMPARE(counts.value(QStringLiteral("开关与接地")), 3);  // 开关 / 接地 / 网络标签
     QCOMPARE(counts.value(QStringLiteral("测量")), 3);        // TP / IP / 万用表

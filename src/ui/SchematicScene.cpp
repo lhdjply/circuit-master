@@ -121,6 +121,9 @@ ComponentItem* SchematicScene::placeComponent(ComponentType type, const QPointF&
     comp.rotation = 0;
 
     switch (type) {
+    case ComponentType::LogicGate:
+        // 门类型与高电平取默认值；从元件库拖进来时会带着具体类型
+        break;
     case ComponentType::Resistor:
         comp.value = 1000.0;
         break;

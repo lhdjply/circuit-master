@@ -113,6 +113,8 @@ private slots:
     void groundRequired();
     void meterServesAsReferenceWithoutGround();
     void anyGroundKindCanServeAsReference();
+    void logicGatesFollowTruthTable();
+    void logicGateChainSettles();
 };
 
 void CoreAnalysisTest::suggestedStepUsesPulseWidthNotEdge()
@@ -546,6 +548,204 @@ void CoreAnalysisTest::allPinsLandOnGrid()
             }
         }
     }
+}
+
+
+/// 搭一个「两个理想源驱动一个逻辑门，输出接 1 kΩ 到地」的电路，
+/// 返回输出节点在仿真结束时的电压（失败返回 -1）。
+/// 源用 rotation 90：0 号引脚（+）在上，1 号引脚（−）在下。
+double gateOutput(GateKind kind, double va, double vb)
+{
+    Circuit c;
+
+    Component gate;
+    gate.id = 1;
+    gate.type = ComponentType::LogicGate;
+    gate.pos = QPointF(400, 300);
+    gate.refdes = QStringLiteral("U1");
+    gate.gateKind = kind;
+    gate.logicHigh = 5.0;
+    c.components.append(gate);
+
+    Component src1;
+    src1.id = 2;
+    src1.type = ComponentType::VoltageSource;
+    src1.pos = QPointF(200, 290);
+    src1.rotation = 90;
+    src1.refdes = QStringLiteral("V1");
+    src1.dcValue = va;
+    c.components.append(src1);
+
+    Component src2;
+    src2.id = 3;
+    src2.type = ComponentType::VoltageSource;
+    src2.pos = QPointF(200, 420);
+    src2.rotation = 90;
+    src2.refdes = QStringLiteral("V2");
+    src2.dcValue = vb;
+    c.components.append(src2);
+
+    Component load;
+    load.id = 4;
+    load.type = ComponentType::Resistor;
+    load.pos = QPointF(600, 300);
+    load.refdes = QStringLiteral("R1");
+    load.value = 1000.0;
+    c.components.append(load);
+
+    Component gnd;
+    gnd.id = 5;
+    gnd.type = ComponentType::Ground;
+    gnd.pos = QPointF(100, 480);
+    gnd.refdes = QStringLiteral("GND1");
+    c.components.append(gnd);
+
+    // 门引脚：0 = 输入 A，1 = 输入 B（非门没有它），最后一个 = 输出
+    const QVector<QPointF> pins = gate.pinPositions();
+    const int outPin = int(pins.size()) - 1;
+
+    c.wires.append(Wire{{QPointF(200, 260), QPointF(200, 240), QPointF(340, 240),
+                         QPointF(340, 290), pins.at(0)}});
+    if (outPin == 2)
+        c.wires.append(Wire{{QPointF(200, 390), QPointF(200, 370), QPointF(320, 370),
+                             QPointF(320, 310), pins.at(1)}});
+    c.wires.append(Wire{{QPointF(200, 320), QPointF(100, 320), QPointF(100, 480)}});
+    c.wires.append(Wire{{QPointF(200, 450), QPointF(100, 450)}});
+    c.wires.append(Wire{{pins.last(), QPointF(570, 300)}});
+    c.wires.append(Wire{{QPointF(630, 300), QPointF(630, 480), QPointF(100, 480)}});
+
+    SimulationOptions options;
+    options.kind = AnalysisKind::Transient;
+    options.tStop = 3e-3;
+    options.tStep = 1e-3;
+    const SimulationResult result = Simulator::run(c, options);
+    if (!result.ok)
+        return -1.0;
+
+    const Netlist net = c.buildNetlist();
+    const Signal* out = result.signal(QStringLiteral("V(%1)").arg(net.nodeOf(gate.id, outPin)));
+    if (!out || out->y.isEmpty())
+        return -1.0;
+    return out->y.last();
+}
+
+void CoreAnalysisTest::logicGateChainSettles()
+{
+    // 两级串联（与门 → 非门）：门的状态要能在同一次求解里传下去，
+    // 不能靠「上一步的输入」慢慢爬 —— 否则直流工作点会停在中间态
+    Circuit c;
+
+    Component andGate;
+    andGate.id = 1;
+    andGate.type = ComponentType::LogicGate;
+    andGate.pos = QPointF(400, 300);
+    andGate.refdes = QStringLiteral("U1");
+    andGate.gateKind = GateKind::And;
+    andGate.logicHigh = 5.0;
+    c.components.append(andGate);
+
+    Component notGate;
+    notGate.id = 2;
+    notGate.type = ComponentType::LogicGate;
+    notGate.pos = QPointF(560, 300);
+    notGate.refdes = QStringLiteral("U2");
+    notGate.gateKind = GateKind::Not;
+    notGate.logicHigh = 5.0;
+    c.components.append(notGate);
+
+    Component src;
+    src.id = 3;
+    src.type = ComponentType::VoltageSource;
+    src.pos = QPointF(200, 290);
+    src.rotation = 90;
+    src.refdes = QStringLiteral("V1");
+    src.dcValue = 5.0;
+    c.components.append(src);
+
+    Component load;
+    load.id = 4;
+    load.type = ComponentType::Resistor;
+    load.pos = QPointF(700, 300);
+    load.refdes = QStringLiteral("R1");
+    load.value = 1000.0;
+    c.components.append(load);
+
+    Component gnd;
+    gnd.id = 5;
+    gnd.type = ComponentType::Ground;
+    gnd.pos = QPointF(100, 480);
+    gnd.refdes = QStringLiteral("GND1");
+    c.components.append(gnd);
+
+    const QPointF andIn0 = andGate.pinPositions().at(0);
+    const QPointF andIn1 = andGate.pinPositions().at(1);
+    const QPointF andOut = andGate.pinPositions().at(2);
+    const QPointF notIn = notGate.pinPositions().at(0);
+    const QPointF notOut = notGate.pinPositions().at(1);
+
+    // 源的 + 极同时接到与门的两个输入上
+    c.wires.append(Wire{{QPointF(200, 260), QPointF(200, 240), QPointF(340, 240),
+                         QPointF(340, 310), andIn1}});
+    c.wires.append(Wire{{QPointF(340, 290), andIn0}});
+    c.wires.append(Wire{{andOut, notIn}});
+    c.wires.append(Wire{{notOut, QPointF(670, 300)}});
+    c.wires.append(Wire{{QPointF(200, 320), QPointF(100, 320), QPointF(100, 480)}});
+    c.wires.append(Wire{{QPointF(730, 300), QPointF(730, 480), QPointF(100, 480)}});
+
+    SimulationOptions options;
+    options.kind = AnalysisKind::Transient;
+    options.tStop = 3e-3;
+    options.tStep = 1e-3;
+    const SimulationResult result = Simulator::run(c, options);
+    QVERIFY2(result.ok, qPrintable(result.error));
+
+    const Netlist net = c.buildNetlist();
+    const Signal* andSignal =
+        result.signal(QStringLiteral("V(%1)").arg(net.nodeOf(andGate.id, 2)));
+    const Signal* notSignal =
+        result.signal(QStringLiteral("V(%1)").arg(net.nodeOf(notGate.id, 1)));
+    QVERIFY(andSignal);
+    QVERIFY(notSignal);
+    // 与门两个输入都是 5 V → 输出 5 V；非门再反相 → 0 V
+    QVERIFY2(andSignal->y.last() > 4.9, qPrintable(QString::number(andSignal->y.last())));
+    QVERIFY2(notSignal->y.last() < 0.01, qPrintable(QString::number(notSignal->y.last())));
+}
+
+void CoreAnalysisTest::logicGatesFollowTruthTable()
+{
+    // 五个门逐一核对真值表。输出按「理想电平 + 100 Ω 内阻」等效，
+    // 接 1 kΩ 到地时仍是干净的电平（高 5 V / 低 0 V）
+    auto high = [](double v) { return v > 2.5; };
+    auto low = [](double v) { return v >= 0.0 && v < 0.2; };
+
+    // 与门：只有两个输入都高才输出高
+    const double andOut = gateOutput(GateKind::And, 5.0, 5.0);
+    QVERIFY2(high(andOut), qPrintable(QString::number(andOut)));
+    QVERIFY(low(gateOutput(GateKind::And, 5.0, 0.0)));
+    QVERIFY(low(gateOutput(GateKind::And, 0.0, 5.0)));
+    QVERIFY(low(gateOutput(GateKind::And, 0.0, 0.0)));
+
+    // 或门：有一个高就高
+    QVERIFY(high(gateOutput(GateKind::Or, 5.0, 0.0)));
+    QVERIFY(high(gateOutput(GateKind::Or, 0.0, 5.0)));
+    QVERIFY(high(gateOutput(GateKind::Or, 5.0, 5.0)));
+    QVERIFY(low(gateOutput(GateKind::Or, 0.0, 0.0)));
+
+    // 非门：一个输入，反相
+    QVERIFY(low(gateOutput(GateKind::Not, 5.0, 0.0)));
+    QVERIFY(high(gateOutput(GateKind::Not, 0.0, 0.0)));
+
+    // 异或门：两个不一样才高
+    QVERIFY(high(gateOutput(GateKind::Xor, 5.0, 0.0)));
+    QVERIFY(high(gateOutput(GateKind::Xor, 0.0, 5.0)));
+    QVERIFY(low(gateOutput(GateKind::Xor, 5.0, 5.0)));
+    QVERIFY(low(gateOutput(GateKind::Xor, 0.0, 0.0)));
+
+    // 同或门：两个一样才高
+    QVERIFY(high(gateOutput(GateKind::Xnor, 5.0, 5.0)));
+    QVERIFY(high(gateOutput(GateKind::Xnor, 0.0, 0.0)));
+    QVERIFY(low(gateOutput(GateKind::Xnor, 5.0, 0.0)));
+    QVERIFY(low(gateOutput(GateKind::Xnor, 0.0, 5.0)));
 }
 
 void CoreAnalysisTest::anyGroundKindCanServeAsReference()

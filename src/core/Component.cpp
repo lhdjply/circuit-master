@@ -27,6 +27,19 @@ QVector<QPointF> pinOffsets(const Component& comp)
         return {QPointF(-30.0, -10.0), QPointF(-30.0, 10.0), QPointF(30.0, -10.0),
                 QPointF(30.0, 10.0)};
     }
+    // 逻辑门：0..n-1 是输入（左侧上下排开），最后一个引脚是输出（右侧）
+    if (comp.type == ComponentType::LogicGate) {
+        QVector<QPointF> pins;
+        const int inputs = gateInputCount(comp.gateKind);
+        if (inputs == 1) {
+            pins.append(QPointF(-30.0, 0.0));
+        } else {
+            pins.append(QPointF(-30.0, -10.0));
+            pins.append(QPointF(-30.0, 10.0));
+        }
+        pins.append(QPointF(30.0, 0.0));
+        return pins;
+    }
     return pinOffsets(comp.type);
 }
 
@@ -84,6 +97,23 @@ int pinCount(ComponentType type)
     }
 }
 
+QString gateKindName(GateKind kind)
+{
+    switch (kind) {
+    case GateKind::And:  return QStringLiteral("与门");
+    case GateKind::Or:   return QStringLiteral("或门");
+    case GateKind::Not:  return QStringLiteral("非门");
+    case GateKind::Xor:  return QStringLiteral("异或门");
+    case GateKind::Xnor: return QStringLiteral("同或门");
+    }
+    return QStringLiteral("与门");
+}
+
+int gateInputCount(GateKind kind)
+{
+    return kind == GateKind::Not ? 1 : 2;
+}
+
 QString groundKindName(GroundKind kind)
 {
     switch (kind) {
@@ -122,6 +152,7 @@ QString typeName(ComponentType type)
     case ComponentType::CurrentProbe:  return QStringLiteral("电流测试点");
     case ComponentType::Multimeter:    return QStringLiteral("万用表");
     case ComponentType::NetLabel:      return QStringLiteral("网络标签");
+    case ComponentType::LogicGate:     return QStringLiteral("逻辑门");
     case ComponentType::Ground:        return QStringLiteral("接地");
     }
     return QString();
@@ -153,6 +184,7 @@ QString typeSymbol(ComponentType type)
     case ComponentType::CurrentProbe:  return QStringLiteral("IP");
     case ComponentType::Multimeter:    return QStringLiteral("XMM");
     case ComponentType::NetLabel:      return QStringLiteral("NET");
+    case ComponentType::LogicGate:     return QStringLiteral("U");
     case ComponentType::Ground:        return QStringLiteral("GND");
     }
     return QString();
@@ -326,6 +358,7 @@ QString Component::unitName() const
     case ComponentType::CurrentProbe:  return QStringLiteral("A");
     case ComponentType::Multimeter:    return QString(); // 万用表没有可设的数值
     case ComponentType::NetLabel:      return QString(); // 网络标签只有名字
+    case ComponentType::LogicGate:     return QStringLiteral("V");
     }
     return QString();
 }
@@ -359,6 +392,10 @@ QString Component::displayValue() const
 
     case ComponentType::OpAmp:
         return QStringLiteral("A = ") + formatEng(value, QString(), 3);
+
+    case ComponentType::LogicGate:
+        return gateKindName(gateKind) + QStringLiteral("  ")
+            + formatEng(logicHigh, QStringLiteral("V"), 2);
 
     case ComponentType::Led:
         return QStringLiteral("Vf = ") + formatEng(vf, QStringLiteral("V"), 3);

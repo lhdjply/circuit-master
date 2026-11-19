@@ -155,6 +155,14 @@ void PropertyPanel::buildUi()
 
     m_form->addRow(QStringLiteral("档位"), m_meterMode);
 
+    // 门类型不在这里改：元件库里与门 / 或门 / 非门…各占一条，
+    // 要换门就删掉重放。面板只留真正需要调的参数
+    m_logicHigh = makeEdit();
+    m_logicHigh->setToolTip(QStringLiteral("输出的高电平。低电平固定 0 V，"
+                                           "输入阈值取它的一半（带 5% 回差）。"));
+    m_logicHigh->setPlaceholderText(QStringLiteral("例如 3.3"));
+    m_form->addRow(QStringLiteral("高电平 (V)"), m_logicHigh);
+
     m_acFrequency = makeEdit();
     m_acFrequency->setToolTip(
         QStringLiteral("交流档按一个周期算有效值：窗口 = 1 / 这个频率。\n"
@@ -254,6 +262,7 @@ void PropertyPanel::buildUi()
     connect(m_meterMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &PropertyPanel::applyValue);
     connect(m_acFrequency, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
+    connect(m_logicHigh, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_netLabel, &QLineEdit::editingFinished, this, &PropertyPanel::applyNetLabel);
     connect(m_windings, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int) { applyValue(); });
@@ -347,6 +356,7 @@ void PropertyPanel::refreshFromItem()
     m_lpri->setText(quantityText(c.lpri, UnitKind::Henry));
     m_windings->setCurrentIndex(m_windings->findData(int(c.transformerKind)));
     m_meterMode->setCurrentIndex(m_meterMode->findData(int(c.multimeterMode)));
+    m_logicHigh->setText(quantityText(c.logicHigh, UnitKind::Volt));
     m_netLabel->setText(c.netLabel);
     m_acFrequency->setText(quantityText(c.acFrequency, UnitKind::Hertz));
     m_polarity->setCurrentIndex(m_polarity->findData(c.secondaryInverted ? 1 : 0));
@@ -399,6 +409,7 @@ void PropertyPanel::updateVisibility()
     m_form->setRowVisible(m_ctr, c.type == ComponentType::Optocoupler);
     m_form->setRowVisible(m_vceSat, c.type == ComponentType::Optocoupler);
     m_form->setRowVisible(m_lpri, c.type == ComponentType::Transformer);
+    m_form->setRowVisible(m_logicHigh, c.type == ComponentType::LogicGate);
 
     if (m_valueLabel) {
         switch (c.type) {
@@ -583,6 +594,23 @@ void PropertyPanel::applyValue()
     if (type == ComponentType::Ground || type == ComponentType::Probe) {
         Component c = m_item->component();
         c.groundKind = static_cast<GroundKind>(m_groundKind->currentData().toInt());
+        m_item->setComponent(c);
+        updateSubtitle();
+        emit changed();
+        return;
+    }
+
+    if (type == ComponentType::LogicGate) {
+        Component c = m_item->component();
+        bool ok = false;
+        QString reason;
+        const double high = parseQuantity(m_logicHigh->text(), UnitKind::Volt, &ok, &reason);
+        if (!ok || high <= 0.0) {
+            markInvalid(m_logicHigh, ok ? QStringLiteral("高电平必须大于 0") : reason);
+            return;
+        }
+        markValid(m_logicHigh);
+        c.logicHigh = high;
         m_item->setComponent(c);
         updateSubtitle();
         emit changed();

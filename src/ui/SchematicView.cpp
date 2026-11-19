@@ -186,6 +186,7 @@ void SchematicView::dropEvent(QDropEvent* event)
     const QStringList parts = payload.split(QLatin1Char(':'));
     const int typeValue = parts.value(0).toInt(&ok);
     const int groundKind = parts.size() > 1 ? parts.at(1).toInt() : 0;
+    const int gateKind = parts.size() > 2 ? parts.at(2).toInt() : 0;
     if (!ok) {
         event->ignore();
         return;
@@ -199,6 +200,11 @@ void SchematicView::dropEvent(QDropEvent* event)
             && groundKind != int(GroundKind::Gnd)) {
             Component comp = item->component();
             comp.groundKind = static_cast<GroundKind>(groundKind);
+            item->setComponent(comp);
+        }
+        if (item->component().type == ComponentType::LogicGate) {
+            Component comp = item->component();
+            comp.gateKind = static_cast<GateKind>(gateKind);
             item->setComponent(comp);
         }
         m_scene->clearSelection();

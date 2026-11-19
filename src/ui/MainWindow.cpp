@@ -111,9 +111,10 @@ protected:
             return nullptr;
         auto* mime = new QMimeData;
         mime->setData(QLatin1String(kComponentMimeType),
-                      QStringLiteral("%1:%2")
+                      QStringLiteral("%1:%2:%3")
                           .arg(items.first()->data(Qt::UserRole).toInt())
                           .arg(items.first()->data(Qt::UserRole + 1).toInt())
+                          .arg(items.first()->data(Qt::UserRole + 2).toInt())
                           .toUtf8());
         return mime;
     }
@@ -129,9 +130,10 @@ protected:
 
         auto* mime = new QMimeData;
         mime->setData(QLatin1String(kComponentMimeType),
-                      QStringLiteral("%1:%2")
+                      QStringLiteral("%1:%2:%3")
                           .arg(item->data(Qt::UserRole).toInt())
                           .arg(item->data(Qt::UserRole + 1).toInt())
+                          .arg(item->data(Qt::UserRole + 2).toInt())
                           .toUtf8());
 
         const qreal ratio = devicePixelRatioF();
@@ -966,6 +968,7 @@ void MainWindow::buildLibrary()
         QString text;
         QString category;
         GroundKind groundKind = GroundKind::Gnd; // 接地符号的种类
+        GateKind gateKind = GateKind::And;       // 逻辑门的种类
     };
     const QVector<Entry> entries = {
         // 按分类排好，同类的挨在一起，「全部」列表也有顺序
@@ -986,6 +989,17 @@ void MainWindow::buildLibrary()
         {ComponentType::Tl431, QStringLiteral("TL431 基准  VR"), QStringLiteral("模拟 IC")},
         {ComponentType::Optocoupler, QStringLiteral("光耦  OC"), QStringLiteral("模拟 IC")},
         {ComponentType::Ob2362, QStringLiteral("OB2362 控制器  U"), QStringLiteral("模拟 IC")},
+
+        {ComponentType::LogicGate, QStringLiteral("与门  AND"), QStringLiteral("数字逻辑"),
+         GroundKind::Gnd, GateKind::And},
+        {ComponentType::LogicGate, QStringLiteral("或门  OR"), QStringLiteral("数字逻辑"),
+         GroundKind::Gnd, GateKind::Or},
+        {ComponentType::LogicGate, QStringLiteral("非门  NOT"), QStringLiteral("数字逻辑"),
+         GroundKind::Gnd, GateKind::Not},
+        {ComponentType::LogicGate, QStringLiteral("异或门  XOR"), QStringLiteral("数字逻辑"),
+         GroundKind::Gnd, GateKind::Xor},
+        {ComponentType::LogicGate, QStringLiteral("同或门  XNOR"), QStringLiteral("数字逻辑"),
+         GroundKind::Gnd, GateKind::Xnor},
 
         {ComponentType::VoltageSource, QStringLiteral("电压源  V"), QStringLiteral("电源")},
         {ComponentType::CurrentSource, QStringLiteral("电流源  I"), QStringLiteral("电源")},
@@ -1008,9 +1022,16 @@ void MainWindow::buildLibrary()
     for (const Entry& entry : entries) {
         if (!showAll && entry.category != category)
             continue;
-        auto* item = new QListWidgetItem(componentIcon(entry.type), entry.text, m_library);
+        // 图标按「具体这一个元件」画：五种逻辑门、五种接地符号长得都不一样，
+        // 只给 ComponentType 的话五条会全画成同一个样子
+        Component proto;
+        proto.type = entry.type;
+        proto.gateKind = entry.gateKind;
+        proto.groundKind = entry.groundKind;
+        auto* item = new QListWidgetItem(componentIcon(proto), entry.text, m_library);
         item->setData(Qt::UserRole, int(entry.type));
         item->setData(Qt::UserRole + 1, int(entry.groundKind));
+        item->setData(Qt::UserRole + 2, int(entry.gateKind));
         item->setSizeHint(QSize(0, 46));
     }
 }
@@ -1030,8 +1051,9 @@ void MainWindow::createDocks()
     m_libraryCategory->addItem(QStringLiteral("全部"));
     // 按「器件性质」分，别把 11 个东西都堆在「半导体」里
     for (const QString& name : {QStringLiteral("基础"), QStringLiteral("半导体"),
-                                QStringLiteral("模拟 IC"), QStringLiteral("电源"),
-                                QStringLiteral("开关与接地"), QStringLiteral("测量")}) {
+                                QStringLiteral("模拟 IC"), QStringLiteral("数字逻辑"),
+                                QStringLiteral("电源"), QStringLiteral("开关与接地"),
+                                QStringLiteral("测量")}) {
         m_libraryCategory->addItem(name);
     }
     m_libraryCategory->setToolTip(QStringLiteral("按类别筛选元件"));

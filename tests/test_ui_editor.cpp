@@ -65,6 +65,7 @@ class UiEditorTest : public QObject {
 private slots:
     void initTestCase();
     void componentLabelsCanBeDragged();
+    void logicGatePinsStayOnGrid();
     void hitAreaFollowsRotation();
     void probeStaysClickableWhenRotated();
     void splitDrawnWiresKeepJunction();
@@ -145,6 +146,54 @@ void UiEditorTest::initTestCase()
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     std::setvbuf(stderr, nullptr, _IONBF, 0);
     csm::installQtTranslations(qApp);
+}
+
+void UiEditorTest::logicGatePinsStayOnGrid()
+{
+    // 逻辑门的引脚数随门类型变（非门 2 个、其余 3 个），引脚位置也必须落在
+    // 10 px 网格上 —— 否则斜放或旋转之后导线接不上去
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    SchematicScene* scene = currentScene(window);
+    QVERIFY(scene);
+
+    const QVector<QPair<GateKind, int>> expected = {
+        {GateKind::And, 3}, {GateKind::Or, 3}, {GateKind::Not, 2},
+        {GateKind::Xor, 3}, {GateKind::Xnor, 3}};
+
+    int index = 0;
+    for (const auto& entry : expected) {
+        auto* item = scene->placeComponent(ComponentType::LogicGate,
+                                           QPointF(200 + index * 120, 200));
+        QVERIFY(item);
+        Component comp = item->component();
+        comp.gateKind = entry.first;
+        QCOMPARE(gateInputCount(entry.first) + 1, entry.second);
+        item->setComponent(comp);
+        settle();
+
+        for (int rotation : {0, 90, 45}) {
+            Component c = item->component();
+            c.rotation = rotation;
+            item->setComponent(c);
+            settle();
+
+            const QVector<QPointF> pins = item->component().pinPositions();
+            QCOMPARE(pins.size(), entry.second);
+            for (const QPointF& pin : pins) {
+                QVERIFY2(std::abs(pin.x() / 10.0 - std::round(pin.x() / 10.0)) < 1e-9
+                             && std::abs(pin.y() / 10.0 - std::round(pin.y() / 10.0)) < 1e-9,
+                         qPrintable(QStringLiteral("%1 的引脚没在网格上：(%2, %3)")
+                                        .arg(gateKindName(entry.first))
+                                        .arg(pin.x())
+                                        .arg(pin.y())));
+            }
+        }
+        ++index;
+    }
 }
 
 void UiEditorTest::componentLabelsCanBeDragged()

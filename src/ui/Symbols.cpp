@@ -81,6 +81,10 @@ QPainterPath symbolShape(ComponentType type)
         path.closeSubpath();
         return path;
     }
+    if (type == ComponentType::LogicGate) {
+        path.addRoundedRect(QRectF(-24.0, -18.0, 48.0, 36.0), 4.0, 4.0);
+        return path;
+    }
     if (type == ComponentType::Transformer) {
         path.addRoundedRect(QRectF(-30.0, -22.0, 60.0, 44.0), 4.0, 4.0);
         return path;
@@ -246,6 +250,72 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         p->drawLine(QPointF(-10.0, -15.0), QPointF(-10.0, -9.0));
         // 反相输入 −
         p->drawLine(QPointF(-13.0, 12.0), QPointF(-7.0, 12.0));
+        break;
+    }
+
+    case ComponentType::LogicGate: {
+        const GateKind kind = comp.gateKind;
+        const int inputs = gateInputCount(kind);
+        const bool curved = kind == GateKind::Or || kind == GateKind::Xor
+            || kind == GateKind::Xnor;
+
+        // 输入 / 输出引线
+        const double bodyLeft = (kind == GateKind::Xor || kind == GateKind::Xnor) ? -27.0 : -18.0;
+        if (inputs == 1) {
+            p->drawLine(QPointF(-30.0, 0.0), QPointF(bodyLeft, 0.0));
+        } else {
+            p->drawLine(QPointF(-30.0, -10.0), QPointF(bodyLeft, -10.0));
+            p->drawLine(QPointF(-30.0, 10.0), QPointF(bodyLeft, 10.0));
+        }
+
+        QPainterPath body;
+        if (kind == GateKind::Not) {
+            QPolygonF tri;
+            tri << QPointF(-18.0, 15.0) << QPointF(-18.0, -15.0) << QPointF(14.0, 0.0);
+            body.addPolygon(tri);
+            body.closeSubpath();
+        } else if (!curved) {
+            // 与门：左直边 + 右半圆。用三次贝塞尔画那半个圆 ——
+            // arcTo 的扫掠方向在屏幕坐标系里容易画反，写死曲线更稳
+            body.moveTo(-18.0, 16.0);
+            body.lineTo(-2.0, 16.0);
+            body.cubicTo(QPointF(17.0, 16.0), QPointF(17.0, -16.0), QPointF(-2.0, -16.0));
+            body.lineTo(-18.0, -16.0);
+            body.closeSubpath();
+        } else {
+            // 或门：右侧收成尖角，后沿内凹
+            body.moveTo(-20.0, 16.0);
+            body.quadTo(-8.0, 16.0, 18.0, 0.0);
+            body.quadTo(-8.0, -16.0, -20.0, -16.0);
+            body.quadTo(-12.0, 0.0, -20.0, 16.0);
+            body.closeSubpath();
+        }
+
+        p->setBrush(theme::symbolFill);
+        p->drawPath(body);
+        p->setBrush(Qt::NoBrush);
+
+        // 异或 / 同或：后沿外面再加一条弧
+        if (kind == GateKind::Xor || kind == GateKind::Xnor) {
+            QPainterPath back;
+            back.moveTo(-27.0, 16.0);
+            back.quadTo(-19.0, 0.0, -27.0, -16.0);
+            p->drawPath(back);
+        }
+
+        // 非门 / 同或门：输出端的小圆圈，再补一截引线到引脚
+        if (kind == GateKind::Not) {
+            p->drawEllipse(QPointF(18.0, 0.0), 4.0, 4.0);
+            p->drawLine(QPointF(22.0, 0.0), QPointF(30.0, 0.0));
+        } else if (kind == GateKind::Xnor) {
+            p->drawEllipse(QPointF(22.0, 0.0), 4.0, 4.0);
+            p->drawLine(QPointF(26.0, 0.0), QPointF(30.0, 0.0));
+        } else {
+            // 与门 / 或门 / 异或门的输出引脚从符号最右端算起
+            // 与门的右缘在 x≈16，或门 / 异或门的尖角在 18
+            p->drawLine(QPointF(kind == GateKind::And ? 16.0 : 18.0, 0.0),
+                        QPointF(30.0, 0.0));
+        }
         break;
     }
 
@@ -773,20 +843,24 @@ QIcon svgIcon(const QString& path, bool forceFallback)
 
 QIcon componentIcon(ComponentType type, const QSize& size)
 {
+    Component comp;
+    comp.type = type;
+    comp.value = 1000.0;
+    comp.function = SourceFunction::Sine;
+    comp.closed = true;
+    return componentIcon(comp, size);
+}
+
+QIcon componentIcon(const Component& comp, const QSize& size)
+{
     QPixmap pm(size);
     pm.fill(Qt::transparent);
 
     QPainter p(&pm);
     p.setRenderHint(QPainter::Antialiasing, true);
 
-    Component comp;
-    comp.type = type;
-    comp.value = 1000.0;
-    comp.function = SourceFunction::Sine;
-    comp.closed = true;
-
     p.translate(size.width() / 2.0, size.height() / 2.0);
-    if (type == ComponentType::Probe)
+    if (comp.type == ComponentType::Probe)
         p.translate(0.0, 8.0);
     const double sx = size.width() / 84.0;
     const double sy = size.height() / 54.0;
