@@ -1,13 +1,20 @@
 #include "ui/SingleInstance.h"
 
+#include <QRegularExpression>
+
+#if !defined(Q_OS_ANDROID)
 #include <QEventLoop>
 #include <QLocalServer>
 #include <QLocalSocket>
-#include <QRegularExpression>
 #include <QTimer>
+#endif
 
 namespace csm {
 
+#if !defined(Q_OS_ANDROID)
+// 这几个常量只在真实现里用得上。放在 #if 里面：Android 那份空壳实现不碰它们，
+// 留在外面编译器会报 unused-const-variable（Clang 对匿名命名空间里的静态常量
+// 一样会警告）
 namespace {
 
 /// 连接已有实例时的重试次数与间隔：刚启动的进程可能还没 listen 好，
@@ -23,6 +30,11 @@ SingleInstance::SingleInstance(const QString& key, QObject* parent)
     : QObject(parent)
 {
     m_socketName = socketName(key);
+}
+
+bool SingleInstance::listening() const
+{
+    return m_server != nullptr;
 }
 
 SingleInstance::~SingleInstance()
@@ -149,5 +161,40 @@ void SingleInstance::acceptConnection()
             finish();
     }
 }
+
+
+
+#else // Q_OS_ANDROID
+
+// Android 上没有「第二个实例」这回事：系统保证一个应用只有一份前台进程，
+// 再点一次图标只是把它切到前台。这里保留同样的接口，让 main.cpp 不用分叉。
+SingleInstance::SingleInstance(const QString& key, QObject* parent)
+    : QObject(parent)
+{
+    m_socketName = socketName(key);
+}
+
+SingleInstance::~SingleInstance() = default;
+
+bool SingleInstance::promote(const QStringList& files)
+{
+    Q_UNUSED(files);
+    return true; // 永远当自己是唯一实例
+}
+
+bool SingleInstance::listening() const
+{
+    return false;
+}
+
+QString SingleInstance::socketName(const QString& key)
+{
+    Q_UNUSED(key);
+    return QString();
+}
+
+void SingleInstance::acceptConnection() {}
+
+#endif // Q_OS_ANDROID
 
 } // namespace csm

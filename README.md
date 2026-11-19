@@ -233,6 +233,51 @@ cmake --build build -j"$(nproc)"
 ./build/CircuitMaster
 ```
 
+### 构建 Android 版（实验性）
+
+需要 Qt for Android（6.5+）、Android SDK 与 NDK r26：
+
+```bash
+export ANDROID_SDK_ROOT=~/Android/Sdk
+export ANDROID_NDK_ROOT=$ANDROID_SDK_ROOT/ndk/26.1.10909125
+
+# 用 Qt 自带的 qt-cmake 包装器：它会指定交叉编译用的 toolchain 与宿主 Qt
+~/Qt/6.10.2/android_arm64_v8a/bin/qt-cmake -S . -B build-android -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DANDROID_SDK_ROOT="$ANDROID_SDK_ROOT" \
+    -DANDROID_NDK_ROOT="$ANDROID_NDK_ROOT" \
+    -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-23 \
+    -DCSM_BUILD_TESTS=OFF
+
+cmake --build build-android --parallel
+cmake --build build-android --target apk      # 产出 APK 的是单独的 apk 目标
+```
+
+装到设备上：
+
+```bash
+adb install -r build-android/android-build/build/outputs/apk/debug/*.apk
+```
+
+**现状与限制**：核心（网表、求解器、文件格式）和界面都能编出来，APK 也能装，
+但**触摸交互还没做** —— 现在是把桌面界面直接搬到 Android 上：
+
+| 已经适配 | 还没做 |
+| --- | --- |
+| 单实例退化为空实现（系统本就只有一份前台进程） | 右键菜单 → 长按菜单 |
+| 更新检查照常可用；下载完把 APK 交给**系统安装器** | 滚轮缩放 → 双指捏合 |
+| 桌面的 `.desktop` / MIME / 安装规则跳过 | 悬停高亮（触摸屏没有悬停） |
+| 测试默认不建（Android 上跑不了 ctest） | 30 处快捷键 → 屏幕按钮 |
+| 包名与 versionCode 由 `VERSION` 推出 | 多窗口 → 单窗口（波形监控 / 万用表是独立窗口） |
+| | 手机尺寸的三栏布局（当前按 1400×880 排） |
+
+换句话说：**能跑，但要用鼠标键盘才顺手**。平板 + 手写笔的方向是成立的，
+手机竖屏目前不可用。
+
+Android 版不走应用商店，安装包直接分发（侧载）：更新时程序自己下载 APK，
+再交给系统安装器 —— 需要在系统设置里允许「安装未知应用」。
+从商店分发是不行的：Play 禁止应用内自更新，那样就得把这条链路整个删掉。
+
 ### 安装到系统
 
 ```bash

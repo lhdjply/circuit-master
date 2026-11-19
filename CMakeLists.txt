@@ -196,9 +196,37 @@ if(WIN32)
     target_sources(CircuitMaster PRIVATE resources/win/circuit-master.rc)
 endif()
 
+# Android：qt_add_executable 会顺带产出 APK/AAB 的构建目标。
+# versionCode 必须是单调递增的整数，这里从 VERSION 推出来
+# （0.3.3 → 303），发布新版本时自然递增。
+if(ANDROID)
+    string(REPLACE "." ";" CSM_VERSION_PARTS "${CSM_VERSION_NUMBER}")
+    list(GET CSM_VERSION_PARTS 0 CSM_VER_MAJOR)
+    list(GET CSM_VERSION_PARTS 1 CSM_VER_MINOR)
+    list(GET CSM_VERSION_PARTS 2 CSM_VER_PATCH)
+    math(EXPR CSM_ANDROID_VERSION_CODE
+         "${CSM_VER_MAJOR} * 10000 + ${CSM_VER_MINOR} * 100 + ${CSM_VER_PATCH}")
+
+    set_target_properties(CircuitMaster PROPERTIES
+        QT_ANDROID_PACKAGE_NAME "io.github.lhdjply.circuitmaster"
+        QT_ANDROID_VERSION_NAME "${CSM_VERSION_NUMBER}"
+        QT_ANDROID_VERSION_CODE ${CSM_ANDROID_VERSION_CODE}
+    )
+    message(STATUS "Android 包名 io.github.lhdjply.circuitmaster，"
+                   "版本 ${CSM_VERSION_NUMBER}（versionCode ${CSM_ANDROID_VERSION_CODE}）")
+endif()
+
 # ---------------------------------------------------------------- 测试
-# 打包时用 -DCSM_BUILD_TESTS=OFF 跳过（见 debian/rules）
-option(CSM_BUILD_TESTS "构建单元测试（需要 Qt6::Test）" ON)
+# 打包时用 -DCSM_BUILD_TESTS=OFF 跳过（见 debian/rules）；
+# Android 上没有能跑 ctest 的环境，也默认关掉
+if(ANDROID)
+    # Android 上 ctest 跑不起来（没有桌面事件循环，也没有 adb 拉日志的钩子），
+    # 默认不建测试二进制，免得白编一遍
+    set(CSM_BUILD_TESTS_DEFAULT OFF)
+else()
+    set(CSM_BUILD_TESTS_DEFAULT ON)
+endif()
+option(CSM_BUILD_TESTS "构建单元测试（需要 Qt6::Test）" ${CSM_BUILD_TESTS_DEFAULT})
 
 if (CSM_BUILD_TESTS AND TARGET Qt6::Test)
     enable_testing()
@@ -238,7 +266,11 @@ if (CSM_BUILD_TESTS AND TARGET Qt6::Test)
 endif()
 
 # ---------------------------------------------------------------- 安装
-if(APPLE)
+# Android 的一切（清单、图标、库）都由 Qt 的 androiddeployqt 负责，
+# 这里不要往 prefix 里装任何东西
+if(ANDROID)
+    # 空分支：交给 Qt 打包
+elseif(APPLE)
     # MACOSX_BUNDLE 的目标必须给 BUNDLE DESTINATION，否则 configure 直接报错。
     # .app 装到 prefix 根下（例如 -DCMAKE_INSTALL_PREFIX=/Applications），
     # 这是 macOS 的惯例；发布用的 .dmg 由 CI 直接对 build/CircuitMaster.app

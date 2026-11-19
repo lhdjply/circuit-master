@@ -452,6 +452,29 @@ void UpdateDialog::installDownloaded(const QString& path)
     const QFileInfo info(path);
     const QString suffix = info.suffix().toLower();
 
+#if defined(Q_OS_ANDROID)
+    // Android：安装包由系统安装器接管，应用自己没有安装权限。
+    // 直接把 APK 交给系统（Qt 会把本地文件转成 content:// 再发 Intent）；
+    // 系统不让装（没开「未知来源」）就退回到发布页，让用户自己下载安装。
+    if (suffix == QLatin1String("apk")) {
+        m_status->setText(QStringLiteral("已下载，正在打开安装程序…"));
+        if (QDesktopServices::openUrl(QUrl::fromLocalFile(path))) {
+            m_status->setText(QStringLiteral(
+                "已交给系统安装器。若没有弹出安装界面，请在系统设置里允许"
+                "「安装未知应用」后重试。"));
+            QSettings().setValue(QStringLiteral("pendingInstaller"), path);
+        } else {
+            m_status->setText(QStringLiteral("无法打开安装器，已打开发布页：%1")
+                                  .arg(m_release.pageUrl.toString()));
+            QDesktopServices::openUrl(m_release.pageUrl);
+        }
+        return;
+    }
+    // 其他后缀（.exe / .deb）在 Android 上没有意义，直接打开发布页
+    m_status->setText(QStringLiteral("这个安装包不能在 Android 上安装，已打开发布页。"));
+    QDesktopServices::openUrl(m_release.pageUrl);
+    return;
+#else
     // Windows 安装包：直接拉起，装完由下次启动清理
     if (suffix == QLatin1String("exe")) {
         m_status->setText(QStringLiteral("已下载，正在启动安装程序…"));
@@ -496,6 +519,7 @@ void UpdateDialog::installDownloaded(const QString& path)
     // 便携包（tar.gz / zip）：不能自动覆盖正在运行的程序，打开所在文件夹让用户自己解压
     m_status->setText(QStringLiteral("便携包已下载到 %1，解压后覆盖原目录即可").arg(path));
     QDesktopServices::openUrl(QUrl::fromLocalFile(info.absolutePath()));
+#endif // Q_OS_ANDROID
 }
 
 void UpdateDialog::cleanupPendingInstaller()
