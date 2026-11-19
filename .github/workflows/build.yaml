@@ -439,6 +439,39 @@ jobs:
           cmake --build build-android --parallel
           cmake --build build-android --target apk --parallel
 
+      # 签名。release 构建默认出的是**未签名** APK，Android 会直接拒绝安装
+      #（"该安装包未包含任何证书"）。这里用仓库里的密钥签：
+      #   resources/android/sideload.keystore，别名 circuit-master
+      # 口令写在下面 —— 这把密钥是**公开**的，只适合自发分发（侧载）：
+      # 谁拿到仓库都能用同一身份签名。要正式分发请换成自己的密钥，
+      # 并用 secrets 传进来（换了密钥之后用户需要卸载重装一次）。
+      # 这个作业只验证「编得出来、签得上」，所以原地替换 build-android 里的那个。
+      - name: Sign the APK
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          tools=$(find "$sdk/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          zipalign="$tools/zipalign"
+          apksigner="$tools/apksigner"
+          if [ ! -x "$apksigner" ]; then
+            echo "::error::apksigner not found under $tools"
+            exit 1
+          fi
+
+          apk=$(find build-android -name '*.apk' -print -quit)
+          if [ -z "$apk" ]; then
+            echo "::error::no APK was produced"
+            exit 1
+          fi
+
+          # zipalign 必须在校名前做，apksigner 之后不能再改文件
+          "$zipalign" -p -f 4 "$apk" "$apk.aligned"
+          "$apksigner" sign --ks resources/android/sideload.keystore \
+            --ks-pass "pass:circuitmaster" --ks-key-alias circuit-master \
+            --key-pass "pass:circuitmaster" --out "$apk" "$apk.aligned"
+          rm -f "$apk.aligned"
+          "$apksigner" verify --print-certs "$apk"
+
       - name: Verify the APK
         run: |
           set -euo pipefail

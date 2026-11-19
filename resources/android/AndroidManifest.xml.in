@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Android 清单模板。CMake 在配置阶段用 @变量@ 填好，输出到构建目录的
+  android-package/ 下（见 CMakeLists.txt 的 Android 分支），再交给
+  QT_ANDROID_PACKAGE_SOURCE_DIR。
+
+  故意不用 androiddeployqt 的 INSERT 系列占位符：那几个占位符在不同 Qt
+  版本里替换规则不完全一样，让 CMake 用 @变量@ 直接填更可控。
+  （注意：XML 注释里不能出现连续两个减号，所以这里不能照抄占位符原文。）
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="@CSM_ANDROID_PACKAGE@"
+    android:installLocation="auto"
+    android:versionCode="@CSM_ANDROID_VERSION_CODE@"
+    android:versionName="@CSM_VERSION_NUMBER@">
+
+    <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="34"/>
+
+    <!-- 检查更新要联网 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- 侧载更新：下载完的 APK 要交给系统安装器（Android 8+ 需要这条） -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+
+    <application
+        android:name="org.qtproject.qt.android.bindings.QtApplication"
+        android:label="电路仿真大师"
+        android:icon="@mipmap/ic_launcher"
+        android:extractNativeLibs="true"
+        android:hardwareAccelerated="true"
+        android:allowBackup="true"
+        android:requestLegacyExternalStorage="false">
+
+        <activity
+            android:name="org.qtproject.qt.android.bindings.QtActivity"
+            android:configChanges="orientation|uiMode|screenLayout|screenSize|smallestScreenSize|layoutDirection|locale|fontScale|keyboard|keyboardHidden|navigation|mcc|mnc|density"
+            android:launchMode="singleTop"
+            android:screenOrientation="unspecified"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- lib_name 是去掉 lib 前缀和 .so 后缀的库名 -->
+            <meta-data android:name="android.app.lib_name" android:value="CircuitMaster"/>
+            <meta-data android:name="android.app.arguments" android:value=""/>
+            <meta-data android:name="android.app.extract_android_style" android:value="minimal"/>
+        </activity>
+    </application>
+</manifest>

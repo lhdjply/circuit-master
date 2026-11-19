@@ -9,6 +9,10 @@
 
 ### 新增
 
+- **Android 安装包可用**：自定义清单 + 应用图标（不再是 Qt 默认的绿机器人），
+  打包后补 `zipalign` + `apksigner` 签名 —— `--release` 出来的 APK 原本是未签名的，
+  Android 会拒绝安装；Release 里附上 `circuit-master-<版本>-android-arm64.apk`，
+  更新器也认这个后缀了。
 - **Android 构建（实验性）**：CMake 里加了 Android 打包配置（包名
   `io.github.lhdjply.circuitmaster`，versionCode 由 `VERSION` 推出），
   单实例在 Android 上退化为空实现（系统保证只有一份前台进程）；安装规则跳过

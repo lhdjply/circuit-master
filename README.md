@@ -278,6 +278,27 @@ Android 版不走应用商店，安装包直接分发（侧载）：更新时程
 再交给系统安装器 —— 需要在系统设置里允许「安装未知应用」。
 从商店分发是不行的：Play 禁止应用内自更新，那样就得把这条链路整个删掉。
 
+**关于签名**：`--release` 构建出来的是**未签名** APK，Android 会直接拒绝安装
+（提示「该安装包未包含任何证书」）。所以 CI 打包后会补一步 `zipalign` + `apksigner`，
+用的是仓库里的 `resources/android/sideload.keystore`（别名 `circuit-master`，
+口令 `circuitmaster`）。
+
+这把密钥是**公开**的 —— 谁都能用同一身份签名，只适合自发分发。
+要正式发布请自己生成一把，用 secrets 传进工作流：
+
+```bash
+keytool -genkeypair -keystore my.keystore -storetype PKCS12 \
+        -alias circuit-master -keyalg RSA -keysize 2048 -validity 10950 \
+        -dname "CN=Your Name, O=Your Org, C=CN"
+```
+
+换密钥之后**签名变了，用户必须卸载重装一次**。
+
+应用图标来自 `resources/android/res/mipmap-*/ic_launcher.png`（由
+`resources/assets/icons/icon.svg` 生成），清单在
+`resources/android/AndroidManifest.xml.in`，由 CMake 填好版本号再交给
+`androiddeployqt`。
+
 ### 安装到系统
 
 ```bash

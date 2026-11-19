@@ -210,12 +210,25 @@ if(ANDROID)
     math(EXPR CSM_ANDROID_VERSION_CODE
          "${CSM_VER_MAJOR} * 10000 + ${CSM_VER_MINOR} * 100 + ${CSM_VER_PATCH}")
 
+    # 自定义清单 + 应用图标。不这么做装出来是 Qt 默认的绿机器人图标，
+    # 清单里也没有侧载更新要用的权限。
+    # 清单由 CMake 用 @变量@ 直接填，不用 androiddeployqt 的 INSERT 占位符
+    # —— 那几个占位符在不同 Qt 版本里替换规则不完全一样。
+    set(CSM_ANDROID_PACKAGE "io.github.lhdjply.circuitmaster")
+    set(CSM_ANDROID_PACKAGE_DIR "${CMAKE_CURRENT_BINARY_DIR}/android-package")
+    configure_file(resources/android/AndroidManifest.xml.in
+                   "${CSM_ANDROID_PACKAGE_DIR}/AndroidManifest.xml" @ONLY)
+    file(COPY resources/android/res DESTINATION "${CSM_ANDROID_PACKAGE_DIR}")
+
     set_target_properties(CircuitMaster PROPERTIES
-        QT_ANDROID_PACKAGE_NAME "io.github.lhdjply.circuitmaster"
+        QT_ANDROID_PACKAGE_NAME "${CSM_ANDROID_PACKAGE}"
+        QT_ANDROID_PACKAGE_SOURCE_DIR "${CSM_ANDROID_PACKAGE_DIR}"
         QT_ANDROID_VERSION_NAME "${CSM_VERSION_NUMBER}"
         QT_ANDROID_VERSION_CODE ${CSM_ANDROID_VERSION_CODE}
+        # minSdk / targetSdk 写在清单的 uses-sdk 里（23 / 34）：这两个值要和
+        # Qt 那一侧 Gradle/AGP 对得上，跟着 Qt 6.7 的默认值走最稳
     )
-    message(STATUS "Android 包名 io.github.lhdjply.circuitmaster，"
+    message(STATUS "Android 包名 ${CSM_ANDROID_PACKAGE}，"
                    "版本 ${CSM_VERSION_NUMBER}（versionCode ${CSM_ANDROID_VERSION_CODE}）")
 endif()
 
