@@ -86,6 +86,7 @@ private:
     void onSelectionChanged();
     void onEditRequested(ComponentItem* item);
     /// 点击万用表时打开（或置前）它的读数窗口
+    void toggleSwitch(ComponentItem* item);
     void openMeterWindow(ComponentItem* item);
     /// 电路里有没有主接地符号。没有 GND 时（参考点由万用表负端顶替）
     /// 不给开波形监控 —— 节点电压是相对表笔算的，波形没有统一的参考点

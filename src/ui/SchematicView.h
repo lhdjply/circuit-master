@@ -22,6 +22,9 @@ public:
     explicit SchematicView(SchematicScene* scene, QWidget* parent = nullptr);
 
     void setTool(Tool tool);
+    /// 由主窗口在实时仿真启停时同步：决定点击开关是「拨动」还是「选中」
+    void setLiveRunning(bool running) { m_liveRunning = running; }
+    bool liveRunning() const { return m_liveRunning; }
     Tool tool() const { return m_tool; }
 
     void zoomBy(double factor);
@@ -37,6 +40,8 @@ signals:
     void scaleChanged(double scale);
     void toolChanged();
     void componentEditRequested(ComponentItem* item);
+    /// 仿真运行中点了一下开关：由上层决定怎么改电路
+    void switchToggled(ComponentItem* item);
 
 protected:
     void mousePressEvent(QMouseEvent* event) override;
@@ -59,6 +64,8 @@ private:
 
     SchematicScene* m_scene = nullptr;
     Tool m_tool = Tool::Select;
+    /// 实时仿真是否在跑。跑的时候左键点开关就是拨动它，不进入拖动
+    bool m_liveRunning = false;
 
     QVector<QPointF> m_wirePoints;
     QGraphicsPathItem* m_preview = nullptr;

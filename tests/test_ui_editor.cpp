@@ -47,6 +47,7 @@
 #include <QStackedWidget>
 #include <QStandardPaths>
 #include <QTabWidget>
+#include <QtTest/QTest>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTemporaryDir>
@@ -67,6 +68,7 @@ private slots:
     void componentLabelsCanBeDragged();
     void logicGatePinsStayOnGrid();
     void alignAndDistributeDoTheExpectedThing();
+    void switchTogglesOnClickOnlyWhileSimulating();
     void hitAreaFollowsRotation();
     void probeStaysClickableWhenRotated();
     void splitDrawnWiresKeepJunction();
@@ -90,6 +92,17 @@ private slots:
     void drawWireWithMouse();
 
 private:
+
+    /// 「波形监控」面板里的动态示波器页
+    static WaveformWindow* livePanel(MainWindow& window)
+    {
+        for (QTabWidget* tabs : window.findChildren<QTabWidget*>()) {
+            if (tabs->count() == 2 && tabs->tabText(0) == QStringLiteral("静态波形"))
+                return qobject_cast<WaveformWindow*>(tabs->widget(1));
+        }
+        return nullptr;
+    }
+
 
     /// 当前标签页对应的画布。
     /// 「新建」「打开」都是开新标签页，而 findChild 拿到的是第一个（可能已在后台），
@@ -147,6 +160,72 @@ void UiEditorTest::initTestCase()
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     std::setvbuf(stderr, nullptr, _IONBF, 0);
     csm::installQtTranslations(qApp);
+}
+
+void UiEditorTest::switchTogglesOnClickOnlyWhileSimulating()
+{
+    // 仿真运行中左键点开关 = 拨动它；没跑仿真时点击还是普通的选中 / 拖动
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    SchematicScene* scene = currentScene(window);
+    SchematicView* view = currentView(window);
+    QVERIFY(scene);
+    QVERIFY(view);
+
+    // 5 V → R1 → 开关 → 地；测试点接在 R1 与开关之间：
+    // 开关闭合时这一点是 0 V，断开时等于 5 V，正好用来验证仿真真的跟着变了
+    auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(150, 300));
+    source->setRotationAngle(90);
+    Component src = source->component();
+    src.dcValue = 5.0;
+    source->setComponent(src);
+
+    scene->placeComponent(ComponentType::Resistor, QPointF(300, 200));
+    auto* toggle = scene->placeComponent(ComponentType::Switch, QPointF(450, 200));
+    scene->placeComponent(ComponentType::Probe, QPointF(330, 140));
+    scene->placeComponent(ComponentType::Ground, QPointF(150, 500));
+
+    scene->addWire({QPointF(150, 270), QPointF(150, 200), QPointF(270, 200)});
+    scene->addWire({QPointF(330, 200), QPointF(330, 140)});                  // 测试点引脚
+    scene->addWire({QPointF(330, 200), QPointF(420, 200)});
+    scene->addWire({QPointF(480, 200), QPointF(560, 200), QPointF(560, 480),
+                    QPointF(150, 480), QPointF(150, 500)});
+    scene->addWire({QPointF(150, 330), QPointF(150, 500)});
+    settle();
+
+    QVERIFY(toggle->component().closed);
+    const QPoint clickPos = view->mapFromScene(toggle->pos());
+
+    // 1) 没跑仿真：点一下不拨动
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, clickPos);
+    settle();
+    QVERIFY2(toggle->component().closed, "没在仿真时点开关不该拨动它");
+
+    // 2) 跑起来：点一下拨动
+    const int node = scene->toCircuit().buildNetlist().nodeOf(toggle->component().id, 0);
+    QVERIFY(node > 0);
+
+    window.runSimulation();
+    settle();
+    WaveformWindow* live = livePanel(window);
+    if (!live || !live->isLive())
+        QSKIP("本机没能进入实时仿真，跳过");
+
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, clickPos);
+    settle();
+    QVERIFY2(!toggle->component().closed, "仿真运行中点开关应当把它断开");
+
+    // 3) 实时引擎要跟着换拓扑：等去抖定时器（200 ms）过去
+    QTRY_VERIFY_WITH_TIMEOUT(live->liveValue(QStringLiteral("V(%1)").arg(node)) > 4.0, 3000);
+
+    // 4) 再点一次，闭合回去
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, clickPos);
+    settle();
+    QVERIFY(toggle->component().closed);
+    QTRY_VERIFY_WITH_TIMEOUT(live->liveValue(QStringLiteral("V(%1)").arg(node)) < 0.5, 3000);
 }
 
 void UiEditorTest::alignAndDistributeDoTheExpectedThing()

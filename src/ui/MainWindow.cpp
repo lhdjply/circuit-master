@@ -512,6 +512,11 @@ void MainWindow::wireDocument(Document* document)
                 if (document == doc())
                     onEditRequested(item);
             });
+    // 仿真运行中点击开关：拨动它，实时引擎会在 200 ms 内换上新拓扑
+    connect(view, &SchematicView::switchToggled, this, [this, document](ComponentItem* item) {
+        if (document == doc())
+            toggleSwitch(item);
+    });
     connect(view, &SchematicView::scenePositionChanged, this, [this](const QPointF& p) {
         if (m_coordLabel)
             m_coordLabel->setText(
@@ -556,6 +561,9 @@ void MainWindow::switchToDocument(int index)
     }
 
     m_scene = document->scene;
+    // 新标签页的视图继承「仿真是否在跑」的状态（实时引擎是全局的）
+    if (m_view && m_waveLive)
+        m_view->setLiveRunning(m_waveLive->isLive());
     m_view = document->view;
     if (m_view)
         m_view->setFocus();
@@ -1347,6 +1355,20 @@ bool MainWindow::meterReadoutAvailable() const
     return m_waveLive && m_waveLive->isLive();
 }
 
+void MainWindow::toggleSwitch(ComponentItem* item)
+{
+    if (!item || item->component().type != ComponentType::Switch)
+        return;
+
+    Component comp = item->component();
+    comp.closed = !comp.closed;
+    item->setClosed(comp.closed); // 符号与模型一起改，画布立刻看到通/断
+    m_scene->commitEdit();        // 记进撤销历史；circuitChanged 会带着它推给实时引擎
+    appendLog(QStringLiteral("开关 %1 %2")
+                  .arg(comp.refdes, comp.closed ? QStringLiteral("闭合")
+                                                : QStringLiteral("断开")));
+}
+
 void MainWindow::openMeterWindow(ComponentItem* item)
 {
     if (!item || item->component().type != ComponentType::Multimeter)
@@ -1785,6 +1807,9 @@ void MainWindow::createMonitorWindow()
 
     connect(m_waveLive, &WaveformWindow::liveStateChanged, this, [this](bool running) {
         updateRunAction();
+        // 仿真运行时点击开关 = 拨动，停下来就恢复成普通的选中 / 拖动
+        if (m_view)
+            m_view->setLiveRunning(running);
         // 读数窗口只在仿真运行时可用，停了就一起收掉，
         // 免得留在桌面上显示一堆不再更新的数字
         if (!running)

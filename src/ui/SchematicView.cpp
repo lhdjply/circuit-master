@@ -87,6 +87,23 @@ void SchematicView::mousePressEvent(QMouseEvent* event)
         return;
     }
 
+    // 仿真运行中：左键直接点开关就是拨动它。这里先拦下来，不再进入拖动 ——
+    // 仿真时去「拖」一个开关没有意义，反而会把画布弄乱
+    if (event->button() == Qt::LeftButton && m_tool == Tool::Select && m_liveRunning) {
+        for (QGraphicsItem* g : items(event->pos())) {
+            if (g->type() != ComponentItem::Type)
+                continue;
+            auto* item = static_cast<ComponentItem*>(g);
+            if (item->component().type != ComponentType::Switch)
+                continue;
+            m_scene->clearSelection();
+            item->setSelected(true);
+            emit switchToggled(item);
+            event->accept();
+            return;
+        }
+    }
+
     if (event->button() == Qt::LeftButton && m_tool == Tool::Wire) {
         const QPointF pos = m_scene->snapToPin(mapToScene(event->pos()));
         if (m_wirePoints.isEmpty())
@@ -144,6 +161,16 @@ void SchematicView::mouseDoubleClickEvent(QMouseEvent* event)
         finishWire();
         event->accept();
         return;
+    }
+    // 仿真运行中双击开关：第一下按下已经拨动过，这里不再弹属性编辑
+    if (event->button() == Qt::LeftButton && m_tool == Tool::Select && m_liveRunning) {
+        for (QGraphicsItem* g : items(event->pos())) {
+            if (g->type() == ComponentItem::Type
+                && static_cast<ComponentItem*>(g)->component().type == ComponentType::Switch) {
+                event->accept();
+                return;
+            }
+        }
     }
     QGraphicsView::mouseDoubleClickEvent(event);
 }
