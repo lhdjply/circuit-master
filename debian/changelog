@@ -1,3 +1,15 @@
+circuit-master (0.4.0) unstable; urgency=medium
+
+  * 新增逻辑门：与 / 或 / 非 / 异或 / 同或。
+  * 新增按钮开关 SB（瞬时，按住才动作），普通开关可在仿真中点一下通断。
+  * 新增对齐与分布：六种对齐 + 水平/垂直等距。
+  * 新增内置更新日志（关于窗口里查看）。
+  * 补上 GPL-3.0 许可证全文与分发相关配置。
+  * 万用表读数窗口只在实时仿真运行时才能点开；波形监控只列测试点。
+  * 接地规则放宽：只画 AGND、或只放一块万用表也能仿真。
+
+ -- Circuit Master Maintainers <lhdjply@users.noreply.github.com>  Wed, 19 Nov 2026 14:30:00 +0800
+
 circuit-master (0.3.3) unstable; urgency=medium
 
   * 新增多文件标签页：一个标签一份电路，各自的历史、参数与仿真结果。

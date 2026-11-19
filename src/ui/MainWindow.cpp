@@ -401,20 +401,11 @@ QTabBar::close-button:hover {
     }
 
 #if defined(Q_OS_ANDROID)
-    // 手机：换成底部图标栏，并收起两侧面板
+    // 手机：换成底部图标栏，并收起两侧面板。
+    // （桌面不要往工具栏上再挂一份面板开关 —— 视图菜单里已经有了，工具栏上
+    //   那两个没图标的文字按钮只是碍眼。）
     setupMobileChrome();
     applyResponsiveLayout();
-#else
-    // 桌面：顶部工具栏上也挂一份面板开关。
-    // Android 不挂 —— 那条工具栏被藏起来了，动作已经挂到底部图标栏上
-    if (QToolBar* bar = findChild<QToolBar*>(QStringLiteral("mainToolBar"))) {
-        bar->addSeparator();
-        for (QDockWidget* dock : {m_libraryDock, m_propsDock}) {
-            if (!dock)
-                continue;
-            bar->addAction(dock->toggleViewAction());
-        }
-    }
 #endif
 
     appendLog(QStringLiteral("电路仿真大师 %1  —  Qt6 / MNA 求解器")

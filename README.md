@@ -259,6 +259,11 @@ cmake --build build-android --target apk      # 产出 APK 的是单独的 apk �
 adb install -r build-android/android-build/build/outputs/apk/debug/*.apk
 ```
 
+> **Android 安装包暂时只出现在持续构建（预发布）里，正式版不带。** 目前只做到
+> 「能编出来、装上能跑」，触摸交互和 Qt 6.7.3 在 Android 上的 popup bug 都还在
+> 处理，等成熟了再随正式版发布。想试可以直接下预发布里的 APK，或者按下面的
+> 步骤自己编一个。
+
 **现状**：能装、能画、能仿真，手机该有的入口都补上了：
 
 | 已经适配 |

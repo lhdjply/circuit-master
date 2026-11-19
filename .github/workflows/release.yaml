@@ -1195,16 +1195,16 @@ jobs:
             fi
           fi
 
-          # Android 只有 arm64 一种 APK。正式版缺了要失败（一条 Release 不该少平台），
-          # 持续构建只警告
-          apk_files=$(find artifacts -name "*-android-arm64.apk" -print0 | xargs -0 echo)
-          if [ -z "$apk_files" ]; then
-            if [ "${{ github.ref_type }}" == "tag" ]; then
-              echo "::error::The Android APK is missing from a tagged release; check the 'Package (Android)' job."
-              exit 1
-            else
-              echo "::warning::The Android APK is missing; publishing the other platforms only."
+          # Android 的 APK 只在**持续构建（预发布）**里带上，正式版（tag）不带 ——
+          # Android 还没成熟，等稳定之后再随正式版发布。作业照常跑，只是这里不收集。
+          apk_files=""
+          if [ "${{ github.ref_type }}" != "tag" ]; then
+            apk_files=$(find artifacts -name "*-android-arm64.apk" -print0 | xargs -0 echo)
+            if [ -z "$apk_files" ]; then
+              echo "::warning::The Android APK is missing from the continuous build."
             fi
+          else
+            echo "正式版不带 Android APK（还没成熟），跳过"
           fi
 
           # 清单只有正式版才生成；持续构建时为空，展开成空参数不影响命令
