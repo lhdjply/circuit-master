@@ -1328,6 +1328,22 @@ void MainWindow::setupMobileChrome()
     m_drawerDock->setMinimumWidth(240);
     m_drawerDock->hide();
 
+    // 元件库的分类下拉框：触摸下 QComboBox 的弹出列表能开、能点，但「松手选中」
+    // 那一步不一定送达 —— 表现就是点了「半导体」还是「全部」。
+    // 改成在条目被**按下**时就应用选择，不等 popup 自己的松手逻辑。
+    if (m_libraryCategory) {
+        if (QAbstractItemView* view = m_libraryCategory->view()) {
+            connect(view, &QAbstractItemView::pressed, this, [this](const QModelIndex& index) {
+                if (index.isValid() && index.row() != m_libraryCategory->currentIndex())
+                    m_libraryCategory->setCurrentIndex(index.row());
+            });
+        }
+        // 手指点得准：控件本身按 44px 给
+        m_libraryCategory->setMinimumHeight(44);
+        // 八项一次列全，免得弹出列表还要滚动
+        m_libraryCategory->setMaxVisibleItems(10);
+    }
+
     // 标签栏左上角的 ☰。放进标签栏的角落控件，不额外占一行高度
     m_drawerButton = new QToolButton(this);
     m_drawerButton->setObjectName(QStringLiteral("drawerButton"));
