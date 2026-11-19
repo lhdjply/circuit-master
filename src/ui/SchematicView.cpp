@@ -88,17 +88,24 @@ void SchematicView::mousePressEvent(QMouseEvent* event)
     }
 
     // 仿真运行中：左键直接点开关就是拨动它。这里先拦下来，不再进入拖动 ——
-    // 仿真时去「拖」一个开关没有意义，反而会把画布弄乱
+    // 仿真时去「拖」一个开关没有意义，反而会把画布弄乱。
+    // 按钮开关是「按住才动作」，所以按下 / 松开分别处理。
     if (event->button() == Qt::LeftButton && m_tool == Tool::Select && m_liveRunning) {
         for (QGraphicsItem* g : items(event->pos())) {
             if (g->type() != ComponentItem::Type)
                 continue;
             auto* item = static_cast<ComponentItem*>(g);
-            if (item->component().type != ComponentType::Switch)
+            const ComponentType type = item->component().type;
+            if (type != ComponentType::Switch && type != ComponentType::PushButton)
                 continue;
             m_scene->clearSelection();
             item->setSelected(true);
-            emit switchToggled(item);
+            if (type == ComponentType::PushButton) {
+                m_pressedButton = item;
+                emit pushButtonPressed(item);
+            } else {
+                emit switchToggled(item);
+            }
             event->accept();
             return;
         }
@@ -141,6 +148,14 @@ void SchematicView::mouseMoveEvent(QMouseEvent* event)
 
 void SchematicView::mouseReleaseEvent(QMouseEvent* event)
 {
+    // 按钮开关是瞬时的：不管松手时鼠标跑到哪儿，都把按住的这个还原
+    if (m_pressedButton) {
+        ComponentItem* released = m_pressedButton;
+        m_pressedButton = nullptr;
+        emit pushButtonReleased(released);
+        event->accept();
+        return;
+    }
     if (event->button() == Qt::MiddleButton && m_panning) {
         m_panning = false;
         updateCursorAndHint();
@@ -166,7 +181,9 @@ void SchematicView::mouseDoubleClickEvent(QMouseEvent* event)
     if (event->button() == Qt::LeftButton && m_tool == Tool::Select && m_liveRunning) {
         for (QGraphicsItem* g : items(event->pos())) {
             if (g->type() == ComponentItem::Type
-                && static_cast<ComponentItem*>(g)->component().type == ComponentType::Switch) {
+                && (static_cast<ComponentItem*>(g)->component().type == ComponentType::Switch
+                    || static_cast<ComponentItem*>(g)->component().type
+                        == ComponentType::PushButton)) {
                 event->accept();
                 return;
             }

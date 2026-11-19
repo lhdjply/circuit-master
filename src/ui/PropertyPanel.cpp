@@ -225,6 +225,12 @@ void PropertyPanel::buildUi()
     m_form->addRow(QStringLiteral("网络名"), m_netLabel);
 
     m_closed = new QCheckBox(QStringLiteral("开关闭合"), page);
+
+    // 按钮开关：只有「常开 / 常闭」可设。按下是瞬时的，不进属性面板
+    m_normallyClosed = new QCheckBox(QStringLiteral("常闭（松开时接通）"), page);
+    m_normallyClosed->setToolTip(QStringLiteral(
+        "不勾：常开，仿真时按住才接通。\n勾上：常闭，仿真时按住才断开。"));
+    m_form->addRow(QString(), m_normallyClosed);
     m_form->addRow(QString(), m_closed);
 
     pageLayout->addLayout(m_form);
@@ -289,6 +295,16 @@ void PropertyPanel::buildUi()
     connect(m_function, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &PropertyPanel::applyFunction);
     connect(m_closed, &QCheckBox::toggled, this, &PropertyPanel::applyClosed);
+    connect(m_normallyClosed, &QCheckBox::toggled, this, [this](bool on) {
+        if (!m_item || m_updating || m_item->component().type != ComponentType::PushButton)
+            return;
+        Component c = m_item->component();
+        c.normallyClosed = on;
+        c.closed = on; // 静止状态跟着变：常闭时默认就是通的
+        m_item->setComponent(c);
+        updateSubtitle();
+        emit changed();
+    });
 
     connect(m_dc, &QLineEdit::editingFinished, this, &PropertyPanel::applyDc);
     for (QLineEdit* edit : {m_amplitude, m_frequency, m_phase, m_offset, m_delay})
@@ -380,6 +396,7 @@ void PropertyPanel::refreshFromItem()
     m_period->setText(quantityText(c.pulsePeriod, UnitKind::Second));
 
     m_closed->setChecked(c.closed);
+    m_normallyClosed->setChecked(c.normallyClosed);
     m_polarized->setChecked(c.polarized);
 
     m_updating = false;
@@ -494,6 +511,7 @@ void PropertyPanel::updateVisibility()
                                            || c.type == ComponentType::Probe);
     m_form->setRowVisible(m_dc, source && c.function == SourceFunction::Constant);
     m_form->setRowVisible(m_closed, c.type == ComponentType::Switch);
+    m_form->setRowVisible(m_normallyClosed, c.type == ComponentType::PushButton);
 
     const bool sine = source && c.function == SourceFunction::Sine;
     for (QLineEdit* edit : {m_amplitude, m_frequency, m_phase, m_offset, m_delay})

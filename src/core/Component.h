@@ -23,6 +23,7 @@ enum class ComponentType {
     Ob2362,      ///< OB2362 电流模式 PWM 控制器（反激常用）
     OpAmp,
     Switch,
+    PushButton,   ///< 按钮开关：仿真时按住才动作，松开回到静止状态
     VoltageSource,
     CurrentSource,
     Probe,
@@ -173,7 +174,9 @@ struct Component {
     double pulseWidth = 5e-4;
     double pulsePeriod = 1e-3;
 
-    bool closed = true; // 开关
+    bool closed = true; // 开关 / 按钮（按钮：按住时与静止状态相反）
+    /// 按钮开关的静止状态：false = 常开（按下才接通），true = 常闭（按下才断开）
+    bool normallyClosed = false;
 
     QPointF toScene(const QPointF& local) const;
     QPointF pinPosition(int index) const;

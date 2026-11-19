@@ -69,6 +69,7 @@ private slots:
     void logicGatePinsStayOnGrid();
     void alignAndDistributeDoTheExpectedThing();
     void switchTogglesOnClickOnlyWhileSimulating();
+    void pushButtonActsOnlyWhileHeld();
     void hitAreaFollowsRotation();
     void probeStaysClickableWhenRotated();
     void splitDrawnWiresKeepJunction();
@@ -160,6 +161,99 @@ void UiEditorTest::initTestCase()
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     std::setvbuf(stderr, nullptr, _IONBF, 0);
     csm::installQtTranslations(qApp);
+}
+
+void UiEditorTest::pushButtonActsOnlyWhileHeld()
+{
+    // 按钮开关是瞬时的：按住才动作，松手立刻回到静止状态。
+    // 电路和开关那条用例一样（5 V → R1 → 按钮 → 地，测点在 R1 与按钮之间）
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    SchematicScene* scene = currentScene(window);
+    SchematicView* view = currentView(window);
+    QVERIFY(scene);
+    QVERIFY(view);
+
+    auto* source = scene->placeComponent(ComponentType::VoltageSource, QPointF(150, 300));
+    source->setRotationAngle(90);
+    Component src = source->component();
+    src.dcValue = 5.0;
+    source->setComponent(src);
+
+    scene->placeComponent(ComponentType::Resistor, QPointF(300, 200));
+    auto* button = scene->placeComponent(ComponentType::PushButton, QPointF(450, 200));
+    scene->placeComponent(ComponentType::Probe, QPointF(330, 140));
+    scene->placeComponent(ComponentType::Ground, QPointF(150, 500));
+
+    scene->addWire({QPointF(150, 270), QPointF(150, 200), QPointF(270, 200)});
+    scene->addWire({QPointF(330, 200), QPointF(330, 140)});
+    scene->addWire({QPointF(330, 200), QPointF(420, 200)});
+    scene->addWire({QPointF(480, 200), QPointF(560, 200), QPointF(560, 480),
+                    QPointF(150, 480), QPointF(150, 500)});
+    scene->addWire({QPointF(150, 330), QPointF(150, 500)});
+    settle();
+
+    // 常开：放下来就不通
+    QVERIFY(!button->component().closed);
+    QCOMPARE(button->component().displayValue(), QStringLiteral("常开"));
+
+    const QPoint clickPos = view->mapFromScene(button->pos());
+
+    // 没跑仿真：按住也不动作
+    QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, clickPos);
+    settle();
+    QVERIFY2(!button->component().closed, "没在仿真时按住按钮不该接通");
+    QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, clickPos);
+    settle();
+
+    window.runSimulation();
+    settle();
+    WaveformWindow* live = livePanel(window);
+    if (!live || !live->isLive())
+        QSKIP("本机没能进入实时仿真，跳过");
+
+    // 测点在 R1 与按钮之间，也就是按钮的 0 号引脚（1 号引脚已经接到地了）
+    const int node = scene->toCircuit().buildNetlist().nodeOf(button->component().id, 0);
+    QVERIFY(node > 0);
+
+    // 测点在 R1 与按钮之间：按钮断开时没有电流，这一点被 R1 抬到 5 V；
+    // 接通时等于地的电位。
+    QTRY_VERIFY_WITH_TIMEOUT(live->liveValue(QStringLiteral("V(%1)").arg(node)) > 4.0, 3000);
+
+    // 按住 → 接通 → 测点被拉到 0 V
+    QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, clickPos);
+    settle();
+    QVERIFY2(button->component().closed, "仿真中按住按钮应当接通");
+    QTRY_VERIFY_WITH_TIMEOUT(live->liveValue(QStringLiteral("V(%1)").arg(node)) < 0.5, 3000);
+
+    // 松手 → 回到常开状态 → 恢复 5 V
+    QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, clickPos);
+    settle();
+    QVERIFY2(!button->component().closed, "松手后按钮应当回到常开状态");
+    QTRY_VERIFY_WITH_TIMEOUT(live->liveValue(QStringLiteral("V(%1)").arg(node)) > 4.0, 3000);
+
+    // 常闭型：静止就通，按住才断开
+    Component comp = button->component();
+    comp.normallyClosed = true;
+    comp.closed = true;
+    button->setComponent(comp);
+    settle();
+    QCOMPARE(button->component().displayValue(), QStringLiteral("常闭"));
+
+    QTRY_VERIFY_WITH_TIMEOUT(live->liveValue(QStringLiteral("V(%1)").arg(node)) < 0.5, 3000);
+
+    QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, clickPos);
+    settle();
+    QVERIFY2(!button->component().closed, "常闭型按住应当断开");
+    QTRY_VERIFY_WITH_TIMEOUT(live->liveValue(QStringLiteral("V(%1)").arg(node)) > 4.0, 3000);
+
+    QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, clickPos);
+    settle();
+    QVERIFY2(button->component().closed, "常闭型松手应当恢复接通");
+    QTRY_VERIFY_WITH_TIMEOUT(live->liveValue(QStringLiteral("V(%1)").arg(node)) < 0.5, 3000);
 }
 
 void UiEditorTest::switchTogglesOnClickOnlyWhileSimulating()

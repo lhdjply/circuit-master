@@ -33,6 +33,7 @@ QString typeToTag(ComponentType type)
     case ComponentType::Pmos:          return QStringLiteral("MP");
     case ComponentType::Igbt:          return QStringLiteral("Z");
     case ComponentType::Switch:        return QStringLiteral("SW");
+    case ComponentType::PushButton:    return QStringLiteral("PB");
     case ComponentType::VoltageSource: return QStringLiteral("V");
     case ComponentType::CurrentSource: return QStringLiteral("I");
     case ComponentType::Probe:         return QStringLiteral("TP");
@@ -62,6 +63,7 @@ ComponentType tagToType(const QString& tag)
     if (tag == QLatin1String("M")) return ComponentType::Nmos;
     if (tag == QLatin1String("Z")) return ComponentType::Igbt;
     if (tag == QLatin1String("SW")) return ComponentType::Switch;
+    if (tag == QLatin1String("PB")) return ComponentType::PushButton;
     if (tag == QLatin1String("V")) return ComponentType::VoltageSource;
     if (tag == QLatin1String("I")) return ComponentType::CurrentSource;
     if (tag == QLatin1String("TP")) return ComponentType::Probe;
@@ -183,6 +185,7 @@ QJsonObject Circuit::toJson() const
         o.insert(QStringLiteral("auxRatio"), c.auxRatio);
         o.insert(QStringLiteral("groundKind"), int(c.groundKind));
         o.insert(QStringLiteral("multimeterMode"), int(c.multimeterMode));
+        o.insert(QStringLiteral("normallyClosed"), c.normallyClosed);
         o.insert(QStringLiteral("gateKind"), int(c.gateKind));
         o.insert(QStringLiteral("logicHigh"), c.logicHigh);
         if (!c.netLabel.isEmpty())
@@ -279,6 +282,7 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
         c.multimeterMode = static_cast<MultimeterMode>(
             o.value(QStringLiteral("multimeterMode")).toInt(0));
         c.netLabel = o.value(QStringLiteral("netLabel")).toString();
+        c.normallyClosed = o.value(QStringLiteral("normallyClosed")).toBool(false);
         c.gateKind = static_cast<GateKind>(o.value(QStringLiteral("gateKind")).toInt(0));
         c.logicHigh = o.value(QStringLiteral("logicHigh")).toDouble(3.3);
         c.refLabelOffset = QPointF(o.value(QStringLiteral("refLabelDx")).toDouble(),

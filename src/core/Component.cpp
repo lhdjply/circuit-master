@@ -146,6 +146,7 @@ QString typeName(ComponentType type)
     case ComponentType::Ob2362:        return QStringLiteral("OB2362 控制器");
 
     case ComponentType::Switch:        return QStringLiteral("开关");
+    case ComponentType::PushButton:    return QStringLiteral("按钮开关");
     case ComponentType::VoltageSource: return QStringLiteral("电压源");
     case ComponentType::CurrentSource: return QStringLiteral("电流源");
     case ComponentType::Probe:         return QStringLiteral("电压测试点");
@@ -178,6 +179,7 @@ QString typeSymbol(ComponentType type)
     case ComponentType::Ob2362:        return QStringLiteral("U");
 
     case ComponentType::Switch:        return QStringLiteral("S");
+    case ComponentType::PushButton:    return QStringLiteral("SB");
     case ComponentType::VoltageSource: return QStringLiteral("V");
     case ComponentType::CurrentSource: return QStringLiteral("I");
     case ComponentType::Probe:         return QStringLiteral("TP");
@@ -352,7 +354,8 @@ QString Component::unitName() const
     case ComponentType::Tl431:
     case ComponentType::Ob2362:
     case ComponentType::Transformer:   return QStringLiteral("V");
-    case ComponentType::Switch:        return QStringLiteral("Ω");
+    case ComponentType::Switch:
+    case ComponentType::PushButton:    return QStringLiteral("Ω");
     case ComponentType::Probe:
     case ComponentType::Ground:        return QString();
     case ComponentType::CurrentProbe:  return QStringLiteral("A");
@@ -429,6 +432,10 @@ QString Component::displayValue() const
 
     case ComponentType::Switch:
         return closed ? QStringLiteral("闭合") : QStringLiteral("断开");
+
+    case ComponentType::PushButton:
+        // 按钮的静止状态才是它的「身份」，按下只是瞬时的
+        return normallyClosed ? QStringLiteral("常闭") : QStringLiteral("常开");
 
     case ComponentType::Probe:
     case ComponentType::CurrentProbe:

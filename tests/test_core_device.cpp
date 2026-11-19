@@ -89,6 +89,7 @@ private slots:
     void tl431RegulatesToReference();
     void optocouplerCouplesLight();
     void mosfetSwitches();
+    void pushButtonContactsFollowState();
     void pmosConductsWithNegativeGate();
     void igbtConductsAboveThreshold();
     void diodeRectifier();
@@ -1255,6 +1256,85 @@ void CoreDeviceTest::optocouplerCouplesLight()
     QVERIFY2(dc.ok, qPrintable(dc.error));
     const double ifLed = dc.elementCurrents.value(QStringLiteral("I(U1)"), 0.0);
     QVERIFY2(ifLed > 1e-3 && ifLed < 20e-3, qPrintable(QString::number(ifLed)));
+}
+
+void CoreDeviceTest::pushButtonContactsFollowState()
+{
+    // 按钮开关和普通开关共用一套接触电阻模型：闭合 1 mΩ、断开 1 GΩ。
+    // 区别只在「谁来决定 closed」—— 按钮由按住 / 松开决定，静止状态由
+    // normallyClosed 决定。这里验证两种静止状态各自的导通情况。
+    auto nodeVoltage = [this](bool normallyClosed, bool closed) {
+        Circuit c;
+
+        Component src;
+        src.id = 1;
+        src.type = ComponentType::VoltageSource;
+        src.pos = QPointF(150, 300);
+        src.rotation = 90;
+        src.refdes = QStringLiteral("V1");
+        src.dcValue = 5.0;
+        c.components.append(src);
+
+        Component button;
+        button.id = 2;
+        button.type = ComponentType::PushButton;
+        button.pos = QPointF(300, 200);
+        button.refdes = QStringLiteral("SB1");
+        button.normallyClosed = normallyClosed;
+        button.closed = closed;
+        c.components.append(button);
+
+        Component load;
+        load.id = 3;
+        load.type = ComponentType::Resistor;
+        load.pos = QPointF(450, 200);
+        load.refdes = QStringLiteral("R1");
+        load.value = 1000.0;
+        c.components.append(load);
+
+        Component gnd;
+        gnd.id = 4;
+        gnd.type = ComponentType::Ground;
+        gnd.pos = QPointF(150, 500);
+        gnd.refdes = QStringLiteral("GND1");
+        c.components.append(gnd);
+
+        // V1+ → 按钮 → R1 → 地；测按钮与 R1 之间那一点
+        c.wires.append(Wire{{QPointF(150, 270), QPointF(150, 200), QPointF(270, 200)}});
+        c.wires.append(Wire{{QPointF(330, 200), QPointF(420, 200)}});
+        c.wires.append(Wire{{QPointF(480, 200), QPointF(560, 200), QPointF(560, 480),
+                             QPointF(150, 480), QPointF(150, 500)}});
+        c.wires.append(Wire{{QPointF(150, 330), QPointF(150, 500)}});
+
+        SimulationOptions options;
+        options.kind = AnalysisKind::Transient;
+        options.tStop = 1e-3;
+        options.tStep = 1e-4;
+        const SimulationResult result = Simulator::run(c, options);
+        if (!result.ok)
+            return -1.0;
+        const Netlist net = c.buildNetlist();
+        const Signal* signal =
+            result.signal(QStringLiteral("V(%1)").arg(net.nodeOf(button.id, 1)));
+        if (!signal || signal->y.isEmpty())
+            return -1.0;
+        return signal->y.last();
+    };
+
+    // 测的是「按钮与 R1 之间」那一点：按钮断开时没有电流，R1 上没有压降，
+    // 这一点被 R1 拉到 0 V（5 V 全落在按钮上）；接通时等于电源电压。
+    //
+    // 常开：静止断开 → 0 V；按住接通 → 5 V
+    QVERIFY2(near(nodeVoltage(false, false), 0.0, 1e-3),
+             qPrintable(QString::number(nodeVoltage(false, false))));
+    QVERIFY2(near(nodeVoltage(false, true), 5.0, 0.2),
+             qPrintable(QString::number(nodeVoltage(false, true))));
+
+    // 常闭：静止接通 → 5 V；按住断开 → 0 V
+    QVERIFY2(near(nodeVoltage(true, true), 5.0, 0.2),
+             qPrintable(QString::number(nodeVoltage(true, true))));
+    QVERIFY2(near(nodeVoltage(true, false), 0.0, 1e-3),
+             qPrintable(QString::number(nodeVoltage(true, false))));
 }
 
 void CoreDeviceTest::mosfetSwitches()

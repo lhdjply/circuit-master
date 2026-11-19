@@ -42,6 +42,9 @@ signals:
     void componentEditRequested(ComponentItem* item);
     /// 仿真运行中点了一下开关：由上层决定怎么改电路
     void switchToggled(ComponentItem* item);
+    /// 仿真运行中按住 / 松开按钮开关
+    void pushButtonPressed(ComponentItem* item);
+    void pushButtonReleased(ComponentItem* item);
 
 protected:
     void mousePressEvent(QMouseEvent* event) override;
@@ -66,6 +69,8 @@ private:
     Tool m_tool = Tool::Select;
     /// 实时仿真是否在跑。跑的时候左键点开关就是拨动它，不进入拖动
     bool m_liveRunning = false;
+    /// 当前被按住的那个按钮开关（松开时用来还原）；同时只会有一个
+    ComponentItem* m_pressedButton = nullptr;
 
     QVector<QPointF> m_wirePoints;
     QGraphicsPathItem* m_preview = nullptr;

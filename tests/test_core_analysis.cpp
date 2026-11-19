@@ -523,6 +523,7 @@ void CoreAnalysisTest::allPinsLandOnGrid()
         ComponentType::Igbt,        ComponentType::Optocoupler,
         ComponentType::Tl431,       ComponentType::Transformer,
         ComponentType::Ob2362,      ComponentType::OpAmp,      ComponentType::Switch,
+        ComponentType::PushButton,
         ComponentType::VoltageSource, ComponentType::CurrentSource,
         ComponentType::Probe,       ComponentType::CurrentProbe,
         ComponentType::Ground,

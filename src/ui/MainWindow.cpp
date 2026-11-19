@@ -517,6 +517,17 @@ void MainWindow::wireDocument(Document* document)
         if (document == doc())
             toggleSwitch(item);
     });
+    // 按钮开关：按住才动作
+    connect(view, &SchematicView::pushButtonPressed, this,
+            [this, document](ComponentItem* item) {
+                if (document == doc())
+                    pressPushButton(item);
+            });
+    connect(view, &SchematicView::pushButtonReleased, this,
+            [this, document](ComponentItem* item) {
+                if (document == doc())
+                    releasePushButton(item);
+            });
     connect(view, &SchematicView::scenePositionChanged, this, [this](const QPointF& p) {
         if (m_coordLabel)
             m_coordLabel->setText(
@@ -1058,6 +1069,7 @@ void MainWindow::buildLibrary()
         {ComponentType::CurrentSource, QStringLiteral("电流源  I"), QStringLiteral("电源")},
 
         {ComponentType::Switch, QStringLiteral("开关  S"), QStringLiteral("开关与接地")},
+        {ComponentType::PushButton, QStringLiteral("按钮开关  SB"), QStringLiteral("开关与接地")},
         {ComponentType::Ground, QStringLiteral("接地  GND"), QStringLiteral("开关与接地"),
          GroundKind::Gnd},
         {ComponentType::NetLabel, QStringLiteral("网络标签  NET"), QStringLiteral("开关与接地")},
@@ -1353,6 +1365,35 @@ bool MainWindow::meterReadoutAvailable() const
 {
     // 只有实时仿真在跑的时候读数才有意义（静态结果那份留在波形页里看）
     return m_waveLive && m_waveLive->isLive();
+}
+
+void MainWindow::pressPushButton(ComponentItem* item)
+{
+    if (!item || item->component().type != ComponentType::PushButton)
+        return;
+    // 按下 = 与静止状态相反：常开的接通，常闭的断开
+    const Component comp = item->component();
+    item->setClosed(!comp.normallyClosed);
+    appendLog(QStringLiteral("按钮 %1 按下（%2）")
+                  .arg(comp.refdes, comp.normallyClosed ? QStringLiteral("断开")
+                                                        : QStringLiteral("接通")));
+}
+
+void MainWindow::releasePushButton(ComponentItem* item)
+{
+    if (!item || item->component().type != ComponentType::PushButton)
+        return;
+    item->setClosed(item->component().normallyClosed);
+}
+
+void MainWindow::restorePushButtons()
+{
+    if (!m_scene)
+        return;
+    for (ComponentItem* item : m_scene->componentItems()) {
+        if (item->component().type == ComponentType::PushButton)
+            item->setClosed(item->component().normallyClosed);
+    }
 }
 
 void MainWindow::toggleSwitch(ComponentItem* item)
@@ -1812,8 +1853,10 @@ void MainWindow::createMonitorWindow()
             m_view->setLiveRunning(running);
         // 读数窗口只在仿真运行时可用，停了就一起收掉，
         // 免得留在桌面上显示一堆不再更新的数字
-        if (!running)
+        if (!running) {
             closeMeterWindows();
+            restorePushButtons(); // 松手事件可能没送到（仿真中途停止）
+        }
 
         // 没有 GND 的电路不开波形监控：参考点由万用表负端顶替，
         // 节点电压之间没有统一基准，画出来也没意义。

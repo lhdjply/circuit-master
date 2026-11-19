@@ -81,6 +81,11 @@ QPainterPath symbolShape(ComponentType type)
         path.closeSubpath();
         return path;
     }
+    if (type == ComponentType::PushButton) {
+        // 符号比两端元件高（按杆伸到 -24），命中区也跟着高一点
+        path.addRoundedRect(QRectF(-30.0, -24.0, 60.0, 30.0), 4.0, 4.0);
+        return path;
+    }
     if (type == ComponentType::LogicGate) {
         path.addRoundedRect(QRectF(-24.0, -18.0, 48.0, 36.0), 4.0, 4.0);
         return path;
@@ -614,6 +619,26 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
             p->drawLine(QPointF(-12.0, 0.0), QPointF(12.0, 0.0));
         else
             p->drawLine(QPointF(-12.0, 0.0), QPointF(9.0, -12.0));
+        break;
+    }
+
+    case ComponentType::PushButton: {
+        // 两个触点 + 一根横杠（按下去才搭上）+ 顶上的按杆
+        p->drawLine(QPointF(-30.0, 0.0), QPointF(-12.0, 0.0));
+        p->drawLine(QPointF(12.0, 0.0), QPointF(30.0, 0.0));
+        p->setBrush(color);
+        p->drawEllipse(QPointF(-12.0, 0.0), 2.6, 2.6);
+        p->drawEllipse(QPointF(12.0, 0.0), 2.6, 2.6);
+        p->setBrush(Qt::NoBrush);
+
+        // 横杠的位置直接反映当前通断：搭在触点上 = 导通，抬起来 = 断开
+        const double barY = comp.closed ? 0.0 : -9.0;
+        p->setPen(symbolPen(color, 2.6));
+        p->drawLine(QPointF(-13.0, barY), QPointF(13.0, barY));
+        // 按杆：从横杠中间往上，顶端一小段横杠表示手指按的地方
+        p->drawLine(QPointF(0.0, barY), QPointF(0.0, -22.0));
+        p->setPen(symbolPen(color, 2.4));
+        p->drawLine(QPointF(-8.0, -22.0), QPointF(8.0, -22.0));
         break;
     }
 

@@ -803,7 +803,8 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
                 a(ib, inM - 1) += gain;
             break;
         }
-        case ComponentType::Switch: {
+        case ComponentType::Switch:
+        case ComponentType::PushButton: {
             const double r = comp.closed ? 1e-3 : 1e9;
             addG(a, n1, n2, 1.0 / r);
             break;
@@ -1086,6 +1087,7 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
             break;
         }
         case ComponentType::Switch:
+        case ComponentType::PushButton:
             current = v / (comp.closed ? 1e-3 : 1e9);
             break;
         case ComponentType::Npn:
@@ -1525,6 +1527,7 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
             break;
         }
         case ComponentType::Switch:
+        case ComponentType::PushButton:
             addG(a, n1, n2, Cx(1.0 / (comp.closed ? 1e-3 : 1e9), 0.0));
             break;
         case ComponentType::Ground: {
