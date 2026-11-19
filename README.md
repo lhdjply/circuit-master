@@ -26,11 +26,13 @@
 - 对齐与分布（编辑菜单 / 右键菜单）：左 / 水平居中 / 右 / 顶 / 垂直居中 / 底对齐，水平等距 / 垂直等距
 - 「编辑」菜单里也有剪切 / 复制 / 粘贴，按选中状态与剪贴板自动启用；
   粘贴的内容落在鼠标当前位置（多个元件时以整块中心对准光标）
-- 元件库：顶部下拉框按「基础 / 半导体 / 模拟 IC / 电源 / 开关与接地 / 测量」
-  分类筛选，拖到画布上放置
-- 电路必须包含接地符号才能仿真（GND 优先，没有 GND 时用第一个当地）；
-  **有万用表时连地都可以省掉**，
-  自动拿它的负端当参考节点（此时波形监控不可用，只能看万用表读数）
+- 元件库：顶部下拉框按「基础 / 半导体 / 模拟 IC / 数字逻辑 / 电源 / 开关与接地 / 测量」
+  分类筛选，拖到画布上放置；每个条目按**自己那一种**图形画图标（五种门、五种接地
+  各有各的样子）
+- 参考节点的选取顺序：**GND → 任意一种地（AGND / DGND / PGND / EARTH）→ 万用表负端**。
+  「五种地相互隔离」说的是它们各自成网，不影响参考点怎么定；没有 GND 时会用第一个
+  当地，消息区会写明用了哪个。**有万用表时连地都可以省掉**（此时波形监控不可用，
+  只能看万用表读数）
 - 折线导线绘制：端点自动吸附引脚，T 型连接与交叉点自动生成连接圆点
 - 双击元件或选中后在右侧属性面板编辑参数，数值可直接带单位：`10kΩ`、`4.7µF`、`10mH`、`5V`、`1mA`；
   不写单位时按元件默认单位（Ω/F/H/V/A）
@@ -47,8 +49,11 @@
 **实时示波器**
 
 - 与静态波形共用同一白色界面，连续仿真、滚动显示，不需要“停止时间”
-- 步长自动推导：取「每窗约 500 点」与「每个电源周期 20 点」的较小值，避免大时基下采样混叠
-- 启动时按峰值自动选一次「电压/格」「电流/格」，之后仅在被削顶时自动放大，缩小需手动
+- 步长自动推导：按**脉宽**约束（高电平至少 4 个采样点）与「每个电源周期 20 点」取较小值，
+  不再看脉冲边沿有多陡 —— 按边沿算的话，1 µs 的沿会把步长压到 200 ns，
+  5 s 的窗口要 2500 万步，一秒只能推进 0.1 s
+- 首次运行等波形展开后按峰值自动选一次「电压/格」「电流/格」「时间/格」；
+  之后**手动改过的量程会锁定**，不再被自动改掉 —— 需要重新自适应就点「自动缩放」
 - 6×10 网格，时间轴固定为 0–时间窗，波形在其中滚动；左下角显示当前时间与“时间/格”
 - 时间/格 5 ns/div–100 s/div（总窗口 = 10 格），支持暂停 / 继续 / 停止
 - 关闭窗口或点「停止」即结束实时仿真
@@ -89,7 +94,8 @@
 - 万用表 XMM：五档位二端仪器 —— 直流电压档并联（10 MΩ 内阻）、直流电流档串联、
   电阻档注入 1 A 测试电流直接读出欧姆数、**交流电压档 / 交流电流档按一个 50 Hz
   周期算有效值**；档位在属性面板切换，**实时仿真运行中**点击万用表弹出七段码读数窗口（停止后自动关闭）
-- 波形只显示测试点信号；未放置测试点时波形为空
+- 波形页只列测试点（TP / IP）—— 万用表的读数走它自己的七段码窗口，不混进时域曲线
+- 未放置测试点时波形为空
 - 电压/电流同时显示时自动启用左右双 Y 轴，并按 mV/mA/µA 自动缩放
 - 框选缩放、自动缩放、时间轴自动切换 ns/µs/ms、工程记数法刻度
 - 导出 CSV 数据、导出 PNG 图片
@@ -197,7 +203,8 @@ TL431 可调基准（REF / 阳极 / 阴极）：
 
 - CMake ≥ 3.21
 - C++17 编译器（GCC 11+ / Clang 14+）
-- Qt 6.5+：`Core`、`Gui`、`Widgets`、`Charts`、`Svg`，测试还需要 `Test`
+- Qt 6.5+：`Core`、`Gui`、`Widgets`、`Charts`、`Svg`、`Network`（单实例转发用本地套接字），
+  测试还需要 `Test`
 
 Deepin / Debian / Ubuntu：
 
@@ -240,8 +247,17 @@ sudo cmake --install build --prefix /usr/local
 ctest --test-dir build --output-on-failure
 ```
 
-- `core`：工程记数法解析、网表提取、分压/RC 充电/二极管整流/AC 低通数值正确性、JSON 往返
-- `ui`：窗口渲染截图、属性编辑、旋转、鼠标绘制导线、从零搭建 RC 电路并仿真、交流分析截图
+一共 9 个测试二进制，一个文件一个可执行文件：
+
+- `test_core_analysis`：网表提取、分压 / RC 充电 / 二极管整流 / AC 低通 / 逻辑门真值表等数值正确性
+- `test_core_device`：二极管、三极管、MOS、光耦、TL431、OB2362、变压器等器件模型
+- `test_core_model`：数据模型、工程记数法解析、JSON 往返
+- `test_core_update`：版本比较、更新清单解析、镜像排序
+- `test_ui_editor`：画布编辑、旋转 / 翻转、导线、对齐与分布、引脚吸附网格
+- `test_ui_panel`：属性面板、元件库分类与图标
+- `test_ui_meter`：万用表读数窗口与七段码显示
+- `test_ui_waveform`：波形监控、自动量程、静态 / 动态示波器
+- `test_ui_workflow`：整体流程、检查更新、多标签页、单实例、截图核对
 
 ## 使用说明
 
@@ -258,12 +274,13 @@ ctest --test-dir build --output-on-failure
    要看曲线点「静态波形」，要连续观察点「动态示波器」。
    波形只显示测试点信号，没有测试点时为空；工作点分析会弹出文字报告。
 6. **分析参数**：在「波形监控 → 静态波形」页顶部切换工作点 / 瞬态 / 交流扫频，
-   设置停止时间、最大步长或扫频范围，点「重新仿真」生效；
-   瞬态还可选择「显示方式」为静态波形图或动态示波器；动态模式会自动隐藏
-   “停止时间/最大步长”并按时间窗设置步长，关闭窗口或点「停止」结束。
+   设置停止时间、最大步长或扫频范围，点「重新仿真」生效。
+   要看连续滚动的波形就切到「动态示波器」页，按「停止仿真」结束。
    这些设置会随 `.csm` 一起保存，重新打开时自动恢复。
 
-> 电路必须包含**接地符号（GND）**，否则无法确定参考节点，仿真会给出提示。
+> 参考节点按 **GND → 任意一种地 → 万用表负端** 的顺序自动选取；三者都没有时才会
+> 提示「无法确定参考节点」。没有 GND 的电路不给开波形监控（节点电压之间没有统一基准），
+> 万用表读数不受影响。
 
 ### 支持的元件
 
@@ -282,21 +299,20 @@ ctest --test-dir build --output-on-failure
 | 变压器 T | 绕组形式可选**单绕组**（4 引脚：初级 + 次级）或**初级 + 辅助绕组 + 次级**（6 引脚）；参数为初级电感 L1、匝数比 N1:N2:N3（单绕组为 N1:N2）与次级同名端（正接 / 反相）；绕组旁标「1」「2」「3」与同名端圆点 |
 | TL431 基准 VR | 三端可调基准：REF 高于基准电压（默认 2.495 V）时阴极开始吸电流，把 Vka 稳在设定值；REF 接阴极即 2.5 V 基准，配分压电阻可做可调稳压 |
 | IGBT Z | 栅极按 MOS 模型、输出侧带导通压降 Vf；参数：Vth、K、Vf |
+| 运算放大器 U | 三端理想运放（VCVS + 50 Ω 输出电阻），开环增益默认 100 k |
+| 逻辑门 AND / OR / NOT / XOR / XNOR | 数字门，在元件库「数字逻辑」分类下。输入高阻，输出按「电平 + 100 Ω 内阻」等效，因此能直接驱动 LED / MOS / 三极管；参数只有输出高电平（默认 3.3 V），低电平固定 0 V，输入阈值取高电平的一半并带 5% 回差 |
+| 电压测试点 TP | 单引脚探针，读取节点电压，不参与矩阵求解 |
+| 电流测试点 IP | 二引脚探针，以 0 V 电压源串入支路，读取该支路电流 |
+| 网络标签 NET | 单引脚标记，同名标签在网表里并成一个网络，不用画线 |
+| 万用表 XMM | 二引脚仪器，五档位：直流电压档 10 MΩ 并联、直流电流档串联、电阻档注入 1 A 读 V/I、交流电压档 / 交流电流档按 50 Hz 一个周期算有效值 |
+| 开关 S | 闭合 1 mΩ / 断开 1 GΩ |
+| 电压源 V | DC / SIN / PULSE |
+| 电流源 I | DC / SIN / PULSE |
 
 粘贴时整块内容按 10 px 整数倍平移，形状不会被改；早期版本粘歪的图可以用
 「编辑 → 导线对齐网格」修回来。
 
 所有元件的引脚坐标都是 10 px 的整数倍，放在网格上就能接线（有测试守着）。
-| 运算放大器 U | 三端理想运放（VCVS + 50 Ω 输出电阻），开环增益默认 100 k |
-| 电压测试点 TP | 单引脚探针，读取节点电压，不参与矩阵求解 |
-| 电流测试点 IP | 二引脚探针，以 0 V 电压源串入支路，读取该支路电流 |
-| 网络标签 NET | 单引脚标记，同名标签在网表里并成一个网络，不用画线 |
-| 逻辑门 AND / OR / NOT / XOR / XNOR | 数字门。输入高阻，输出「电平 + 100 Ω」等效，高电平可设（默认 3.3 V） |
-| 万用表 XMM | 二引脚仪器，五档位：直流电压档 10 MΩ 并联、直流电流档串联、电阻档注入 1 A 读 V/I、交流电压档 / 交流电流档按 50 Hz 一个周期算有效值 |
-| 开关 S | 闭合 1 mΩ / 断开 1 GΩ |
-| 电压源 V | DC / SIN / PULSE |
-| 电流源 I | DC / SIN / PULSE |
-| 接地 GND | 参考节点 0 |
 
 ## 项目结构
 
@@ -304,10 +320,11 @@ ctest --test-dir build --output-on-failure
 ├── CMakeLists.txt
 ├── resources/
 │   ├── assets/
-│   │   ├── circuit-master.qrc      图标资源清单（/icons 前缀）
-│   │   └── icons/                  应用图标 + 12 枚工具栏图标
+│   │   ├── circuit-master.qrc      资源清单（/icons 图标、/docs 内置更新日志）
+│   │   └── icons/                  应用图标 + 18 个界面图标（工具栏、标签页关闭）
 │   ├── examples/                   内置示例（.csm + examples.qrc）
 │   ├── linux/circuit-master.desktop.in   桌面入口模板（CMake 生成）
+│   ├── mac/circuit-master.icns     macOS 应用图标
 │   └── win/                        Windows 资源
 │       ├── circuit-master.ico      exe 图标 / 安装程序图标（由 SVG 生成）
 │       ├── circuit-master.rc       PE 资源段（资源管理器里的 exe 图标）
@@ -351,7 +368,7 @@ ctest --test-dir build --output-on-failure
 
 ## 已知限制与路线图
 
-当前版本是 **0.1.0**，聚焦于“可用且结果可信”的最小闭环。已知限制：
+当前版本是 **0.3.3**，聚焦于“可用且结果可信”的最小闭环。已知限制：
 
 - 导线中间拐点不能单独拖动（只能拖首尾端点，或拖动导线主体让它变形）
 - 二极管模型未包含串联电阻、结电容；开关为理想电阻模型
@@ -361,25 +378,27 @@ ctest --test-dir build --output-on-failure
 
 计划：
 
-- [ ] 导线拐点拖动、对齐与自动布线
-- [ ] 受控源 / 变压器等元件，运放饱和与带宽模型，IGBT 开关特性
+- [ ] 导线拐点拖动、自动布线
+- [x] 对齐与分布（0.3.3 起）
+- [x] 变压器、逻辑门、万用表、网络标签、测试点
+- [ ] 受控源（VCVS / VCCS / CCVS / CCCS），运放饱和与带宽模型，IGBT 开关特性
 - [ ] 自适应步长瞬态、梯形法、SPICE `.model` 导入
 - [ ] 交流相位、阻抗、傅里叶与参数扫描
 - [ ] 子电路与层次化设计、BOM 与 PDF 出图
 
 ## 版本号
 
-版本号只有一个来源：仓库根目录的 `VERSION` 文件（写法与 git tag 一致，如 `v0.1.0`）。
+版本号只有一个来源：仓库根目录的 `VERSION` 文件（写法与 git tag 一致，如 `v0.3.3`）。
 
 - CMake 在配置阶段读取它，剥掉 `v` 前缀后交给 `project(VERSION ...)`，
   并生成 `csm_version.h`（`CSM_VERSION_STRING` / `CSM_VERSION_NUMBER`）供源码使用
 - 界面标题栏、消息区、关于对话框与 `--version` 输出都取自该宏，源码里不再硬编码版本号
 - `VERSION` 已登记为 CMake 重配置依赖，改完直接构建即可生效
-- 发版时同步更新 `CHANGELOG.md`
+- 发版时同步更新 `CHANGELOG.md` 与 `debian/changelog`
 
 ```bash
 ./build/CircuitMaster --version
-# 电路仿真大师 v0.1.0
+# 电路仿真大师 v0.3.3
 ```
 
 ## 持续集成
@@ -390,17 +409,17 @@ ctest --test-dir build --output-on-failure
 | --- | --- | --- |
 | `build.yaml` | push / PR | **Linux**（Ubuntu 26.04）、**macOS**（Homebrew Qt）、**Windows**（MSYS2 UCRT64 / MinGW）三平台编译，校验 Qt ≥ 6.5、QtCharts 可用、产物存在（Windows 还检查 PE 子系统为 GUI，macOS 检查 `.app` 里的可执行文件） |
 | `test.yaml` | push / PR | 三平台跑 `ctest`（`QT_QPA_PLATFORM=offscreen`），失败时自动 `--rerun-failed -V` 重跑并上传日志 |
-| `release.yaml` | 任意分支 / tag | **Linux 四架构**（amd64 / arm64 / loong64 / riscv64，Deepin crimson 容器 + QEMU）`debuild` 出 `.deb` + 便携 `tar.gz`；**Windows 两架构**（x64 / arm64）`windeployqt` 打便携 zip 与 Inno Setup 安装包；**macOS arm64** 用 `macdeployqt` 打包后 `hdiutil` 出 `.dmg`；随后生成校验和并发布 Release |
+| `release.yaml` | 任意分支 / tag | **Linux 四架构**（amd64 / arm64 / loong64 / riscv64，Deepin crimson 容器 + QEMU）`debuild` 出 `.deb` + 便携 `tar.gz`；**Windows 两架构**（x64 / arm64）`windeployqt` 打便携 zip 与 Inno Setup 安装包；**macOS 两架构**（`macos-26` → arm64、`macos-26-intel` → x64）用 `macdeployqt` 打包后 `hdiutil` 出 `.dmg`；随后生成校验和并发布 Release |
 
 发版流程：
 
 ```bash
 # 1. 改版本号（VERSION 与 debian/changelog 必须一致，CMake 会校验）
-echo "v0.2.0" > VERSION
-dch -v 0.2.0    # 或手工编辑 debian/changelog
-# 2. 在 CHANGELOG.md 写一节 "## [v0.2.0]"，Release 正文直接取这一节
+echo "v0.3.3" > VERSION
+dch -v 0.3.3    # 或手工编辑 debian/changelog
+# 2. 在 CHANGELOG.md 写一节 "## [v0.3.3]"，Release 正文直接取这一节
 # 3. 打 tag 触发发布
-git tag v0.2.0 && git push origin v0.2.0
+git tag v0.3.3 && git push origin v0.3.3
 ```
 
 > 未打 tag 的推送会生成 `continuous_build` 预发布，便于随时下载最新构建。
@@ -430,7 +449,7 @@ dpkg-buildpackage -us -uc -b
 打包相关约定：
 
 - 版本号：`debian/changelog` 是安装包的版本来源（dpkg 的硬约束），
-  与根目录 `VERSION` 不一致时 CMake 会给出警告，发版请用 `dch -v 0.2.0` 同步
+  与根目录 `VERSION` 不一致时 CMake 会给出警告，发版请用 `dch -v 0.3.3` 同步
 - 打包时传入 `-DCSM_BUILD_TESTS=OFF` 跳过单元测试（测试需要 Qt6::Test，与安装内容无关）
 - 安装内容全部由 CMake 的 install 规则提供：可执行文件、`.desktop`、SVG 图标、示例电路
 
@@ -444,7 +463,7 @@ Windows 侧产物：
 内含启动脚本（设置 `LD_LIBRARY_PATH` / `QT_PLUGIN_PATH`）、Qt 运行库、插件与内置示例：
 
 ```bash
-scripts/package-linux-tarball.sh --arch amd64 --from-deb ../circuit-master_0.1.0_amd64.deb
+scripts/package-linux-tarball.sh --arch amd64 --from-deb ../circuit-master_0.3.3_amd64.deb
 ```
 
 安装后的文件布局：
