@@ -1344,12 +1344,74 @@ void MainWindow::setupMobileChrome()
         m_libraryCategory->setMaxVisibleItems(10);
     }
 
+    // 元件库的分类选择：QComboBox 的候选列表是 popup 控件，而 Qt 6.7.2/6.7.3 的
+    // Android 后端把 popup 整体弄坏了（QTBUG-135253，回归 bug），点了不生效。
+    // 这里换成一排可横滑的按钮，点哪个就把隐藏的下拉框切到哪个 ——
+    // 筛选逻辑一行没动，只是换了个不会坏的入口。
+    if (m_libraryCategory && m_libraryDock) {
+        if (QWidget* container = m_libraryDock->widget()) {
+            if (auto* layout = qobject_cast<QVBoxLayout*>(container->layout())) {
+                auto* chipBar = new QWidget(container);
+                auto* row = new QHBoxLayout(chipBar);
+                row->setContentsMargins(0, 0, 0, 0);
+                row->setSpacing(6);
+                auto* group = new QButtonGroup(chipBar);
+                group->setExclusive(true);
+                for (int i = 0; i < m_libraryCategory->count(); ++i) {
+                    auto* chip = new QToolButton(chipBar);
+                    chip->setText(m_libraryCategory->itemText(i));
+                    chip->setCheckable(true);
+                    chip->setChecked(i == m_libraryCategory->currentIndex());
+                    chip->setMinimumHeight(40);
+                    chip->setStyleSheet(QStringLiteral(
+                        "QToolButton { border: 1px solid #cbd5e1; border-radius: 18px;"
+                        " padding: 6px 14px; background: #ffffff; color: #334155; }"
+                        "QToolButton:checked { background: #2563eb; border-color: #2563eb;"
+                        " color: #ffffff; }"));
+                    group->addButton(chip, i);
+                    row->addWidget(chip);
+                }
+                row->addStretch(1);
+
+                auto* scroll = new QScrollArea(container);
+                scroll->setObjectName(QStringLiteral("libraryChips"));
+                scroll->setWidget(chipBar);
+                scroll->setWidgetResizable(true);
+                scroll->setFrameShape(QFrame::NoFrame);
+                scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+                scroll->setFixedHeight(56);
+                layout->insertWidget(0, scroll);
+                connect(group, &QButtonGroup::idClicked, this,
+                        [this](int id) { m_libraryCategory->setCurrentIndex(id); });
+                m_libraryCategory->hide();
+            }
+        }
+    }
+
     // 标签栏左上角的 ☰。放进标签栏的角落控件，不额外占一行高度
     m_drawerButton = new QToolButton(this);
     m_drawerButton->setObjectName(QStringLiteral("drawerButton"));
-    m_drawerButton->setText(QStringLiteral("☰"));
+    // 不要用「☰」这个字形：不少 Android 字体里没有 U+2630，会渲染成一个方框。
+    // 直接画三条横线当图标。
+    {
+        const int side = 48;
+        QPixmap pixmap(side, side);
+        pixmap.fill(Qt::transparent);
+        QPainter painter(&pixmap);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        painter.setPen(QPen(QColor(0x33, 0x41, 0x55), 3.0, Qt::SolidLine, Qt::RoundCap));
+        const int left = 12;
+        const int right = side - 12;
+        for (int i = 0; i < 3; ++i) {
+            const int y = 16 + i * 8;
+            painter.drawLine(left, y, right, y);
+        }
+        painter.end();
+        m_drawerButton->setIcon(QIcon(pixmap));
+        m_drawerButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+        m_drawerButton->setIconSize(QSize(side, side));
+    }
     m_drawerButton->setAutoRaise(true);
-    m_drawerButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
     m_drawerButton->setMinimumSize(44, 40);
     connect(m_drawerButton, &QToolButton::clicked, this, [this] {
         m_drawerDock->setVisible(!m_drawerDock->isVisible());

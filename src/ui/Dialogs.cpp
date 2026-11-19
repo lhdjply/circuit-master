@@ -23,6 +23,24 @@
 
 namespace csm {
 
+namespace {
+
+/// Android 上的 QDialog 触摸问题是 Qt 的已知 bug：
+///   QTBUG-137407  QDialog 的触摸在 6.6.3 以上的多数版本里是坏的
+///   QTBUG-136221  只有铺满全屏才响应
+/// 我们用的 6.7.3 正好在受影响范围内，所以这里统一铺满 —— 卡片本身还是居中的，
+/// 只是窗口占满屏幕，触摸才落得到按钮上。
+void makeTouchFriendly(QDialog& dialog)
+{
+#if defined(Q_OS_ANDROID)
+    dialog.setWindowState(Qt::WindowFullScreen);
+#else
+    Q_UNUSED(dialog);
+#endif
+}
+
+} // namespace
+
 #if defined(Q_OS_ANDROID)
 
 namespace {
@@ -203,6 +221,7 @@ QMessageBox::StandardButton runMessage(QWidget* parent, const QPixmap& icon,
             result = QMessageBox::Cancel;
     });
 
+    makeTouchFriendly(dialog);
     dialog.exec();
 
     if (result == QMessageBox::NoButton)
@@ -315,6 +334,7 @@ a { color: #2563eb; }
 #else
     dialog.resize(660, 560);
 #endif
+    makeTouchFriendly(dialog);
     dialog.exec();
 }
 
@@ -425,6 +445,7 @@ QLabel#aboutFoot {
 #else
     dialog.setMinimumWidth(540);
 #endif
+    makeTouchFriendly(dialog);
     dialog.exec();
 }
 
