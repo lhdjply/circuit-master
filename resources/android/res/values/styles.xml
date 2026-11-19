@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  应用主题。
+
+  默认主题会带一条系统标题栏，上面用 android:label 那个名字（「电路仿真大师」）——
+  它在手机上白占一行高度，而且我们自己的界面里已经有标签栏和 ☰ 了，
+  标题栏就显得多余且不搭。这里换成 NoActionBar 版本，界面直接顶到屏幕顶上。
+
+  parent 用平台的 DeviceDefault，跟随系统深/浅色；不引入 AppCompat 之类的外部依赖。
+-->
+<resources>
+    <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar"/>
+</resources>

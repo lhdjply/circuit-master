@@ -17,6 +17,7 @@ class QListWidget;
 class QListWidgetItem;
 class QPlainTextEdit;
 class QToolBar;
+class QToolButton;
 
 namespace csm {
 
@@ -155,6 +156,9 @@ private:
     bool m_compactLayout = false;
     /// 底部那条图标工具栏
     QToolBar* m_mobileBar = nullptr;
+    /// 左侧抽屉：文件 / 编辑 / 视图 / 仿真 / 帮助
+    QDockWidget* m_drawerDock = nullptr;
+    QToolButton* m_drawerButton = nullptr;
 #endif
     QWidget* m_waveWindow = nullptr;   // 独立的「波形监控」窗口
     QTabWidget* m_waveTabs = nullptr;

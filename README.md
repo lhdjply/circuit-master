@@ -265,6 +265,7 @@ adb install -r build-android/android-build/build/outputs/apk/debug/*.apk
 | 已经适配 | 还没做 |
 | --- | --- |
 | `Q_OS_ANDROID` 时用手机外壳：无菜单栏、底部图标工具栏、无状态栏 | 右键菜单 → 长按菜单 |
+| 五个菜单搬进左侧抽屉，标签栏左上角 ☰ 打开 | 字号与点击区按手指尺寸放大 |
 | 窄屏自动收起两侧面板，画布占满 + 双指捏合缩放 | 快捷键（空格旋转、Ctrl+Z、F5）→ 屏幕按钮 |
 | 面板叫出来时停到底部，像上滑面板 | 字号与点击区按手指尺寸放大 |
 | 单指拖动、框选、连线仍走鼠标那套 | |
@@ -308,6 +309,10 @@ keytool -genkeypair -keystore my.keystore -storetype PKCS12 \
 ```
 
 换密钥之后**签名变了，用户必须卸载重装一次**。
+
+主题用 `resources/android/res/values/styles.xml` 里的 `AppTheme`
+（`Theme.DeviceDefault.NoActionBar`）—— 默认主题会在界面顶上压一条系统标题栏，
+既占高度又和我们的标签栏重复。
 
 应用图标来自 `resources/android/res/mipmap-*/ic_launcher.png`（由
 `resources/assets/icons/icon.svg` 生成），清单在

@@ -57,7 +57,11 @@
 #include <QTimer>
 #include <QToolBar>
 #if defined(Q_OS_ANDROID)
+#include <QFont>
 #include <QToolButton>
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
+#include <QVariant>
 #endif
 #include <QVBoxLayout>
 
@@ -1259,29 +1263,75 @@ void MainWindow::setupMobileChrome()
     if (m_propsDock)
         m_mobileBar->addAction(m_propsDock->toggleViewAction());
 
-    // 溢出菜单：把菜单栏里那几个菜单原样搬进来。动作可以在多个菜单里出现，
-    // 所以不需要动原来的菜单结构。
-    auto* overflowButton = new QToolButton(m_mobileBar);
-    overflowButton->setObjectName(QStringLiteral("overflowButton"));
-    overflowButton->setText(QStringLiteral("⋮"));
-    overflowButton->setAutoRaise(true);
-    overflowButton->setPopupMode(QToolButton::InstantPopup);
-    auto* overflow = new QMenu(overflowButton);
-    overflow->setObjectName(QStringLiteral("overflowMenu"));
+    // 侧边抽屉：手机上没有菜单栏，把「文件 / 编辑 / 视图 / 仿真 / 帮助」
+    // 整个搬进左侧抽屉，由标签栏左上角那个 ☰ 打开。
+    m_drawerDock = new QDockWidget(this);
+    m_drawerDock->setObjectName(QStringLiteral("drawerDock"));
+    m_drawerDock->setAllowedAreas(Qt::LeftDockWidgetArea);
+    // 不要标题栏：抽屉本身就是整个菜单
+    auto* emptyTitle = new QWidget(m_drawerDock);
+    emptyTitle->setFixedHeight(0);
+    m_drawerDock->setTitleBarWidget(emptyTitle);
+
+    auto* tree = new QTreeWidget(m_drawerDock);
+    tree->setObjectName(QStringLiteral("drawerTree"));
+    tree->setHeaderHidden(true);
+    tree->setIconSize(QSize(22, 22));
+    tree->setIndentation(16);
+    // 手指点得准：每行 44px（Material 的最小触控尺寸）
+    tree->setStyleSheet(QStringLiteral(
+        "QTreeWidget::item { height: 44px; }"
+        "QTreeWidget { border: none; background: #ffffff; }"));
+
     for (QAction* menuAction : menuBar()->actions()) {
-        QMenu* source = menuAction->menu();
-        if (!source || source->actions().isEmpty())
+        QMenu* menu = menuAction->menu();
+        if (!menu || menu->actions().isEmpty())
             continue;
-        QMenu* copy = overflow->addMenu(menuAction->text());
-        for (QAction* action : source->actions()) {
-            if (action->isSeparator())
-                copy->addSeparator();
-            else
-                copy->addAction(action);
+        // 「文件(&F)」→「文件」
+        QString title = menuAction->text();
+        if (const int accel = title.indexOf(QStringLiteral("(&")); accel > 0)
+            title.truncate(accel);
+
+        auto* root = new QTreeWidgetItem(tree, {title});
+        root->setFlags(Qt::ItemIsEnabled); // 只作分组，点了不做事
+        QFont groupFont = root->font(0);
+        groupFont.setBold(true);
+        root->setFont(0, groupFont);
+        for (QAction* action : menu->actions()) {
+            if (action->isSeparator() || !action->isVisible())
+                continue;
+            auto* leaf = new QTreeWidgetItem(root, {action->text()});
+            leaf->setIcon(0, action->icon());
+            leaf->setData(0, Qt::UserRole, QVariant::fromValue(action));
         }
     }
-    overflowButton->setMenu(overflow);
-    m_mobileBar->addWidget(overflowButton);
+    // 不展开：五组全摊开在手机上要滚半天，先给一眼能看完的五个入口
+
+    connect(tree, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem* item, int) {
+        auto* action = item->data(0, Qt::UserRole).value<QAction*>();
+        if (!action)
+            return;
+        m_drawerDock->hide();
+        // 排到下个事件循环再触发：抽屉刚收起来，弹出来的对话框才不会被它挡住
+        QTimer::singleShot(0, action, &QAction::trigger);
+    });
+
+    addDockWidget(Qt::LeftDockWidgetArea, m_drawerDock);
+    m_drawerDock->setMinimumWidth(240);
+    m_drawerDock->hide();
+
+    // 标签栏左上角的 ☰。放进标签栏的角落控件，不额外占一行高度
+    m_drawerButton = new QToolButton(this);
+    m_drawerButton->setObjectName(QStringLiteral("drawerButton"));
+    m_drawerButton->setText(QStringLiteral("☰"));
+    m_drawerButton->setAutoRaise(true);
+    m_drawerButton->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    m_drawerButton->setMinimumSize(44, 40);
+    connect(m_drawerButton, &QToolButton::clicked, this, [this] {
+        m_drawerDock->setVisible(!m_drawerDock->isVisible());
+    });
+    if (m_tabs)
+        m_tabs->setCornerWidget(m_drawerButton, Qt::TopLeftCorner);
 }
 
 

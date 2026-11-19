@@ -27,6 +27,17 @@ LINE_COMMENT = re.compile(r"//[^\n]*")
 BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.S)
 
 
+def strip_literals(text: str) -> str:
+    """去掉字符串与字符字面量，免得里面的花括号影响计数。"""
+    text = re.sub(r'"(?:[^"\\]|\\.)*"', '""', text)
+    return re.sub(r"'(?:[^'\\]|\\.)*'", "''", text)
+
+
+def brace_balance(text: str) -> int:
+    text = strip_literals(strip_comments(text))
+    return text.count("{") - text.count("}")
+
+
 def strip_comments(text: str) -> str:
     return LINE_COMMENT.sub("", BLOCK_COMMENT.sub("", text))
 
@@ -64,13 +75,19 @@ def main() -> int:
             continue
         header_text = strip_comments(header.read_text(encoding="utf-8"))
         for block in android_blocks(cpp.read_text(encoding="utf-8")):
+            # 花括号必须配平：这段代码桌面构建时被预处理掉，桌面编译器看不见它，
+            # 多一个 } 会让它提前关掉 namespace，报一堆「MainWindow 未声明」
+            balance = brace_balance(block)
+            if balance != 0:
+                problems.append(f"{cpp.relative_to(ROOT)}: Android 区块的花括号不配平"
+                                f"（多了 {abs(balance)} 个 {'}' if balance < 0 else '{'}）")
             for name in sorted(set(MEMBER.findall(block))):
                 if not re.search(rf"\b{name}\b", header_text):
                     problems.append(f"{cpp.relative_to(ROOT)}: Android 区块用到了 {name}，"
                                     f"但 {header.name} 里没有声明")
 
     if problems:
-        print("Android 专属代码里引用了头文件中不存在的成员：")
+        print("Android 专属代码有问题：")
         for item in problems:
             print("  " + item)
         print("\n这类错误桌面构建不会报（那段代码不编译），只会在 Android CI 上炸。")
