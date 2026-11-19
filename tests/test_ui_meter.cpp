@@ -487,14 +487,18 @@ void UiMeterTest::meterWindowFollowsMode()
     QCOMPARE(meter->mode(), MultimeterMode::Resistance);
     auto* display = meter->findChild<SevenSegmentDisplay*>();
     QVERIFY(display);
-    QCOMPARE(display->displayedUnit(), QStringLiteral("Ω"));
+    // 只断言基本单位：显示值带自动量程前缀（p / n / µ / m / k / M），
+    // 具体哪一个取决于读数，而读数在末位会随平台不同（macOS 上是 pΩ）
+    QVERIFY2(display->displayedUnit().endsWith(QStringLiteral("Ω")),
+             qPrintable(display->displayedUnit()));
 
     // 改回电压档，单位跟着回去
     c.multimeterMode = MultimeterMode::Voltage;
     item->setComponent(c);
     settle();
     QCOMPARE(meter->mode(), MultimeterMode::Voltage);
-    QCOMPARE(display->displayedUnit(), QStringLiteral("V"));
+    QVERIFY2(display->displayedUnit().endsWith(QStringLiteral("V")),
+             qPrintable(display->displayedUnit()));
 }
 
 void UiMeterTest::netLabelFromPanelAndLibrary()
