@@ -723,6 +723,41 @@ void MainWindow::createActions()
     m_actRotate->setShortcut(QKeySequence(Qt::Key_Space));
     m_actRotate->setShortcutContext(Qt::WindowShortcut);
 
+    // 对齐与分布：按符号本体的外框算，位移仍会被网格吸附
+    const QVector<QPair<QString, SchematicScene::AlignMode>> alignItems = {
+        {QStringLiteral("左对齐"), SchematicScene::AlignMode::Left},
+        {QStringLiteral("水平居中"), SchematicScene::AlignMode::CenterH},
+        {QStringLiteral("右对齐"), SchematicScene::AlignMode::Right},
+        {QStringLiteral("顶对齐"), SchematicScene::AlignMode::Top},
+        {QStringLiteral("垂直居中"), SchematicScene::AlignMode::CenterV},
+        {QStringLiteral("底对齐"), SchematicScene::AlignMode::Bottom},
+    };
+    for (const auto& entry : alignItems) {
+        auto* action = new QAction(entry.first, this);
+        action->setEnabled(false);
+        const SchematicScene::AlignMode mode = entry.second;
+        connect(action, &QAction::triggered, this, [this, mode] {
+            if (m_scene)
+                m_scene->alignSelection(mode);
+        });
+        m_alignActions.append(action);
+    }
+
+    const QVector<QPair<QString, Qt::Orientation>> distributeItems = {
+        {QStringLiteral("水平等距"), Qt::Horizontal},
+        {QStringLiteral("垂直等距"), Qt::Vertical},
+    };
+    for (const auto& entry : distributeItems) {
+        auto* action = new QAction(entry.first, this);
+        action->setEnabled(false);
+        const Qt::Orientation orientation = entry.second;
+        connect(action, &QAction::triggered, this, [this, orientation] {
+            if (m_scene)
+                m_scene->distributeSelection(orientation);
+        });
+        m_distributeActions.append(action);
+    }
+
     m_actSelectAll = new QAction(QStringLiteral("全选"), this);
     m_actSelectAll->setShortcut(QKeySequence::SelectAll);
 
@@ -904,6 +939,16 @@ void MainWindow::createMenus()
     editMenu->addSeparator();
     editMenu->addAction(m_actDelete);
     editMenu->addAction(m_actRotate);
+    editMenu->addSeparator();
+
+    QMenu* arrangeMenu = editMenu->addMenu(QStringLiteral("对齐与分布"));
+    arrangeMenu->setObjectName(QStringLiteral("menuArrange"));
+    for (QAction* action : m_alignActions)
+        arrangeMenu->addAction(action);
+    arrangeMenu->addSeparator();
+    for (QAction* action : m_distributeActions)
+        arrangeMenu->addAction(action);
+
     editMenu->addSeparator();
     editMenu->addAction(m_actSelectAll);
     editMenu->addSeparator();
@@ -1272,6 +1317,12 @@ void MainWindow::onSelectionChanged()
                 "提示：万用表读数窗口只在实时仿真运行时打开。按 F5 运行仿真后再点它。"));
         }
     }
+    const int selectedCount = m_scene->selectedComponents().size();
+    for (QAction* action : m_alignActions)
+        action->setEnabled(selectedCount >= 2);
+    for (QAction* action : m_distributeActions)
+        action->setEnabled(selectedCount >= 3);
+
     m_actDelete->setEnabled(!selected.isEmpty());
     m_actCut->setEnabled(!selected.isEmpty());
     m_actCopy->setEnabled(!selected.isEmpty());

@@ -66,6 +66,7 @@ private slots:
     void initTestCase();
     void componentLabelsCanBeDragged();
     void logicGatePinsStayOnGrid();
+    void alignAndDistributeDoTheExpectedThing();
     void hitAreaFollowsRotation();
     void probeStaysClickableWhenRotated();
     void splitDrawnWiresKeepJunction();
@@ -146,6 +147,95 @@ void UiEditorTest::initTestCase()
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     std::setvbuf(stderr, nullptr, _IONBF, 0);
     csm::installQtTranslations(qApp);
+}
+
+void UiEditorTest::alignAndDistributeDoTheExpectedThing()
+{
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    SchematicScene* scene = currentScene(window);
+    QVERIFY(scene);
+
+    // 三个同样的电阻，位置错开
+    QVector<ComponentItem*> items;
+    const QVector<QPointF> spots = {QPointF(200, 200), QPointF(400, 260), QPointF(620, 380)};
+    for (const QPointF& spot : spots) {
+        auto* item = scene->placeComponent(ComponentType::Resistor, spot);
+        QVERIFY(item);
+        item->setSelected(true);
+        items.append(item);
+    }
+    settle();
+
+    // 左对齐：三块的左缘应当一模一样（同尺寸元件，网格吸附后仍然对齐）
+    scene->alignSelection(SchematicScene::AlignMode::Left);
+    settle();
+    const double left = items.first()->symbolRect().left();
+    for (ComponentItem* item : items)
+        QVERIFY2(std::abs(item->symbolRect().left() - left) < 0.01,
+                 qPrintable(QStringLiteral("%1 的左缘 %2 ≠ %3")
+                                .arg(item->component().refdes)
+                                .arg(item->symbolRect().left())
+                                .arg(left)));
+
+    // 垂直等距：首尾不动，中间的按中心线平均分开
+    scene->distributeSelection(Qt::Vertical);
+    settle();
+    QVector<double> centers;
+    for (ComponentItem* item : items)
+        centers.append(item->symbolRect().center().y());
+    std::sort(centers.begin(), centers.end());
+    QCOMPARE(centers.size(), 3);
+    const double gap1 = centers.at(1) - centers.at(0);
+    const double gap2 = centers.at(2) - centers.at(1);
+    QVERIFY2(gap1 > 1.0, qPrintable(QString::number(gap1)));
+    QVERIFY2(std::abs(gap1 - gap2) < 0.01,
+             qPrintable(QStringLiteral("间距不匀：%1 / %2").arg(gap1).arg(gap2)));
+
+    // 水平等距同理
+    scene->distributeSelection(Qt::Horizontal);
+    settle();
+    QVector<double> xs;
+    for (ComponentItem* item : items)
+        xs.append(item->symbolRect().center().x());
+    std::sort(xs.begin(), xs.end());
+    const double dx1 = xs.at(1) - xs.at(0);
+    const double dx2 = xs.at(2) - xs.at(1);
+    QVERIFY2(std::abs(dx1 - dx2) < 0.01,
+             qPrintable(QStringLiteral("间距不匀：%1 / %2").arg(dx1).arg(dx2)));
+
+    // 菜单项可用性：对齐 ≥2 个，分布 ≥3 个
+    QMenu* arrange = window.findChild<QMenu*>(QStringLiteral("menuArrange"));
+    QVERIFY2(arrange, "编辑菜单里应当有「对齐与分布」子菜单");
+
+    auto actionsByText = [arrange](const QString& text) -> QAction* {
+        for (QAction* action : arrange->actions()) {
+            if (action->text() == text)
+                return action;
+        }
+        return nullptr;
+    };
+    QAction* alignLeft = actionsByText(QStringLiteral("左对齐"));
+    QAction* distributeH = actionsByText(QStringLiteral("水平等距"));
+    QVERIFY(alignLeft);
+    QVERIFY(distributeH);
+    QVERIFY(alignLeft->isEnabled());
+    QVERIFY(distributeH->isEnabled());
+
+    // 只留一个选中：两者都该灰掉
+    items.at(1)->setSelected(false);
+    items.at(2)->setSelected(false);
+    settle();
+    QVERIFY2(!alignLeft->isEnabled(), "只选一个时对齐不该可用");
+    QVERIFY2(!distributeH->isEnabled(), "只选一个时分布不该可用");
+
+    items.at(1)->setSelected(true);
+    settle();
+    QVERIFY2(alignLeft->isEnabled(), "选两个时对齐应当可用");
+    QVERIFY2(!distributeH->isEnabled(), "选两个时分布还不够");
 }
 
 void UiEditorTest::logicGatePinsStayOnGrid()

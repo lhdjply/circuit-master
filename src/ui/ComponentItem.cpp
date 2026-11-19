@@ -400,6 +400,16 @@ QPointF ComponentItem::probeLabelAnchor() const
     return QPointF(40.0 * std::sin(rad), -40.0 * std::cos(rad)) + m_comp.refLabelOffset;
 }
 
+QRectF ComponentItem::symbolRect() const
+{
+    // 变换必须和 shape() / paint() 一致：先镜像再旋转
+    QTransform symbolTransform;
+    symbolTransform.scale(m_comp.mirrorX ? -1.0 : 1.0, m_comp.mirrorY ? -1.0 : 1.0);
+    symbolTransform.rotate(double(m_comp.rotation));
+    const QRectF local = symbolTransform.mapRect(symbolShape(m_comp.type).boundingRect());
+    return mapRectToScene(local);
+}
+
 QRectF ComponentItem::refLabelRect() const
 {
     if (m_comp.refdes.isEmpty())

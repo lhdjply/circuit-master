@@ -45,6 +45,9 @@ public:
     QVector<QPointF> pinScenePositions() const;
 
     /// 标号 / 数值标签在 item 坐标里的可点击范围（拖动与命中测试用）
+    /// 符号本体在场景坐标下的矩形（不含标号 / 数值标签）。
+    /// 对齐、分布都按它算 —— 用 boundingRect() 的话，标号文字的长短会影响对齐结果
+    QRectF symbolRect() const;
     QRectF refLabelRect() const;
     QRectF valueLabelRect() const;
 

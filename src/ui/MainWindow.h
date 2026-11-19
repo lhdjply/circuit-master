@@ -174,6 +174,9 @@ private:
     QAction* m_actPaste = nullptr;
     QAction* m_actDelete = nullptr;
     QAction* m_actRotate = nullptr;
+    /// 「对齐与分布」子菜单里的动作：对齐要 ≥2 个元件，分布要 ≥3 个
+    QVector<QAction*> m_alignActions;
+    QVector<QAction*> m_distributeActions;
     QAction* m_actSelectAll = nullptr;
     QAction* m_actSnapWires = nullptr;
 

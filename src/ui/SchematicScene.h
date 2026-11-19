@@ -27,7 +27,17 @@ public:
 
     QString nextRefdes(ComponentType type) const;
     QVector<ComponentItem*> componentItems() const;
+    /// 当前选中的元件（按图元顺序，不含导线）
+    QVector<ComponentItem*> selectedComponents() const;
     QVector<WireItem*> wireItems() const;
+
+    /// 对齐方式：多条选中元件按符号本体的外框对齐
+    enum class AlignMode { Left, CenterH, Right, Top, CenterV, Bottom };
+    /// 把选中的元件对齐（至少 2 个）。位移会被 10 px 网格吸附，
+    /// 所以同尺寸的元件能完全对齐，尺寸不同时最多差半个网格
+    void alignSelection(AlignMode mode);
+    /// 等距分布：首尾不动，中间的按中心线平均分开（至少 3 个）
+    void distributeSelection(Qt::Orientation orientation);
 
     void deleteSelection();
     void commitEdit();

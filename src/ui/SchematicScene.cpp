@@ -266,6 +266,80 @@ QVector<WireItem*> SchematicScene::wireItems() const
     return out;
 }
 
+QVector<ComponentItem*> SchematicScene::selectedComponents() const
+{
+    QVector<ComponentItem*> out;
+    for (QGraphicsItem* item : selectedItems()) {
+        if (item->type() == ComponentItem::Type)
+            out.append(static_cast<ComponentItem*>(item));
+    }
+    return out;
+}
+
+void SchematicScene::alignSelection(AlignMode mode)
+{
+    QVector<ComponentItem*> items = selectedComponents();
+    if (items.size() < 2)
+        return;
+
+    // 共同外框：按符号本体算，标号文字的长短不参与
+    QRectF bounds = items.first()->symbolRect();
+    for (ComponentItem* item : items)
+        bounds = bounds.united(item->symbolRect());
+
+    for (ComponentItem* item : items) {
+        const QRectF rect = item->symbolRect();
+        QPointF delta;
+        switch (mode) {
+        case AlignMode::Left:    delta.setX(bounds.left() - rect.left()); break;
+        case AlignMode::CenterH: delta.setX(bounds.center().x() - rect.center().x()); break;
+        case AlignMode::Right:   delta.setX(bounds.right() - rect.right()); break;
+        case AlignMode::Top:     delta.setY(bounds.top() - rect.top()); break;
+        case AlignMode::CenterV: delta.setY(bounds.center().y() - rect.center().y()); break;
+        case AlignMode::Bottom:  delta.setY(bounds.bottom() - rect.bottom()); break;
+        }
+        if (qFuzzyIsNull(delta.x()) && qFuzzyIsNull(delta.y()))
+            continue;
+        // setPos 会被 itemChange 吸到 10 px 网格；导线由 movedBy → followComponent 带走
+        item->setPos(item->pos() + delta);
+    }
+    commitEdit();
+}
+
+void SchematicScene::distributeSelection(Qt::Orientation orientation)
+{
+    QVector<ComponentItem*> items = selectedComponents();
+    if (items.size() < 3)
+        return;
+
+    const bool horizontal = orientation == Qt::Horizontal;
+    std::sort(items.begin(), items.end(), [horizontal](ComponentItem* a, ComponentItem* b) {
+        const QPointF ca = a->symbolRect().center();
+        const QPointF cb = b->symbolRect().center();
+        return horizontal ? ca.x() < cb.x() : ca.y() < cb.y();
+    });
+
+    const QRectF firstRect = items.first()->symbolRect();
+    const QRectF lastRect = items.last()->symbolRect();
+    const double firstCenter = horizontal ? firstRect.center().x() : firstRect.center().y();
+    const double lastCenter = horizontal ? lastRect.center().x() : lastRect.center().y();
+    const double step = (lastCenter - firstCenter) / double(items.size() - 1);
+    if (qFuzzyIsNull(step))
+        return; // 全都叠在一起，没有可分布的间距
+
+    for (int i = 1; i < items.size() - 1; ++i) {
+        ComponentItem* item = items.at(i);
+        const QRectF rect = item->symbolRect();
+        const double center = horizontal ? rect.center().x() : rect.center().y();
+        const double target = firstCenter + step * i;
+        QPointF delta = horizontal ? QPointF(target - center, 0.0) : QPointF(0.0, target - center);
+        if (qFuzzyIsNull(delta.x()) && qFuzzyIsNull(delta.y()))
+            continue;
+        item->setPos(item->pos() + delta);
+    }
+    commitEdit();
+}
+
 void SchematicScene::deleteSelection()
 {
     const QList<QGraphicsItem*> selected = selectedItems();

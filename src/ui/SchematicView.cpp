@@ -216,6 +216,50 @@ void SchematicView::dropEvent(QDropEvent* event)
     event->acceptProposedAction();
 }
 
+namespace {
+
+/// 往菜单里挂「对齐与分布」子菜单。动作直接连到场景，不靠 exec 的返回值分发，
+/// 所以放在右键菜单里也不用改后面的 if 链
+void addArrangeMenu(QMenu* menu, SchematicScene* scene)
+{
+    if (!scene)
+        return;
+    const int count = scene->selectedComponents().size();
+    QMenu* arrange = menu->addMenu(QObject::tr("对齐与分布"));
+    arrange->setEnabled(count >= 2);
+
+    const QVector<QPair<QString, SchematicScene::AlignMode>> aligns = {
+        {QObject::tr("左对齐"), SchematicScene::AlignMode::Left},
+        {QObject::tr("水平居中"), SchematicScene::AlignMode::CenterH},
+        {QObject::tr("右对齐"), SchematicScene::AlignMode::Right},
+        {QObject::tr("顶对齐"), SchematicScene::AlignMode::Top},
+        {QObject::tr("垂直居中"), SchematicScene::AlignMode::CenterV},
+        {QObject::tr("底对齐"), SchematicScene::AlignMode::Bottom},
+    };
+    for (const auto& entry : aligns) {
+        QAction* action = arrange->addAction(entry.first);
+        action->setEnabled(count >= 2);
+        const SchematicScene::AlignMode mode = entry.second;
+        QObject::connect(action, &QAction::triggered, scene,
+                         [scene, mode] { scene->alignSelection(mode); });
+    }
+    arrange->addSeparator();
+    const QVector<QPair<QString, Qt::Orientation>> distributes = {
+        {QObject::tr("水平等距"), Qt::Horizontal},
+        {QObject::tr("垂直等距"), Qt::Vertical},
+    };
+    for (const auto& entry : distributes) {
+        QAction* action = arrange->addAction(entry.first);
+        action->setEnabled(count >= 3);
+        const Qt::Orientation orientation = entry.second;
+        QObject::connect(action, &QAction::triggered, scene, [scene, orientation] {
+            scene->distributeSelection(orientation);
+        });
+    }
+}
+
+} // namespace
+
 void SchematicView::contextMenuEvent(QContextMenuEvent* event)
 {
     if (m_tool == Tool::Wire) {
@@ -243,6 +287,7 @@ void SchematicView::contextMenuEvent(QContextMenuEvent* event)
         QAction* flipH = menu.addAction(QStringLiteral("水平翻转"));
         QAction* flipV = menu.addAction(QStringLiteral("垂直翻转"));
         QAction* resetLabels = menu.addAction(QStringLiteral("还原标签位置"));
+        addArrangeMenu(&menu, m_scene);
         menu.addSeparator();
         QAction* cut = menu.addAction(QStringLiteral("剪切"));
         QAction* copy = menu.addAction(QStringLiteral("复制"));
