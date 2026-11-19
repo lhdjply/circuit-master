@@ -4,6 +4,7 @@
 #include "ui/Document.h"
 #include "sim/Simulator.h"
 
+#include <QHash>
 #include <QJsonObject>
 #include <QMainWindow>
 
@@ -18,6 +19,7 @@ class QListWidgetItem;
 class QPlainTextEdit;
 class QToolBar;
 class QToolButton;
+class QTreeWidgetItem;
 
 namespace csm {
 
@@ -159,6 +161,9 @@ private:
     /// 左侧抽屉：文件 / 编辑 / 视图 / 仿真 / 帮助
     QDockWidget* m_drawerDock = nullptr;
     QToolButton* m_drawerButton = nullptr;
+    /// 抽屉里的条目 → 对应的菜单动作。用 QHash 而不是塞进 item 的 data，
+    /// 免得依赖 QAction* 的元类型注册
+    QHash<QTreeWidgetItem*, QAction*> m_drawerActions;
 #endif
     QWidget* m_waveWindow = nullptr;   // 独立的「波形监控」窗口
     QTabWidget* m_waveTabs = nullptr;

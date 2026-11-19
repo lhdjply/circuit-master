@@ -61,7 +61,6 @@
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
-#include <QVariant>
 #endif
 #include <QVBoxLayout>
 
@@ -1274,6 +1273,11 @@ void MainWindow::setupMobileChrome()
     m_drawerDock->setTitleBarWidget(emptyTitle);
 
     auto* tree = new QTreeWidget(m_drawerDock);
+    // 关键：必须把它装进抽屉的控件区。只 new 出来的话它虽然是 dock 的子对象，
+    // 却没有被布局进来 —— 抽屉打开时是一片空白，点什么都没反应
+    m_drawerDock->setWidget(tree);
+    // 手机上别让它被误拖出去或关掉
+    m_drawerDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
     tree->setObjectName(QStringLiteral("drawerTree"));
     tree->setHeaderHidden(true);
     tree->setIconSize(QSize(22, 22));
@@ -1283,6 +1287,7 @@ void MainWindow::setupMobileChrome()
         "QTreeWidget::item { height: 44px; }"
         "QTreeWidget { border: none; background: #ffffff; }"));
 
+    m_drawerActions.clear();
     for (QAction* menuAction : menuBar()->actions()) {
         QMenu* menu = menuAction->menu();
         if (!menu || menu->actions().isEmpty())
@@ -1302,15 +1307,18 @@ void MainWindow::setupMobileChrome()
                 continue;
             auto* leaf = new QTreeWidgetItem(root, {action->text()});
             leaf->setIcon(0, action->icon());
-            leaf->setData(0, Qt::UserRole, QVariant::fromValue(action));
+            m_drawerActions.insert(leaf, action);
         }
     }
     // 不展开：五组全摊开在手机上要滚半天，先给一眼能看完的五个入口
 
     connect(tree, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem* item, int) {
-        auto* action = item->data(0, Qt::UserRole).value<QAction*>();
-        if (!action)
+        QAction* action = m_drawerActions.value(item, nullptr);
+        if (!action) {
+            // 点的是分组行：手机上没人会去点那个小三角，点整行就展开/收起
+            item->setExpanded(!item->isExpanded());
             return;
+        }
         m_drawerDock->hide();
         // 排到下个事件循环再触发：抽屉刚收起来，弹出来的对话框才不会被它挡住
         QTimer::singleShot(0, action, &QAction::trigger);
