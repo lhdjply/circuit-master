@@ -78,6 +78,11 @@ private:
     bool m_pinching = false;
     double m_pinchDistance = 0.0;
     QPointF m_pinchCenter;
+    /// 长按 = 右键：手机上只有手指，没有右键
+    void startLongPress(const QPoint& pos);
+    QTimer* m_longPressTimer = nullptr;
+    QPoint m_longPressPos;
+    bool m_longPressFired = false;
 #endif
     /// 当前被按住的那个按钮开关（松开时用来还原）；同时只会有一个
     ComponentItem* m_pressedButton = nullptr;
