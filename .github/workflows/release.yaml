@@ -296,6 +296,7 @@ jobs:
           cp build/CircuitMaster.exe "$stage/"
           cp README.md "$stage/README.md"
           cp CHANGELOG.md "$stage/CHANGELOG.md"
+          cp LICENSE "$stage/LICENSE"
 
           echo "STAGE=$stage" >> "$GITHUB_ENV"
           echo "PKG_VERSION=$version" >> "$GITHUB_ENV"
@@ -684,6 +685,7 @@ jobs:
           cp -R build/CircuitMaster.app "$stage/"
           cp README.md "$stage/README.md"
           cp CHANGELOG.md "$stage/CHANGELOG.md"
+          cp LICENSE "$stage/LICENSE"
 
           echo "STAGE=$stage" >> "$GITHUB_ENV"
           echo "PKG_VERSION=$version" >> "$GITHUB_ENV"

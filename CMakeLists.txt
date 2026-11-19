@@ -268,4 +268,8 @@ else()
     install(DIRECTORY resources/examples/
             DESTINATION ${CMAKE_INSTALL_DATADIR}/circuit-master/examples
             FILES_MATCHING PATTERN "*.csm")
+
+    # 说明与许可证：GPL-3 要求分发时随附许可证全文
+    install(FILES README.md CHANGELOG.md LICENSE
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/circuit-master)
 endif()

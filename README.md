@@ -490,5 +490,25 @@ git config commit.template .gitmessage
 
 ## 许可
 
-本项目为自由软件，可作为 Multisim 在 Linux 上的替代方案使用与修改。
-如需用于商业分发，请自行确认所链接 Qt 模块的许可证（LGPL/GPL）要求。
+本项目以 **GNU 通用公共许可证第 3 版或更高版本（GPL-3.0-or-later）** 发布，
+全文见 [LICENSE](LICENSE)。
+
+```
+Copyright (C) 2026 Circuit Master Maintainers
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU General Public License as published by the
+Free Software Foundation, either version 3 of the License, or (at your
+option) any later version.
+```
+
+这意味着你可以自由使用、修改、再分发，包括商用；但分发（含修改版）时必须
+同样以 GPL 提供源码。没有任何担保。
+
+关于 Qt：本项目动态链接 Qt 6，Qt 以 LGPL-3 / GPL-3 双许可提供，因此
+「GPL-3.0-or-later」对整个程序是自洽的 —— 不需要额外的商业授权。
+若你打算改成 MIT / Apache 之类的宽松许可，就必须同时满足 LGPL 对动态链接的
+全部要求（允许替换 Qt 库、随附 LGPL 全文等），这一点在分发二进制时容易被忽略。
+
+商标与第三方资源：Multisim、NI 等名称归其各自所有者；示例电路与截图均为本项目
+原创。

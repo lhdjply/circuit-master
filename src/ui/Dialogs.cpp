@@ -354,13 +354,14 @@ QLabel#aboutFoot {
         "<b>求解器</b>　改进节点法（MNA）+ 牛顿-拉夫逊迭代，<br>"
         "　　　　　　支持直流工作点、瞬态与交流小信号扫频。<br>"
         "<b>元件</b>　　电阻、电容、电感、变压器、二极管、三极管、<br>"
-        "　　　　　　MOS、运放、开关、电源、万用表、测试点、接地。"));
+        "　　　　　　MOS、运放、逻辑门、开关、电源、万用表、测试点、接地。"));
     right->addWidget(body);
     top->addLayout(right, 1);
     outer->addLayout(top);
 
     auto* foot = new QLabel(
-        QStringLiteral("基于 Qt6 / C++17 / CMake　·　自由软件，可作为 Multisim 在 Linux 上的替代方案"),
+        QStringLiteral("基于 Qt6 / C++17 / CMake　·　GPL-3.0 自由软件，"
+                       "可作为 Multisim 在 Linux 上的替代方案"),
         &dialog);
     foot->setObjectName(QStringLiteral("aboutFoot"));
     foot->setWordWrap(true);
