@@ -74,9 +74,17 @@ def main() -> int:
         if not header.exists():
             continue
         header_text = strip_comments(header.read_text(encoding="utf-8"))
-        for block in android_blocks(cpp.read_text(encoding="utf-8")):
+        source = cpp.read_text(encoding="utf-8")
+        for block in android_blocks(source):
             # 花括号必须配平：这段代码桌面构建时被预处理掉，桌面编译器看不见它，
             # 多一个 } 会让它提前关掉 namespace，报一堆「MainWindow 未声明」
+            # 头文件不许放进 Android 区块：那样桌面编译看不见，只在 Android 炸
+            # （m_mobileBar、QButtonGroup 两次都是这么栽的）
+            for line in block.splitlines():
+                if line.lstrip().startswith("#include"):
+                    problems.append(f"{cpp.relative_to(ROOT)}: Android 区块里出现 "
+                                    f"{line.strip()}，头文件应当放到文件顶部")
+
             balance = brace_balance(block)
             if balance != 0:
                 problems.append(f"{cpp.relative_to(ROOT)}: Android 区块的花括号不配平"

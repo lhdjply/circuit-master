@@ -19,6 +19,7 @@
 
 #include <QAbstractItemView>
 #include <QAction>
+#include <QButtonGroup>
 #include <QComboBox>
 #include <QActionGroup>
 #include <QApplication>
@@ -29,6 +30,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFont>
 #include <QFontDatabase>
 #include <QGraphicsItem>
 #include <QGraphicsScene>
@@ -56,12 +58,9 @@
 #include <QTextStream>
 #include <QTimer>
 #include <QToolBar>
-#if defined(Q_OS_ANDROID)
-#include <QFont>
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
-#endif
 #include <QVBoxLayout>
 
 #include <algorithm>
