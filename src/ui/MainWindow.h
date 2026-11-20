@@ -68,6 +68,14 @@ private:
     void onWaveTabChanged(int index);
     /// 用当前电路启动实时示波器，成功返回 true
     bool startLiveScope();
+    /// 取（必要时创建）某个文档自己的动态示波器
+    WaveformWindow* liveScopeFor(Document* document);
+    /// 把某个文档的动态示波器挂到「动态示波器」页，并让 m_waveLive 指向它
+    void bindLiveScope(Document* document);
+    /// 按某个文档的电路刷新 LED 亮度
+    void refreshDocumentLeds(Document* document);
+    /// m_waveLive 属于哪个文档（现在恒等于当前文档，留着当断言用）
+    Document* m_liveDoc = nullptr;
     /// 按仿真结果点亮/熄灭电路里的发光二极管
     void applyLedStates(const SimulationResult& result);
     /// 熄灭所有 LED（停止仿真或换电路时调用）

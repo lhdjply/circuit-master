@@ -21,10 +21,14 @@ namespace csm {
 
 class SchematicScene;
 class SchematicView;
+class WaveformWindow;
 
 struct Document {
     SchematicScene* scene = nullptr;
     SchematicView* view = nullptr;
+    /// 这个图纸自己的动态示波器。每个图纸一个，切走之后它的定时器继续推进，
+    /// 所以后台图纸的仿真不会停；界面上的「动态示波器」页显示当前图纸这一份。
+    WaveformWindow* liveScope = nullptr;
 
     QString name = QStringLiteral("未命名");
     QString filePath;

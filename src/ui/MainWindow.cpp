@@ -422,8 +422,10 @@ QTabBar::close-button:hover {
     // 波形窗口有两个实例（静态 / 动态），图表配色各刷一次
     if (m_wavePlot)
         m_wavePlot->applyTheme();
-    if (m_waveLive)
-        m_waveLive->applyTheme();
+    for (Document* document : m_documents) {
+        if (document && document->liveScope)
+            document->liveScope->applyTheme();
+    }
     createStatusBar();
 
     appendLog(QStringLiteral("电路仿真大师 %1  —  Qt6 / MNA 求解器")
@@ -438,6 +440,7 @@ QTabBar::close-button:hover {
     }
     if (m_waveLive)
         m_waveLive->stopLiveScope();
+    m_liveDoc = nullptr;
 
     // 启动后自动检查一次更新：先让窗口画出来再查，只有真发现新版本才弹窗。
     // 测试里用 CSM_NO_UPDATE_CHECK=1 关掉，避免用例依赖网络。
@@ -606,19 +609,16 @@ void MainWindow::switchToDocument(int index)
         return;
     Document* document = m_documents.at(index);
 
-    // 切走之前先把「跑到一半」的东西收干净：实时仿真与万用表窗口都只属于
-    // 原来那个文档，留着会显示错的数据
-    if (m_scene != document->scene) {
-        if (m_waveLive && m_waveLive->isLive())
-            m_waveLive->stopLiveScope();
+    // 万用表窗口属于原来那个文档，切走时收掉；但**实时仿真不停** ——
+    // 它属于发起仿真的那个文档（m_liveDoc），切回来看应当还在跑
+    if (m_scene != document->scene)
         closeMeterWindows();
-    }
 
     m_scene = document->scene;
-    // 新标签页的视图继承「仿真是否在跑」的状态（实时引擎是全局的）
-    if (m_view && m_waveLive)
-        m_view->setLiveRunning(m_waveLive->isLive());
+    bindLiveScope(document);   // 换成这个图纸自己的动态示波器
     m_view = document->view;
+    if (m_view)
+        m_view->setLiveRunning(m_waveLive && m_waveLive->isLive());
     if (m_view)
         m_view->setFocus();
 
@@ -664,6 +664,19 @@ bool MainWindow::closeDocument(int index)
             m_tabs->setCurrentIndex(previous);
             return false;
         }
+    }
+
+    // 关掉的文档：停掉并销毁它自己的动态示波器，否则引擎会跑在清空后的电路上
+    if (document->liveScope) {
+        document->liveScope->stopLiveScope();
+        if (m_waveTabs)
+            m_waveTabs->removeTab(m_waveTabs->indexOf(document->liveScope));
+        document->liveScope->deleteLater();
+        if (m_waveLive == document->liveScope)
+            m_waveLive = nullptr;
+        if (m_liveDoc == document)
+            m_liveDoc = nullptr;
+        document->liveScope = nullptr;
     }
 
     // 最后一个标签不真删：清成空白文档，省得窗口里什么都没有
@@ -926,6 +939,7 @@ void MainWindow::createActions()
         // 动态示波器在跑时，这个按钮就是「停止」
         if (m_waveLive && m_waveLive->isLive()) {
             m_waveLive->stopLiveScope();
+            m_liveDoc = nullptr;
             return;
         }
         runSimulation();
@@ -1265,8 +1279,10 @@ void MainWindow::applyTheme()
     }
     if (m_wavePlot)
         m_wavePlot->applyTheme();
-    if (m_waveLive)
-        m_waveLive->applyTheme();
+    for (Document* document : m_documents) {
+        if (document && document->liveScope)
+            document->liveScope->applyTheme();
+    }
 
     // 工具栏 / 菜单图标是按主题着色渲染的，切主题要按名字重新生成
     for (QAction* action : findChildren<QAction*>()) {
@@ -1337,8 +1353,10 @@ MainWindow::~MainWindow()
         m_view->disconnect(this);
     if (m_wavePlot)
         m_wavePlot->disconnect(this);
-    if (m_waveLive)
-        m_waveLive->disconnect(this);
+    for (Document* document : m_documents) {
+        if (document && document->liveScope)
+            document->liveScope->disconnect(this);
+    }
 }
 
 void MainWindow::pushHistory()
@@ -1667,6 +1685,7 @@ Document* MainWindow::loadCircuitData(const Circuit& circuit, const QString& tit
     clearBlast();
     if (m_waveLive)
         m_waveLive->stopLiveScope();
+    m_liveDoc = nullptr;
     if (m_actMonitor) {
         m_actMonitor->setEnabled(false);
         m_actMonitor->setChecked(false);
@@ -1940,9 +1959,8 @@ void MainWindow::createMonitorWindow()
 
     m_waveTabs = new QTabWidget(m_waveWindow);
     m_wavePlot = new WaveformWindow(m_waveTabs);
-    m_waveLive = new WaveformWindow(m_waveTabs);
     m_waveTabs->addTab(m_wavePlot, QStringLiteral("静态波形"));
-    m_waveTabs->addTab(m_waveLive, QStringLiteral("动态示波器"));
+    bindLiveScope(doc());   // 「动态示波器」页用当前图纸自己的那一份
     m_waveTabs->setCurrentIndex(0);
     windowLayout->addWidget(m_waveTabs);
 
@@ -1959,40 +1977,6 @@ void MainWindow::createMonitorWindow()
                 runSimulation();
             });
 
-    connect(m_waveLive, &WaveformWindow::liveStateChanged, this, [this](bool running) {
-        updateRunAction();
-        // 仿真运行时点击开关 = 拨动，停下来就恢复成普通的选中 / 拖动
-        if (m_view)
-            m_view->setLiveRunning(running);
-        // 读数窗口只在仿真运行时可用，停了就一起收掉，
-        // 免得留在桌面上显示一堆不再更新的数字
-        if (!running) {
-            closeMeterWindows();
-            restorePushButtons(); // 松手事件可能没送到（仿真中途停止）
-        }
-
-        // 没有 GND 的电路不开波形监控：参考点由万用表负端顶替，
-        // 节点电压之间没有统一基准，画出来也没意义。
-        if (m_actMonitor && running && !monitorAvailable()) {
-            m_actMonitor->setEnabled(false);
-            m_actMonitor->setToolTip(QStringLiteral(
-                "波形监控需要有接地符号（GND）。当前电路没有 GND，只能看万用表读数。"));
-            if (m_actMonitor->isChecked()) {
-                const QSignalBlocker blocker(m_actMonitor);
-                m_actMonitor->setChecked(false);
-            }
-            if (m_waveWindow)
-                m_waveWindow->hide();
-        }
-    });
-    // 刻度改动记进 doc()->options，保存工程时一并写入
-    connect(m_waveLive, &WaveformWindow::liveScalesChanged, this,
-            [this](double timeDiv, double voltDiv, double ampDiv) {
-                doc()->options.scopeTimeDiv = timeDiv;
-                doc()->options.scopeVoltDiv = voltDiv;
-                doc()->options.scopeAmpDiv = ampDiv;
-            });
-
     // 电路改动（比如拨动开关）后重建实时引擎，让仿真跟着新拓扑走
     m_liveRestartTimer = new QTimer(this);
     m_liveRestartTimer->setSingleShot(true);
@@ -2001,8 +1985,10 @@ void MainWindow::createMonitorWindow()
         if (!m_waveLive || !m_waveLive->isLive())
             return;
 
-        // 优先原地更新：时间轴与已有波形都保留，只把新拓扑/数值喂给引擎
-        const Circuit circuit = m_scene->toCircuit();
+        // 优先原地更新：时间轴与已有波形都保留，只把新拓扑/数值喂给引擎。
+        // 取发起仿真的那个文档的电路 —— 用户可能已经切到别的标签页了
+        SchematicScene* liveScene = m_liveDoc ? m_liveDoc->scene : m_scene;
+        const Circuit circuit = liveScene->toCircuit();
         const Netlist net = circuit.buildNetlist();
         if (!net.valid) {
             appendLog(QStringLiteral("⚠ 电路无法求解：%1").arg(net.error));
@@ -2010,8 +1996,13 @@ void MainWindow::createMonitorWindow()
         }
         const QVector<QPair<QString, QString>> probes = probeSpecs(circuit, net);
         if (!m_waveLive->updateLiveCircuit(circuit, probes)) {
-            // 测试点或节点编号变了，只能重启引擎
-            startLiveScope();
+            // 测试点或节点编号变了，只能重启引擎。但只在「发起仿真的那个文档」
+            // 正显示着的时候重启 —— 否则会把仿真悄悄换到别的图纸上
+            if (m_liveDoc && m_liveDoc == doc()) {
+                startLiveScope();
+            } else {
+                appendLog(QStringLiteral("⚠ 电路结构变化较大，切回该图纸后仿真会重新开始"));
+            }
         }
     });
 
@@ -2022,7 +2013,9 @@ void MainWindow::createMonitorWindow()
 
     // 实时仿真推进时同步刷新 LED 亮度
     connect(m_waveLive, &WaveformWindow::liveUpdated, this, [this] {
-        for (ComponentItem* item : m_scene->componentItems()) {
+        // 仿真可能跑在后台文档上（用户切到了别的标签页），LED 要刷那个文档的
+        SchematicScene* ledScene = m_liveDoc ? m_liveDoc->scene : m_scene;
+        for (ComponentItem* item : ledScene->componentItems()) {
             if (item->component().type != ComponentType::Led)
                 continue;
             const double amps =
@@ -2090,6 +2083,103 @@ void MainWindow::onWaveTabChanged(int index)
         m_wavePlot->setResult(doc()->lastResult);
 }
 
+WaveformWindow* MainWindow::liveScopeFor(Document* document)
+{
+    if (!document)
+        return nullptr;
+    if (document->liveScope)
+        return document->liveScope;
+
+    // 每个图纸一份：自己的引擎、自己的定时器，切走之后照样推进
+    auto* scope = new WaveformWindow(m_waveTabs);
+    document->liveScope = scope;
+
+    connect(scope, &WaveformWindow::liveStateChanged, this, [this, document](bool running) {
+        updateRunAction();
+        if (document == doc() && m_view)
+            m_view->setLiveRunning(running);
+        if (!running) {
+            if (document == doc())
+                closeMeterWindows();
+            restorePushButtons();
+        }
+        if (document == doc() && running && m_actMonitor && !monitorAvailable()) {
+            m_actMonitor->setEnabled(false);
+            m_actMonitor->setToolTip(QStringLiteral(
+                "波形监控需要有接地符号（GND）。当前电路没有 GND，只能看万用表读数。"));
+            if (m_actMonitor->isChecked()) {
+                const QSignalBlocker blocker(m_actMonitor);
+                m_actMonitor->setChecked(false);
+            }
+            if (m_waveWindow)
+                m_waveWindow->hide();
+        }
+    });
+
+    // 刻度改动记进该文档的 options，保存工程时一并写入
+    connect(scope, &WaveformWindow::liveScalesChanged, this,
+            [document](double timeDiv, double voltDiv, double ampDiv) {
+                document->options.scopeTimeDiv = timeDiv;
+                document->options.scopeVoltDiv = voltDiv;
+                document->options.scopeAmpDiv = ampDiv;
+            });
+
+    // 电路里有 LED / 电解电容时，实时仿真要不断刷新它们的显示
+    connect(scope, &WaveformWindow::liveUpdated, this, [this, document] {
+        if (document == doc())
+            refreshMeterWindows();
+        refreshDocumentLeds(document);
+    });
+    return scope;
+}
+
+void MainWindow::bindLiveScope(Document* document)
+{
+    if (!m_waveTabs || !document)
+        return;
+    WaveformWindow* scope = liveScopeFor(document);
+
+    // 「动态示波器」固定在第 1 页：先把别人的摘下来（不销毁，它自己的定时器
+    // 继续跑），再插自己的
+    for (int i = m_waveTabs->count() - 1; i >= 1; --i) {
+        if (m_waveTabs->widget(i) != scope)
+            m_waveTabs->removeTab(i);
+    }
+    if (m_waveTabs->indexOf(scope) < 0)
+        m_waveTabs->insertTab(1, scope, QStringLiteral("动态示波器"));
+
+    m_waveLive = scope;
+    m_liveDoc = document;
+}
+
+void MainWindow::refreshDocumentLeds(Document* document)
+{
+    if (!document || !document->liveScope || !document->scene)
+        return;
+    WaveformWindow* scope = document->liveScope;
+    if (!scope->isLive())
+        return;
+
+    for (ComponentItem* item : document->scene->componentItems()) {
+        if (item->component().type != ComponentType::Led)
+            continue;
+        const QString name = QStringLiteral("I(%1)").arg(item->component().refdes);
+        const double amps = std::abs(scope->liveValue(name));
+        item->setLedBrightness(amps < 1e-4 ? 0.0
+                                          : std::min(1.0, std::log10(amps / 1e-4) / 2.0));
+    }
+
+    // 实时仿真里也可能把电解电容接反
+    const QHash<int, double> blown = scope->liveBlownCapacitors();
+    QHash<int, double> fresh;
+    for (auto it = blown.constBegin(); it != blown.constEnd(); ++it) {
+        if (!m_blownIds.contains(it.key()))
+            fresh.insert(it.key(), it.value());
+    }
+    if (!fresh.isEmpty())
+        applyBlownCapacitors(fresh);
+}
+
 bool MainWindow::startLiveScope()
 {
     const Circuit circuit = m_scene->toCircuit();
@@ -2105,6 +2195,7 @@ bool MainWindow::startLiveScope()
     m_waveLive->setLiveScalePreferences(doc()->options.scopeTimeDiv, doc()->options.scopeVoltDiv,
                                         doc()->options.scopeAmpDiv);
     m_waveLive->startLive(circuit, probes);
+    m_liveDoc = doc();   // 这条仿真属于当前文档
     appendLog(QStringLiteral("动态示波器已启动：连续仿真，切回静态波形或关闭面板即停止。"));
     return true;
 }
