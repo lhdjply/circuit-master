@@ -212,7 +212,9 @@ if(Qt6LinguistTools_FOUND)
         FILES ${CSM_QM_FILES}
     )
 else()
-    message(WARNING "没找到 Qt LinguistTools：中文翻译不会被打包，界面将只有英文")
+    message(WARNING
+        "没找到 Qt LinguistTools：中文翻译不会被打包，界面将只有英文。"
+        "装好后重新配置即可（Debian/Ubuntu: qt6-l10n-tools，MSYS2: qt6-tools）。")
 endif()
 # OBJECT 库的对象文件不会自动跟着依赖传递，这里显式把两个都列上
 target_link_libraries(CircuitMaster PRIVATE csm_ui csm_core)

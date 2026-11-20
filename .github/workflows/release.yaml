@@ -224,6 +224,7 @@ jobs:
             "${{ matrix.mingw_prefix }}-qt6-base" \
             "${{ matrix.mingw_prefix }}-qt6-charts" \
             "${{ matrix.mingw_prefix }}-qt6-svg" \
+            "${{ matrix.mingw_prefix }}-qt6-tools" \
             "${{ matrix.mingw_prefix }}-qt6-translations"
 
           # 以「工具真的能跑」为准：上一步的退出码既可能来自成功，也可能来自被
@@ -254,14 +255,14 @@ jobs:
           version=$(pkg-config --modversion Qt6Core)
           echo "Qt6Core $version"
 
-          # 与 Linux 作业同一套判定：CMakeLists 里要求 Qt 6.5+。
-          # MSYS2 的 qt6-base 当前远新于 6.5，正常不会触发；保留这个检查是为了
+          # 与 Linux 作业同一套判定：CMakeLists 里要求 Qt 6.4+。
+          # MSYS2 的 qt6-base 当前远新于 6.4，正常不会触发；保留这个检查是为了
           # 镜像里 Qt 被降级时能给出明确原因。
           major=${version%%.*}
           rest=${version#*.}
           minor=${rest%%.*}
-          if [ "$major" -lt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -lt 5 ]; }; then
-            echo "::error::Qt >= 6.5 is required, found $version."
+          if [ "$major" -lt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -lt 4 ]; }; then
+            echo "::error::Qt >= 6.4 is required, found $version."
             exit 1
           fi
 
@@ -645,8 +646,8 @@ jobs:
           major=${version%%.*}
           rest=${version#*.}
           minor=${rest%%.*}
-          if [ "$major" -lt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -lt 5 ]; }; then
-            echo "::error::Qt >= 6.5 is required, found $version."
+          if [ "$major" -lt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -lt 4 ]; }; then
+            echo "::error::Qt >= 6.4 is required, found $version."
             exit 1
           fi
 

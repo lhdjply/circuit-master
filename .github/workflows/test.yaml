@@ -28,6 +28,9 @@ jobs:
       - name: Install system Qt and build dependencies
         run: |
           sudo apt-get update
+          # qt6-tools-dev 提供 Qt6LinguistTools 的 CMake 配置，
+          # qt6-l10n-tools 提供 lrelease 可执行文件 —— 两个都要才有中文 .qm。
+          # 注意：续行中间不能插注释，那会把命令截断成几条。
           sudo apt-get install -y --no-install-recommends \
             ca-certificates \
             cmake \
@@ -38,6 +41,8 @@ jobs:
             qt6-base-dev-tools \
             qt6-charts-dev \
             qt6-svg-dev \
+            qt6-tools-dev \
+            qt6-l10n-tools \
             qt6-translations-l10n
 
       - name: Verify Qt version
@@ -47,13 +52,13 @@ jobs:
           dpkg-query -W -f='${Package} ${Version}\n' \
             qt6-base-dev qt6-charts-dev qt6-svg-dev
 
-          # CMakeLists 里要求 Qt 6.5+；太旧时在这里明确失败，
+          # CMakeLists 里要求 Qt 6.4+；太旧时在这里明确失败，
           # 否则报出来的会是 "no member named ..."，看起来像代码写错了。
           major=${version%%.*}
           rest=${version#*.}
           minor=${rest%%.*}
-          if [ "$major" -lt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -lt 5 ]; }; then
-            echo "::error::Qt >= 6.5 is required, found $version."
+          if [ "$major" -lt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -lt 4 ]; }; then
+            echo "::error::Qt >= 6.4 is required, found $version."
             exit 1
           fi
 
@@ -132,13 +137,13 @@ jobs:
           fi
           echo "Qt $version（$QT_PREFIX）"
 
-          # CMakeLists 里要求 Qt 6.5+，太旧时在这里明确失败，
+          # CMakeLists 里要求 Qt 6.4+，太旧时在这里明确失败，
           # 否则报出来的会是 "no member named ..."，看起来像代码写错了
           major=${version%%.*}
           rest=${version#*.}
           minor=${rest%%.*}
-          if [ "$major" -lt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -lt 5 ]; }; then
-            echo "::error::Qt >= 6.5 is required, found $version."
+          if [ "$major" -lt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -lt 4 ]; }; then
+            echo "::error::Qt >= 6.4 is required, found $version."
             exit 1
           fi
 
@@ -276,6 +281,7 @@ jobs:
             mingw-w64-ucrt-x86_64-qt6-base \
             mingw-w64-ucrt-x86_64-qt6-charts \
             mingw-w64-ucrt-x86_64-qt6-svg \
+            mingw-w64-ucrt-x86_64-qt6-tools \
             mingw-w64-ucrt-x86_64-qt6-translations
 
           # 以「工具真的能跑」为准：上一步的退出码既可能来自成功，也可能来自被
@@ -306,14 +312,14 @@ jobs:
           version=$(pkg-config --modversion Qt6Core)
           echo "Qt6Core $version"
 
-          # 与 Linux 作业同一套判定：CMakeLists 里要求 Qt 6.5+。
+          # 与 Linux 作业同一套判定：CMakeLists 里要求 Qt 6.4+。
           # MSYS2 的 qt6-base 当前远新于 6.5，正常不会触发；保留这个检查是为了
           # 镜像里 Qt 被降级时能给出明确原因。
           major=${version%%.*}
           rest=${version#*.}
           minor=${rest%%.*}
-          if [ "$major" -lt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -lt 5 ]; }; then
-            echo "::error::Qt >= 6.5 is required, found $version."
+          if [ "$major" -lt 6 ] || { [ "$major" -eq 6 ] && [ "$minor" -lt 4 ]; }; then
+            echo "::error::Qt >= 6.4 is required, found $version."
             exit 1
           fi
 

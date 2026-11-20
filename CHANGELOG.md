@@ -9,7 +9,9 @@
 
 ### 新增
 
-- **界面语言：中文 / English**：「视图 → 语言」里切换，选择存进 QSettings。
+- **界面语言：中文 / English**（打包需要两个包：`qt6-tools-dev` 提供 `Qt6LinguistTools` 的 CMake 配置，
+  `qt6-l10n-tools` 提供 `lrelease`；MSYS2 上是 `qt6-tools`；CI 的三个工作流都装了这个包并校验
+  它在 PATH 里，缺了就直接失败，不会静默发一版只有英文的包）：「视图 → 语言」里切换，选择存进 QSettings。
   源码里的文案一律用英文（`CSM_TR("Open File")`），中文放在
   `resources/translations/circuit-master_zh_CN.ts`（445 条），构建时由 lrelease
   编成 .qm 并嵌进资源；切换后提示重启生效。Qt 自带控件的文案（输入框右键菜单等）
