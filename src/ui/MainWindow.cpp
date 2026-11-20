@@ -374,6 +374,8 @@ QIcon actionIcon(const QString& name, const QString& themeName, QStyle::Standard
 MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent)
 {
+    // 跟随系统模式下，系统深浅色一变就整体重刷（图标、元件库、图表都要跟着）
+    Theme::setChangeHandler([this] { applyTheme(); });
     setWindowTitle(QStringLiteral("电路仿真大师"));
     const QRect available = QGuiApplication::primaryScreen()
         ? QGuiApplication::primaryScreen()->availableGeometry()

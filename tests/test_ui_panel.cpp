@@ -43,6 +43,8 @@
 #include <QMimeData>
 #include <QPixmap>
 #include <QPlainTextEdit>
+#include <QMetaObject>
+#include <QStyleHints>
 #include <QPushButton>
 #include <QScopeGuard>
 #include <QSet>
@@ -80,6 +82,7 @@ private slots:
     void libraryFiltersByCategory();
     void logicGateRowsInPanel();
     void themeSwitchesLightAndDark();
+    void themeFollowsSystemSchemeChanges();
     void logicGateIconsDiffer();
     void libraryDragPixmapHasNoSelectionBackground();
 
@@ -600,6 +603,27 @@ void UiPanelTest::logicGateIconsDiffer()
         seen.insert(bytes);
     }
     QCOMPARE(seen.size(), 5); // 五个门的图标互不相同
+}
+
+void UiPanelTest::themeFollowsSystemSchemeChanges()
+{
+    // 跟随系统时，系统深浅色一变就要整体重刷；固定浅色 / 深色时不响应。
+    // offscreen 平台不会自己发这个信号，这里直接把信号打出去验证链路。
+    int notified = 0;
+    Theme::setChangeHandler([&notified] { ++notified; });
+
+    Theme::save(Theme::Mode::System);
+    Theme::apply(*qApp);
+    QMetaObject::invokeMethod(QGuiApplication::styleHints(), "colorSchemeChanged",
+                              Q_ARG(Qt::ColorScheme, Qt::ColorScheme::Dark));
+    QCOMPARE(notified, 1);
+
+    Theme::save(Theme::Mode::Light);
+    QMetaObject::invokeMethod(QGuiApplication::styleHints(), "colorSchemeChanged",
+                              Q_ARG(Qt::ColorScheme, Qt::ColorScheme::Dark));
+    QCOMPARE(notified, 1); // 固定模式不响应
+
+    Theme::setChangeHandler(nullptr); // 别把捕获局部变量的 lambda 留着
 }
 
 void UiPanelTest::themeSwitchesLightAndDark()

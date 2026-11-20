@@ -44,6 +44,10 @@ bool isDark();
 /// 像凹进去，深底上就变成明显的**重影** —— 所以这里直接关掉。
 QStyle* appStyle();
 
+/// 登记一个「主题需要重新应用」的回调。跟随系统模式下，系统深浅色一变就会调它。
+/// 主窗口在这里接上自己的 applyTheme()（它负责刷新图标、元件库等）。
+void setChangeHandler(std::function<void()> handler);
+
 /// 按当前模式给 QApplication 装调色板，并把登记过的控件样式重建一遍
 /// （main 启动时、切换主题时都要调）
 void apply(QApplication& app);

@@ -34,6 +34,8 @@ public:
 };
 
 Mode g_mode = Mode::System;
+std::function<void()> g_changeHandler;
+bool g_watchingScheme = false;
 
 /// 登记过的控件 + 它们的样式生成器
 QVector<QPair<QPointer<QWidget>, std::function<QString()>>>& styledWidgets()
@@ -42,14 +44,28 @@ QVector<QPair<QPointer<QWidget>, std::function<QString()>>>& styledWidgets()
     return list;
 }
 
+/// 启动时（我们还没装自己的调色板之前）系统给的调色板。
+/// 有些平台插件根本不报 colorScheme（返回 Unknown），这时只能看它。
+QPalette g_startupPalette;
+bool g_startupPaletteSampled = false;
+
 bool systemIsDark()
 {
 #if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
-    if (QGuiApplication::styleHints())
-        return QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
+    if (QGuiApplication::styleHints()) {
+        switch (QGuiApplication::styleHints()->colorScheme()) {
+        case Qt::ColorScheme::Dark:
+            return true;
+        case Qt::ColorScheme::Light:
+            return false;
+        case Qt::ColorScheme::Unknown:
+            break;
+        }
+    }
 #endif
-    // 老 Qt 上退化成「看窗口底色亮度」
-    const QPalette palette = QGuiApplication::palette();
+    // 平台不报：退回「启动时系统调色板的明暗」
+    const QPalette& palette = g_startupPaletteSampled ? g_startupPalette
+                                                     : QGuiApplication::palette();
     return palette.color(QPalette::Window).lightness() < 128;
 }
 
@@ -77,6 +93,11 @@ bool isDark()
     return g_mode == Mode::Dark || (g_mode == Mode::System && systemIsDark());
 }
 
+void setChangeHandler(std::function<void()> handler)
+{
+    g_changeHandler = std::move(handler);
+}
+
 QStyle* appStyle()
 {
     static QStyle* style = new AppStyle;
@@ -85,6 +106,28 @@ QStyle* appStyle()
 
 void apply(QApplication& app)
 {
+    // 跟随系统模式：系统深浅色一变就重新应用一次。不挂这个监听的话，
+    // 系统切到深色时只有画布会变（它绘制时读 isDark()），其余控件仍用旧调色板 ——
+    // 结果就是「深色画布 + 浅色界面」。
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+    if (!g_watchingScheme && QGuiApplication::styleHints()) {
+        g_watchingScheme = true;
+        QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged,
+                         [](Qt::ColorScheme) {
+                             if (g_mode != Mode::System)
+                                 return;
+                             apply(*qApp);
+                             if (g_changeHandler)
+                                 g_changeHandler();
+                         });
+    }
+#endif
+
+    if (!g_startupPaletteSampled) {
+        g_startupPalette = app.palette();
+        g_startupPaletteSampled = true;
+    }
+
     const bool dark = isDark();
     QPalette palette;
     if (dark) {
