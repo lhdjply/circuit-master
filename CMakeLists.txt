@@ -43,8 +43,11 @@ set(CMAKE_INCLUDE_CURRENT_DIR OFF)
 include(GNUInstallDirs)
 
 # 下限取 6.4：Debian 12 / Ubuntu 24.04 就是这一版。打包在 Debian 12 里做，
-# 产物才能装到大多数 Debian 系发行版上；更高版本才有的接口（比如
-# QStyleHints::colorScheme，6.5+）在代码里用 QT_VERSION_CHECK 兜着。
+# 产物才能装到大多数 Debian 系发行版上。
+#
+# 因此**只能用 6.4 就有的接口**。6.5+ 的（QStyleHints::colorScheme、
+# QList::assign(6.6) 等）要么换成等价写法，要么用 QT_VERSION_CHECK 包起来 ——
+# 否则本地 Qt 6.8 编得过，Debian 12 上却报 “has no member named ...”。
 find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Charts Svg Network)
 find_package(Qt6 6.4 QUIET COMPONENTS Test)
 

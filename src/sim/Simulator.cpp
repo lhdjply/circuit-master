@@ -133,7 +133,8 @@ struct ElementState {
             // 首次调用：按 period/h 定窗口大小，样本过多就抽稀
             const double raw = std::max(period / std::max(h, 1e-15), 2.0);
             w.decim = std::max(1, int(std::ceil(raw / kMaxSamples)));
-            w.samples.assign(std::max(2, int(std::lround(period / (w.decim * h)))), 0.0);
+            // 用 fill 而不是 assign：QList::assign 要 Qt 6.6，Debian 12 上是 6.4
+            w.samples.fill(0.0, std::max(2, int(std::lround(period / (w.decim * h)))));
             w.index = 0;
             w.filled = 0;
             w.skip = 0;
