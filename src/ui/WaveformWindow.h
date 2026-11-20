@@ -135,6 +135,10 @@ private:
     double m_liveDiv = 0.5e-3;
     double m_liveWindow = 5e-3;
     double m_liveSpeed = 1.0;
+    /// 用户手动选过时基后就不再自动换挡（和电压档的 m_liveScaleLocked 同理）
+    bool m_liveTimeLocked = false;
+    /// 正由「自动换挡」改写时基：此时不要把它记成用户选择
+    bool m_liveAutoPicking = false;
     int m_liveDecimation = 1;
     int m_liveSampleCounter = 0;
     bool m_livePlaying = false;

@@ -9,6 +9,7 @@
 
 #include <QChart>
 #include <QCloseEvent>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QChartView>
 #include <QFontDatabase>
@@ -42,6 +43,12 @@
 namespace csm {
 
 namespace {
+
+/// 动态示波器每窗口的采样点数（显示用，靠抽稀维持）
+constexpr double kLiveSamples = 500.0;
+/// 每个窗口最多积分多少步：步长再细也不超这个预算，否则大时基会卡死
+constexpr double kLiveStepBudget = 400000.0;
+
 
 const QColor kColors[] = {
     QColor(0x25, 0x63, 0xeb), QColor(0xdc, 0x26, 0x26), QColor(0x16, 0xa3, 0x4a),
@@ -332,6 +339,11 @@ WaveformWindow::WaveformWindow(QWidget* parent)
             [this] {
                 m_liveDiv = m_liveWindowBox->currentData().toDouble();
                 m_liveWindow = m_liveDiv * 10.0;
+                if (!m_liveAutoPicking) {
+                    m_liveTimeLocked = true;   // 手动选的时基要留住
+                    // 也别让「首次自动量程」在稍后把时基又改回去
+                    m_liveAutoScaled = true;
+                }
                 if (m_live)
                     restartLiveEngine();
                 emit liveScalesChanged(m_liveDiv, m_liveVoltDiv, m_liveAmpDiv);
@@ -923,19 +935,14 @@ void WaveformWindow::restartLiveEngine()
 {
     m_live = std::make_unique<LiveTransient>();
 
-    // 步长同时受两件事约束：
-    //  1) 时间窗分辨率：每个窗口约 500 个采样点
-    //  2) 信号本身：每个电源周期至少 20 点，避免大时基下采样混叠（正弦被采成 0）
-    double step = m_liveWindow / 500.0;
+    // 步长 = min(时基步长, 电路要求)，再用「每窗口步数预算」兜底。
+    // 时基只决定窗口宽度，不能把积分步长放粗到跨过开关周期 —— 那样看到的是
+    // 混叠出来的假象（1 s/格时 20 ms 步长会让反激输出从 ±300 V 塌成 0）；
+    // 但预算不设又不行：10 s 窗口按 769 ns 算要 1300 万步。
+    const double divStep = std::max(m_liveWindow / kLiveSamples, 1e-12);
     const double suggested = m_liveCircuit.suggestedMaxStep();
-    if (suggested > 0.0)
-        step = std::min(step, suggested);
-    // 下限防止步数爆炸（每窗口最多 2 万步），但绝不能粗过 suggested：
-    // 粗过开关周期时（例如 20 ms/格 → 10 µs 步长对 50 kHz 的变换器）整个开关
-    // 过程会被跨过去，仿真结果直接是 0 V，看起来就是「没有波形」。
-    // 这里改成：宁可少采点（靠抽稀显示），也不让步长跨过电路本身的动态。
-    const double floorStep = m_liveWindow / 20000.0;
-    step = std::max({step, suggested > 0.0 ? std::min(floorStep, suggested) : floorStep, 1e-12});
+    double step = suggested > 0.0 ? std::min(divStep, suggested) : divStep;
+    step = std::max(step, m_liveWindow / kLiveStepBudget);
     QString error;
     if (!m_live->start(m_liveCircuit, step, &error)) {
         m_live.reset();
@@ -947,9 +954,7 @@ void WaveformWindow::restartLiveEngine()
         buffer.x.clear();
         buffer.y.clear();
     }
-    // 这里**不**重置 m_liveAutoScaled：改时基只是换时间窗，电压/电流量程
-    // 不该跟着重选一遍（否则用户刚点完「自动缩放」、再手动换时基，
-    // 电压档又被自动改掉）。真正需要重新自适应时由 startLive / autoScale 重置。
+    // 不重置 m_liveAutoScaled：换时基不该把电压/电流量程也重选一遍。
     updateLiveDecimation();
     for (QLineSeries* series : m_liveSeries)
         series->clear();
@@ -1267,6 +1272,7 @@ void WaveformWindow::autoScale()
     // 实时示波器：时基、电压/电流量程一起重新自适应
     if (m_live) {
         m_liveScaleLocked = false;
+        m_liveTimeLocked = false;   // 点「自动缩放」就是明确要求重新自适应
         m_liveAutoScaled = false;
         pickLiveTimeBase(); // 先定时基：它决定步长，可能重启引擎
         autoPickLiveScales();
@@ -1360,6 +1366,8 @@ void WaveformWindow::pickLiveTimeBase()
 {
     if (!m_liveWindowBox)
         return;
+    if (m_liveTimeLocked)
+        return; // 用户手动选过时基，别抢
     const double period = estimateLivePeriod();
     if (!(period > 0.0))
         return; // 估不出周期就不动时基，免得把用户看到的东西抖掉
@@ -1383,8 +1391,13 @@ void WaveformWindow::pickLiveTimeBase()
     if (best < 0 || best == m_liveWindowBox->currentIndex())
         return;
 
-    // 不屏蔽信号：下拉框的槽会重算窗口、步长并重启引擎
+    // 不屏蔽信号：下拉框的槽会重算窗口、步长并重启引擎。
+    // 但要用标志把「自动改」和「用户改」分开，否则会被记成用户选择而上锁。
+    if (m_liveTimeLocked)
+        return;                            // 用户选过就不动
+    m_liveAutoPicking = true;
     m_liveWindowBox->setCurrentIndex(best);
+    m_liveAutoPicking = false;
 }
 
 void WaveformWindow::selectAll(bool on)
