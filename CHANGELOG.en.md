@@ -6,60 +6,59 @@ numbering follows [Semantic Versioning](https://semver.org/).
 The single source of truth for the version is the `VERSION` file at the
 repository root (same form as the tag, e.g. `v0.4.0`).
 
-## [Unreleased]
+## [v0.4.1] - 2026-11-20
+
+A settings window, light and dark themes, a Chinese/English interface, and wider
+oscilloscope ranges.
 
 ### Added
 
-- **Interface language: Chinese / English**: switch under View → Language; the
-  choice is stored in QSettings. All source strings are English
-  (`CSM_TR("Open File")`) and the Chinese lives in
-  `resources/translations/circuit-master_zh_CN.ts` (445 entries), compiled to
-  `.qm` by lrelease at build time and embedded in the resources. Switching
-  prompts for a restart. Qt's own widget strings (line-edit context menus and
-  so on) follow the same setting. The catalogues are refreshed with
-  `scripts/update-translations.py` (the `update_translations` /
-  `check_translations` build targets), which also emits
-  `circuit-master_en.ts` as an English reference. This file has a Chinese
-  counterpart, `CHANGELOG.md`.
-- **Light and dark themes**: View → Theme offers Follow System / Light / Dark,
-  stored in QSettings. The canvas, symbols, wires, waveform charts, dialogs and
-  hint text each get their own dark values, and switching applies immediately.
-  Toolbar icons keep their original colours (blue strokes, green playback) in
-  light mode and are hue-preserving brightened in dark mode.
-- **Follow System really follows**: the system colour scheme is watched, so
-  flipping the desktop to dark repaints the whole window. Previously it was
-  sampled once at startup and a mid-session switch left a dark canvas inside a
-  light interface. When the platform does not report a scheme (some X11
-  setups), the system palette is used instead.
-- **The live scope behaves like a real oscilloscope**: the time base only sets
-  how wide a window you look at; the integration step comes from the circuit's
-  dynamics and is never coarsened just because you zoomed out — at 1 s/div that
-  used to skip thousands of switching cycles and collapse a flyback converter's
-  output from ±300 V to 0. A steady 30 V / 12 V envelope is visible at 1 s/div
-  now. A 400k-step budget per window keeps the cost bounded.
+- **Settings window**: Edit → Settings (Ctrl+,) collects the theme, grid size and
+  interface language in one place. All three apply when you press OK; Cancel
+  changes nothing.
+- **Light and dark themes**: Follow System / Light / Dark. The canvas, symbols,
+  wires, waveform charts, dialogs and hint text each get their own dark values,
+  and switching applies immediately. Toolbar icons keep their original colours
+  in light mode and are hue-preserving brightened in dark mode.
+- **Interface language: Chinese / English**: switching prompts for a restart.
+  Qt's own widget strings (line-edit context menus and so on), the built-in
+  example names, the changelog and the update window all follow the setting.
+- **Adjustable grid size**: 1 / 2 / 5 / 10 px (10 by default). It sets the canvas
+  grid, the snap step for parts and wires, and the netlist's "are these two pins
+  connected" test.
+- **Scope ranges up to 1000 V and 10 A**: previously capped at 100 V/div and
+  1 A/div, which flattened the rectified mains rail (around 300 V), the flyback
+  drain spike (above 500 V) and the primary peak current (1–2 A) into flat tops.
 
 ### Changed
 
-- **The .deb now targets most Debian-based distributions**: packages used to be
-  built in Deepin crimson, which pulled in Deepin's newer glibc / Qt and made
-  them uninstallable elsewhere. amd64 and arm64 are now built in **Debian 12**
-  (glibc 2.36, Qt 6.4) — the common floor for Debian 12/13, Ubuntu 24.04+,
-  Mint 22 and Kali. The CMake Qt floor dropped from 6.5 to 6.4 accordingly.
-  `Depends` now only carries what `dpkg-shlibdeps` derives; platform plugins and
-  translation packages moved to `Recommends`.
-- **Android code moved out of the mainline**: the Android port is still being
-  polished, and keeping it on master meant every change had to serve two
-  platforms. It now lives on the `android-test` branch and master is a
-  desktop-only build again.
+- **The live scope takes its step size the way a real oscilloscope does**: the
+  time base only decides how wide a window you look at, while the integration
+  step follows the circuit's dynamics. Coarsening it with the time base used to
+  skip thousands of switching cycles at 1 s/div, collapsing a flyback output from
+  ±300 V to 0; a steady 30 V / 12 V envelope is visible at 1 s/div now.
+- **Each document owns its own live scope**: background sheets keep advancing,
+  "sheet A simulating, sheet B not" are independent states, and the engine stops
+  only when the document is closed.
+- **Library and example menus lost their redundant suffixes**: no more
+  "Resistor R" or "RC charge and discharge (transient)".
 
 ### Fixed
 
-- **Each document gets its own live scope**: there used to be a single engine and
-  switching documents stopped it, so creating a sheet mid-simulation and
-  switching back found the simulation dead. Every document now owns an engine
-  (with its own timer): background sheets keep advancing, "sheet A simulating,
-  sheet B not" are independent states, and the engine is stopped and destroyed
-  only when the document is closed.
+- **Follow System was sampled only at startup**, so switching the desktop theme
+  mid-session left a dark canvas inside a light interface. The system colour
+  scheme is now watched, with the system palette as a fallback when the platform
+  does not report one.
+- **The .deb only installed on Deepin**: packages are now built on Debian 12 and
+  install on Debian 12/13, Ubuntu 24.04+, Linux Mint 22 and Kali.
+- **Switching tabs interrupted the simulation**: see "each document owns its own
+  live scope" above.
+
+### Development
+
+- UI strings are English source plus `.ts` catalogues (421 entries);
+  `scripts/update-translations.py` extracts them and checks for untranslated
+  ones. This file has a Chinese counterpart, `CHANGELOG.md`.
 
 ## [v0.4.0] - 2026-11-19
 

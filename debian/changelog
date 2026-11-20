@@ -1,3 +1,16 @@
+circuit-master (0.4.1) unstable; urgency=medium
+
+  * 新增设置窗口（编辑 → 设置…）：主题、网格大小、界面语言。
+  * 新增深浅色主题，可跟随系统；Qt 控件与工具栏图标一并适配。
+  * 新增界面语言：中文 / English，示例电路与更新日志也有英文版。
+  * 网格大小可调（1 / 2 / 5 / 10 px），吸附步长与网表连通判定跟着走。
+  * 动态示波器：电压档补到 1000 V、电流档补到 10 A；
+    步长按真实示波器的逻辑取，时基只决定窗口。
+  * 每个图纸各自持有一份动态示波器，切页不再中断仿真。
+  * 安装包改在 Debian 12 里构建，可装到大多数 Debian 系发行版。
+
+ -- Circuit Master Maintainers <lhdjply@users.noreply.github.com>  Fri, 20 Nov 2026 14:00:00 +0800
+
 circuit-master (0.4.0) unstable; urgency=medium
 
   * 新增逻辑门：与 / 或 / 非 / 异或 / 同或。
