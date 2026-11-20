@@ -1,4 +1,5 @@
 #include "ui/SchematicScene.h"
+#include "core/Grid.h"
 
 #include "ui/ComponentItem.h"
 #include "ui/Symbols.h"
@@ -35,7 +36,8 @@ bool strictlyInsideSegment(const QLineF& line, const QPointF& p)
 
 QPoint gridKey(const QPointF& p)
 {
-    return QPoint(int(std::lround(p.x() / 10.0)), int(std::lround(p.y() / 10.0)));
+    const double step = Grid::size();
+    return QPoint(int(std::lround(p.x() / step)), int(std::lround(p.y() / step)));
 }
 
 } // namespace
@@ -799,7 +801,8 @@ void SchematicScene::setShowGrid(bool show)
 
 QPointF SchematicScene::snap(const QPointF& point) const
 {
-    return QPointF(std::round(point.x() / 10.0) * 10.0, std::round(point.y() / 10.0) * 10.0);
+    const double step = Grid::size();
+    return QPointF(std::round(point.x() / step) * step, std::round(point.y() / step) * step);
 }
 
 void SchematicScene::followComponent(ComponentItem* item, const QPointF& delta)
@@ -894,7 +897,7 @@ void SchematicScene::recomputeJunctions()
 
     for (const QLineF& seg : segments) {
         for (const QPoint& key : keys) {
-            const QPointF point(key.x() * 10.0, key.y() * 10.0);
+            const QPointF point(key.x() * Grid::size(), key.y() * Grid::size());
             if (strictlyInsideSegment(seg, point))
                 passing[key] += 1;
         }
@@ -909,7 +912,7 @@ void SchematicScene::recomputeJunctions()
         const bool dot = branches >= 3 || (branches >= 1 && through >= 1)
             || (pinCount >= 1 && branches >= 2);
         if (dot)
-            m_junctions.append(QPointF(key.x() * 10.0, key.y() * 10.0));
+            m_junctions.append(QPointF(key.x() * Grid::size(), key.y() * Grid::size()));
     }
 }
 
@@ -920,7 +923,10 @@ void SchematicScene::drawBackground(QPainter* painter, const QRectF& rect)
 
     if (m_showGrid && !rect.isEmpty()) {
         const qreal scale = painter->worldTransform().m11();
-        const qreal step = scale < 0.55 ? 50.0 : 10.0;
+        const qreal grid = Grid::size();
+        // 屏幕上每格不足 4 px 时按 5 格画一次：1 px 的网格按原样画会糊成一片，
+        // 也白白多画几百条线
+        const qreal step = scale * grid < 4.0 ? grid * 5.0 : grid;
 
         QPen minorPen(Theme::gridMinor(), 0.0);
         QPen majorPen(Theme::gridMajor(), 0.0);
@@ -929,12 +935,12 @@ void SchematicScene::drawBackground(QPainter* painter, const QRectF& rect)
         const qreal startY = std::floor(rect.top() / step) * step;
 
         for (qreal x = startX; x <= rect.right(); x += step) {
-            const bool major = std::abs(std::fmod(std::abs(x), 50.0)) < 0.01;
+            const bool major = std::abs(std::fmod(std::abs(x), grid * 5.0)) < 0.01;
             painter->setPen(major ? majorPen : minorPen);
             painter->drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
         }
         for (qreal y = startY; y <= rect.bottom(); y += step) {
-            const bool major = std::abs(std::fmod(std::abs(y), 50.0)) < 0.01;
+            const bool major = std::abs(std::fmod(std::abs(y), grid * 5.0)) < 0.01;
             painter->setPen(major ? majorPen : minorPen);
             painter->drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
         }

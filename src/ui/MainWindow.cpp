@@ -13,6 +13,7 @@
 #include "ui/PropertyPanel.h"
 #include "ui/SchematicScene.h"
 #include "ui/SchematicView.h"
+#include "ui/SettingsDialog.h"
 #include "ui/Symbols.h"
 #include "ui/Theme.h"
 #include "ui/UpdateDialog.h"
@@ -1033,6 +1034,11 @@ void MainWindow::createMenus()
     editMenu->addSeparator();
     editMenu->addAction(m_actSnapWires);
 
+    editMenu->addSeparator();
+    QAction* settingsAction = editMenu->addAction(CSM_TR("Settings…"));
+    settingsAction->setShortcut(QKeySequence::Preferences);
+    connect(settingsAction, &QAction::triggered, this, &MainWindow::showSettings);
+
     QMenu* viewMenu = menuBar()->addMenu(CSM_TR("&View"));
     viewMenu->addAction(m_actNextTab);
     viewMenu->addAction(m_actPrevTab);
@@ -1045,50 +1051,6 @@ void MainWindow::createMenus()
     viewMenu->addSeparator();
     // 面板开关。三块面板的标题栏上都有 ✕，关掉之后原本没有任何入口能再打开
     viewMenu->setObjectName(QStringLiteral("menuView"));
-    viewMenu->addSeparator();
-
-    // 主题：跟随系统 / 浅色 / 深色，选完立刻生效并存盘
-    QMenu* themeMenu = viewMenu->addMenu(CSM_TR("Theme"));
-    themeMenu->setObjectName(QStringLiteral("menuTheme"));
-    auto* themeGroup = new QActionGroup(this);
-    themeGroup->setExclusive(true);
-    const QVector<QPair<QString, Theme::Mode>> themeItems = {
-        {CSM_TR("Follow System"), Theme::Mode::System},
-        {CSM_TR("Light"), Theme::Mode::Light},
-        {CSM_TR("Dark"), Theme::Mode::Dark},
-    };
-    for (const auto& item : themeItems) {
-        QAction* action = themeMenu->addAction(item.first);
-        action->setCheckable(true);
-        action->setChecked(Theme::mode() == item.second);
-        themeGroup->addAction(action);
-        const Theme::Mode mode = item.second;
-        connect(action, &QAction::triggered, this, [this, mode] {
-            Theme::save(mode);
-            applyTheme();
-        });
-    }
-    viewMenu->addSeparator();
-
-    // 语言：中文 / English。文案是编译进程序的，切换后要重建界面，所以提示重启
-    QMenu* languageMenu = viewMenu->addMenu(CSM_TR("Language"));
-    auto* languageGroup = new QActionGroup(this);
-    languageGroup->setExclusive(true);
-    for (const Language value : {Language::Chinese, Language::English}) {
-        QAction* action = languageMenu->addAction(languageDisplayName(value));
-        action->setCheckable(true);
-        action->setChecked(language() == value);
-        languageGroup->addAction(action);
-        connect(action, &QAction::triggered, this, [this, value] {
-            if (language() == value)
-                return;
-            saveLanguage(value);
-            Dialogs::info(this, CSM_TR("Language"),
-                          CSM_TR("The interface language has been changed. "
-                                 "Restart the application to apply it."));
-        });
-    }
-    viewMenu->addSeparator();
 
     QMenu* simMenu = menuBar()->addMenu(CSM_TR("&Simulate"));
     simMenu->addAction(m_actRun);
@@ -2429,6 +2391,20 @@ void MainWindow::checkForUpdates(bool manual)
     if (manual)
         appendLog(CSM_TR("Checking for updates…"));
     checker->check();
+}
+
+void MainWindow::showSettings()
+{
+    SettingsDialog dialog(this,
+                          [this] { applyTheme(); },
+                          [this] {
+                              // 网格变了：所有画布重画（吸附步长是运行时取的）
+                              for (Document* document : m_documents) {
+                                  if (document && document->scene)
+                                      document->scene->update();
+                              }
+                          });
+    dialog.exec();
 }
 
 void MainWindow::showQuickGuide()

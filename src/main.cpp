@@ -1,4 +1,5 @@
 #include "csm_version.h"
+#include "core/Grid.h"
 #include "core/Language.h"
 #include "ui/I18n.h"
 #include "ui/Theme.h"
@@ -75,6 +76,7 @@ int main(int argc, char* argv[])
 
     // 界面语言：源码是英文，中文靠 resources/translations 里的 .qm
     csm::loadLanguage();
+    csm::Grid::load();
 
     // Qt 自带控件的中文（输入框右键菜单、标准按钮等）
     csm::installQtTranslations(&app);

@@ -628,6 +628,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Got it</translation>
     </message>
     <message>
+        <source>Grid size</source>
+        <translation>Grid size</translation>
+    </message>
+    <message>
         <source>Ground</source>
         <translation>Ground</translation>
     </message>
@@ -1198,6 +1202,14 @@ to edit its parameters</translation>
         <translation>Semiconductors</translation>
     </message>
     <message>
+        <source>Settings</source>
+        <translation>Settings</translation>
+    </message>
+    <message>
+        <source>Settings…</source>
+        <translation>Settings…</translation>
+    </message>
+    <message>
         <source>Show Grid</source>
         <translation>Show Grid</translation>
     </message>
@@ -1316,6 +1328,10 @@ to edit its parameters</translation>
     <message>
         <source>The installer has started; the package is cleaned up automatically once you finish</source>
         <translation>The installer has started; the package is cleaned up automatically once you finish</translation>
+    </message>
+    <message>
+        <source>The interface language applies after a restart.</source>
+        <translation>The interface language applies after a restart.</translation>
     </message>
     <message>
         <source>The interface language has been changed. Restart the application to apply it.</source>

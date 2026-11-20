@@ -631,6 +631,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>知道了</translation>
     </message>
     <message>
+        <source>Grid size</source>
+        <translation>网格大小</translation>
+    </message>
+    <message>
         <source>Ground</source>
         <translation>接地</translation>
     </message>
@@ -1201,6 +1205,14 @@ to edit its parameters</source>
         <translation>半导体</translation>
     </message>
     <message>
+        <source>Settings</source>
+        <translation>设置</translation>
+    </message>
+    <message>
+        <source>Settings…</source>
+        <translation>设置…</translation>
+    </message>
+    <message>
         <source>Show Grid</source>
         <translation>显示网格</translation>
     </message>
@@ -1319,6 +1331,10 @@ to edit its parameters</source>
     <message>
         <source>The installer has started; the package is cleaned up automatically once you finish</source>
         <translation>安装程序已启动，按提示完成后会自动清理安装包</translation>
+    </message>
+    <message>
+        <source>The interface language applies after a restart.</source>
+        <translation>界面语言在重启后生效。</translation>
     </message>
     <message>
         <source>The interface language has been changed. Restart the application to apply it.</source>

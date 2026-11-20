@@ -85,6 +85,7 @@ private:
     void applyBlownCapacitors(const QHash<int, double>& blown);
     void clearBlast();
     void showQuickGuide();
+    void showSettings();
     void showAbout();
 
     void pushHistory();

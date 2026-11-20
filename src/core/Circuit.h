@@ -35,7 +35,8 @@ public:
     /// 没有动态电源时返回 0。
     double suggestedMaxStep() const;
 
-    static QPointF snapPoint(const QPointF& p, double grid = kGrid);
+    /// grid = 0 表示用当前设置里的网格间距（见 core/Grid.h）
+    static QPointF snapPoint(const QPointF& p, double grid = 0.0);
     static QVector<QPointF> normalizeWire(const QVector<QPointF>& points);
 };
 

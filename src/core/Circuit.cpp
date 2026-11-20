@@ -1,4 +1,6 @@
 #include "core/Circuit.h"
+
+#include "core/Grid.h"
 #include "core/Language.h"
 
 #include "core/Units.h"
@@ -358,7 +360,8 @@ double Circuit::suggestedMaxStep() const
 
 QPointF Circuit::snapPoint(const QPointF& p, double grid)
 {
-    return QPointF(std::round(p.x() / grid) * grid, std::round(p.y() / grid) * grid);
+    const double step = grid > 0.0 ? grid : csm::Grid::size();
+    return QPointF(std::round(p.x() / step) * step, std::round(p.y() / step) * step);
 }
 
 QVector<QPointF> Circuit::normalizeWire(const QVector<QPointF>& points)

@@ -1,4 +1,6 @@
 #include "core/Netlist.h"
+
+#include "core/Grid.h"
 #include "core/Language.h"
 
 #include "core/Circuit.h"
@@ -84,7 +86,7 @@ Netlist Netlist::build(const Circuit& circuit)
     Netlist net;
     net.nodeNames.append(QStringLiteral("0"));
 
-    const double grid = Circuit::kGrid;
+    const double grid = csm::Grid::size();
     DisjointSet dsu;
 
     // 1. 登记所有引脚位置

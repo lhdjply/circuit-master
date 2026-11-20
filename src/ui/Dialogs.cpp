@@ -297,6 +297,11 @@ a { color: %5; }
     dialog.exec();
 }
 
+void Dialogs::applyStyle(QDialog& dialog)
+{
+    dialog.setStyleSheet(dialogStyleSheet());
+}
+
 void Dialogs::about(QWidget* parent, const QString& version)
 {
     QDialog dialog(parent);

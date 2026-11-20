@@ -13,6 +13,7 @@
 //  样式只作用在单个对话框实例上，不碰全局 QSS。
 // ---------------------------------------------------------------------------
 
+#include <QDialog>
 #include <QMessageBox>
 #include <QString>
 
@@ -22,6 +23,9 @@ namespace csm {
 
 class Dialogs {
 public:
+    /// 给自建对话框套上与本程序其它提示框一致的观感（底色、按钮样式、
+    /// 去掉系统主题给按钮加的小图标）。设置窗口用它，别自己再写一套 QSS。
+    static void applyStyle(QDialog& dialog);
     /// 普通提示（对应 QMessageBox::Information）
     static void info(QWidget* parent, const QString& title, const QString& text);
     /// 警告（对应 QMessageBox::Warning）

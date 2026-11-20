@@ -116,6 +116,7 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/generated")
 # 构建目录里不再产出 libcsm_core.a / libcsm_ui.a 这类中间产物。
 # 测试目标同样链接这两个对象库（每个目标各拿一份对象文件）。
 add_library(csm_core OBJECT
+    src/core/Grid.cpp
     src/core/Language.cpp
     src/core/Units.cpp
     src/core/Component.cpp
@@ -134,6 +135,7 @@ set(CSM_UI_SOURCES
     src/ui/Dialogs.cpp
     src/ui/SingleInstance.cpp
     src/ui/Symbols.cpp
+    src/ui/SettingsDialog.cpp
     src/ui/Theme.cpp
     src/ui/ComponentItem.cpp
     src/ui/WireItem.cpp
