@@ -230,6 +230,9 @@ WaveformWindow::WaveformWindow(QWidget* parent)
         {QStringLiteral("2 V"), 2.0},     {QStringLiteral("5 V"), 5.0},
         {QStringLiteral("10 V"), 10.0},   {QStringLiteral("20 V"), 20.0},
         {QStringLiteral("50 V"), 50.0},   {QStringLiteral("100 V"), 100.0},
+        // 高压电路（市电整流后的母线、反激的漏源尖峰）会用到这几档
+        {QStringLiteral("200 V"), 200.0}, {QStringLiteral("500 V"), 500.0},
+        {QStringLiteral("1000 V"), 1000.0},
     };
     for (const auto& entry : voltDivs)
         m_liveVoltDivBox->addItem(entry.first, entry.second);
@@ -247,6 +250,9 @@ WaveformWindow::WaveformWindow(QWidget* parent)
         {QStringLiteral("10 mA"), 1e-2},  {QStringLiteral("20 mA"), 2e-2},
         {QStringLiteral("50 mA"), 5e-2},  {QStringLiteral("100 mA"), 1e-1},
         {QStringLiteral("1 A"), 1.0},
+        // 功率电路：反激初级的峰值电流能到 1~2 A，电机类负载还会更大
+        {QStringLiteral("2 A"), 2.0},     {QStringLiteral("5 A"), 5.0},
+        {QStringLiteral("10 A"), 10.0},
     };
     for (const auto& entry : ampDivs)
         m_liveAmpDivBox->addItem(entry.first, entry.second);
