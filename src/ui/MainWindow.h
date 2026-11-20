@@ -4,7 +4,6 @@
 #include "ui/Document.h"
 #include "sim/Simulator.h"
 
-#include <QHash>
 #include <QJsonObject>
 #include <QMainWindow>
 
@@ -17,9 +16,6 @@ class QLabel;
 class QListWidget;
 class QListWidgetItem;
 class QPlainTextEdit;
-class QToolBar;
-class QToolButton;
-class QTreeWidgetItem;
 
 namespace csm {
 
@@ -44,9 +40,6 @@ public:
 
 protected:
     void closeEvent(QCloseEvent* event) override;
-#if defined(Q_OS_ANDROID)
-    void resizeEvent(QResizeEvent* event) override;
-#endif
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
@@ -54,13 +47,6 @@ private:
     void createMenus();
     void createToolBar();
     void createDocks();
-    /// 窄屏（手机）切紧凑布局：收起两侧面板，把宽度让给画布
-#if defined(Q_OS_ANDROID)
-    /// 手机外观：底部工具栏 + 隐藏菜单栏 + 溢出菜单（⋮）
-    void setupMobileChrome();
-    /// 手机上收起两侧面板，把宽度让给画布
-    void applyResponsiveLayout();
-#endif
     void createStatusBar();
 
     void newCircuit();
@@ -151,20 +137,6 @@ private:
     SchematicView* m_view = nullptr;
     PropertyPanel* m_props = nullptr;
     QDockWidget* m_logDock = nullptr;
-    QDockWidget* m_libraryDock = nullptr;
-    QDockWidget* m_propsDock = nullptr;
-#if defined(Q_OS_ANDROID)
-    /// 当前是不是紧凑布局（手机竖屏）。用来避免每次 resize 都重复设置
-    bool m_compactLayout = false;
-    /// 底部那条图标工具栏
-    QToolBar* m_mobileBar = nullptr;
-    /// 左侧抽屉：文件 / 编辑 / 视图 / 仿真 / 帮助
-    QDockWidget* m_drawerDock = nullptr;
-    QToolButton* m_drawerButton = nullptr;
-    /// 抽屉里的条目 → 对应的菜单动作。用 QHash 而不是塞进 item 的 data，
-    /// 免得依赖 QAction* 的元类型注册
-    QHash<QTreeWidgetItem*, QAction*> m_drawerActions;
-#endif
     QWidget* m_waveWindow = nullptr;   // 独立的「波形监控」窗口
     QTabWidget* m_waveTabs = nullptr;
     WaveformWindow* m_wavePlot = nullptr;   // 静态波形

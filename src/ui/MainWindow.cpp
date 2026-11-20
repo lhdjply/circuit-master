@@ -19,7 +19,6 @@
 
 #include <QAbstractItemView>
 #include <QAction>
-#include <QButtonGroup>
 #include <QComboBox>
 #include <QActionGroup>
 #include <QApplication>
@@ -30,7 +29,6 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
-#include <QFont>
 #include <QFontDatabase>
 #include <QGraphicsItem>
 #include <QGraphicsScene>
@@ -59,8 +57,6 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QToolButton>
-#include <QTreeWidget>
-#include <QTreeWidgetItem>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -386,27 +382,6 @@ QTabBar::close-button:hover {
     createDocks();
     createMonitorWindow();
     createStatusBar();
-
-    // 面板开关：三块面板的标题栏上都有 ✕，关掉之后原本没有任何入口能再打开，
-    // 所以菜单里补一份（视图 → 元件库 / 属性 / 消息）。
-    // 这一份与平台无关：桌面直接用菜单；Android 上菜单栏是隐藏的，但
-    // setupMobileChrome() 会把菜单栏里的菜单原样搬进「⋮」溢出菜单。
-    if (QMenu* viewMenu = menuBar()->findChild<QMenu*>(QStringLiteral("menuView"))) {
-        for (QDockWidget* dock : {m_libraryDock, m_propsDock, m_logDock}) {
-            if (!dock)
-                continue;
-            QAction* toggle = dock->toggleViewAction();
-            viewMenu->addAction(toggle);
-        }
-    }
-
-#if defined(Q_OS_ANDROID)
-    // 手机：换成底部图标栏，并收起两侧面板。
-    // （桌面不要往工具栏上再挂一份面板开关 —— 视图菜单里已经有了，工具栏上
-    //   那两个没图标的文字按钮只是碍眼。）
-    setupMobileChrome();
-    applyResponsiveLayout();
-#endif
 
     appendLog(QStringLiteral("电路仿真大师 %1  —  Qt6 / MNA 求解器")
                   .arg(QStringLiteral(CSM_VERSION_STRING)));
@@ -999,7 +974,6 @@ void MainWindow::createMenus()
     editMenu->addAction(m_actSnapWires);
 
     QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("视图(&V)"));
-    viewMenu->setObjectName(QStringLiteral("menuView"));
     viewMenu->addAction(m_actNextTab);
     viewMenu->addAction(m_actPrevTab);
     viewMenu->addSeparator();
@@ -1008,9 +982,9 @@ void MainWindow::createMenus()
     viewMenu->addAction(m_actZoomFit);
     viewMenu->addSeparator();
     viewMenu->addAction(m_actGrid);
-    // 面板开关放在菜单里，手机上空出来的宽度全给画布，需要时再叫出来。
-    // 这三个 QAction 由 QDockWidget 自己提供，标题就是面板名。
     viewMenu->addSeparator();
+    // 面板开关。三块面板的标题栏上都有 ✕，关掉之后原本没有任何入口能再打开
+    viewMenu->setObjectName(QStringLiteral("menuView"));
 
     QMenu* simMenu = menuBar()->addMenu(QStringLiteral("仿真(&S)"));
     simMenu->addAction(m_actRun);
@@ -1033,7 +1007,6 @@ void MainWindow::createMenus()
 void MainWindow::createToolBar()
 {
     QToolBar* bar = addToolBar(QStringLiteral("主工具栏"));
-    bar->setObjectName(QStringLiteral("mainToolBar"));
     bar->setMovable(false);
     bar->setIconSize(QSize(22, 22));
     bar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
@@ -1135,7 +1108,6 @@ void MainWindow::createDocks()
 {
     auto* libraryDock = new QDockWidget(QStringLiteral("元件库"), this);
     libraryDock->setObjectName(QStringLiteral("libraryDock"));
-    m_libraryDock = libraryDock;
     libraryDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 
     auto* libraryContainer = new QWidget(libraryDock);
@@ -1177,7 +1149,6 @@ void MainWindow::createDocks()
 
     auto* propsDock = new QDockWidget(QStringLiteral("属性"), this);
     propsDock->setObjectName(QStringLiteral("propsDock"));
-    m_propsDock = propsDock;
     m_props = new PropertyPanel(propsDock);
     auto* propsScroll = new QScrollArea(propsDock);
     propsScroll->setWidgetResizable(true);
@@ -1202,248 +1173,16 @@ void MainWindow::createDocks()
     logDock->setWidget(m_log);
     addDockWidget(Qt::BottomDockWidgetArea, logDock);
     logDock->setMaximumHeight(170);
-}
 
-#if defined(Q_OS_ANDROID)
-
-void MainWindow::setupMobileChrome()
-{
-    // 手机上不要菜单栏（桌面形态，白白吃掉一行高度），也不要顶部那条
-    // 带文字的工具栏。把动作搬到底部一条图标栏里，退出来的宽度给画布。
-    menuBar()->hide();
-    if (QToolBar* top = findChild<QToolBar*>(QStringLiteral("mainToolBar")))
-        top->hide();
-    // 状态栏那两行是桌面信息（「选择模式：拖动元件移动…」），手机上纯占地方
-    if (statusBar())
-        statusBar()->hide();
-
-    // 面板开关原本没有图标，文字模式在底部栏里会把整条挤爆 —— 补两个
-    // 标准图标，图标模式下才排得下
-    if (m_libraryDock) {
-        QAction* toggle = m_libraryDock->toggleViewAction();
-        toggle->setIcon(style()->standardIcon(QStyle::SP_DirIcon));
-    }
-    if (m_propsDock) {
-        QAction* toggle = m_propsDock->toggleViewAction();
-        toggle->setIcon(style()->standardIcon(QStyle::SP_FileDialogDetailedView));
-    }
-
-    m_mobileBar = new QToolBar(QStringLiteral("手机工具栏"), this);
-    m_mobileBar->setObjectName(QStringLiteral("mobileBar"));
-    m_mobileBar->setMovable(false);
-    m_mobileBar->setFloatable(false);
-    // 26 是试出来的：30 时 393 宽的机器上最后那个「⋮」会被挤进溢出箭头里
-    m_mobileBar->setIconSize(QSize(26, 26));
-    m_mobileBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
-    addToolBar(Qt::BottomToolBarArea, m_mobileBar);
-
-    // 常用动作只留图标：393 逻辑像素宽最多摆得下七八个
-    m_mobileBar->addAction(m_actNew);
-    m_mobileBar->addAction(m_actOpen);
-    m_mobileBar->addAction(m_actSave);
-    m_mobileBar->addAction(m_actUndo);
-    m_mobileBar->addAction(m_actRedo);
-    m_mobileBar->addSeparator();
-    m_mobileBar->addAction(m_actRun);
-    m_mobileBar->addAction(m_actMonitor);
-    m_mobileBar->addSeparator();
-    if (m_libraryDock)
-        m_mobileBar->addAction(m_libraryDock->toggleViewAction());
-    if (m_propsDock)
-        m_mobileBar->addAction(m_propsDock->toggleViewAction());
-
-    // 侧边抽屉：手机上没有菜单栏，把「文件 / 编辑 / 视图 / 仿真 / 帮助」
-    // 整个搬进左侧抽屉，由标签栏左上角那个 ☰ 打开。
-    m_drawerDock = new QDockWidget(this);
-    m_drawerDock->setObjectName(QStringLiteral("drawerDock"));
-    m_drawerDock->setAllowedAreas(Qt::LeftDockWidgetArea);
-    // 不要标题栏：抽屉本身就是整个菜单
-    auto* emptyTitle = new QWidget(m_drawerDock);
-    emptyTitle->setFixedHeight(0);
-    m_drawerDock->setTitleBarWidget(emptyTitle);
-
-    auto* tree = new QTreeWidget(m_drawerDock);
-    // 关键：必须把它装进抽屉的控件区。只 new 出来的话它虽然是 dock 的子对象，
-    // 却没有被布局进来 —— 抽屉打开时是一片空白，点什么都没反应
-    m_drawerDock->setWidget(tree);
-    // 手机上别让它被误拖出去或关掉
-    m_drawerDock->setFeatures(QDockWidget::NoDockWidgetFeatures);
-    tree->setObjectName(QStringLiteral("drawerTree"));
-    tree->setHeaderHidden(true);
-    tree->setIconSize(QSize(22, 22));
-    tree->setIndentation(16);
-    // 手指点得准：每行 44px（Material 的最小触控尺寸）
-    tree->setStyleSheet(QStringLiteral(
-        "QTreeWidget::item { height: 44px; }"
-        "QTreeWidget { border: none; background: #ffffff; }"));
-
-    m_drawerActions.clear();
-    for (QAction* menuAction : menuBar()->actions()) {
-        QMenu* menu = menuAction->menu();
-        if (!menu || menu->actions().isEmpty())
-            continue;
-        // 「文件(&F)」→「文件」
-        QString title = menuAction->text();
-        if (const int accel = title.indexOf(QStringLiteral("(&")); accel > 0)
-            title.truncate(accel);
-
-        auto* root = new QTreeWidgetItem(tree, {title});
-        root->setFlags(Qt::ItemIsEnabled); // 只作分组，点了不做事
-        QFont groupFont = root->font(0);
-        groupFont.setBold(true);
-        root->setFont(0, groupFont);
-        for (QAction* action : menu->actions()) {
-            if (action->isSeparator() || !action->isVisible())
+    // 菜单建好之后才能往里挂（createMenus 在 createDocks 之前跑）
+    if (QMenu* viewMenu = menuBar()->findChild<QMenu*>(QStringLiteral("menuView"))) {
+        for (QDockWidget* dock : findChildren<QDockWidget*>()) {
+            if (dock->objectName() == QStringLiteral("drawerDock"))
                 continue;
-            auto* leaf = new QTreeWidgetItem(root, {action->text()});
-            leaf->setIcon(0, action->icon());
-            m_drawerActions.insert(leaf, action);
+            viewMenu->addAction(dock->toggleViewAction());
         }
     }
-    // 不展开：五组全摊开在手机上要滚半天，先给一眼能看完的五个入口
-
-    connect(tree, &QTreeWidget::itemClicked, this, [this](QTreeWidgetItem* item, int) {
-        QAction* action = m_drawerActions.value(item, nullptr);
-        if (!action) {
-            // 点的是分组行：手机上没人会去点那个小三角，点整行就展开/收起
-            item->setExpanded(!item->isExpanded());
-            return;
-        }
-        m_drawerDock->hide();
-        // 排到下个事件循环再触发：抽屉刚收起来，弹出来的对话框才不会被它挡住
-        QTimer::singleShot(0, action, &QAction::trigger);
-    });
-
-    addDockWidget(Qt::LeftDockWidgetArea, m_drawerDock);
-    m_drawerDock->setMinimumWidth(240);
-    m_drawerDock->hide();
-
-    // 元件库的分类下拉框：触摸下 QComboBox 的弹出列表能开、能点，但「松手选中」
-    // 那一步不一定送达 —— 表现就是点了「半导体」还是「全部」。
-    // 改成在条目被**按下**时就应用选择，不等 popup 自己的松手逻辑。
-    if (m_libraryCategory) {
-        if (QAbstractItemView* view = m_libraryCategory->view()) {
-            connect(view, &QAbstractItemView::pressed, this, [this](const QModelIndex& index) {
-                if (index.isValid() && index.row() != m_libraryCategory->currentIndex())
-                    m_libraryCategory->setCurrentIndex(index.row());
-            });
-        }
-        // 手指点得准：控件本身按 44px 给
-        m_libraryCategory->setMinimumHeight(44);
-        // 八项一次列全，免得弹出列表还要滚动
-        m_libraryCategory->setMaxVisibleItems(10);
-    }
-
-    // 元件库的分类选择：QComboBox 的候选列表是 popup 控件，而 Qt 6.7.2/6.7.3 的
-    // Android 后端把 popup 整体弄坏了（QTBUG-135253，回归 bug），点了不生效。
-    // 这里换成一排可横滑的按钮，点哪个就把隐藏的下拉框切到哪个 ——
-    // 筛选逻辑一行没动，只是换了个不会坏的入口。
-    if (m_libraryCategory && m_libraryDock) {
-        if (QWidget* container = m_libraryDock->widget()) {
-            if (auto* layout = qobject_cast<QVBoxLayout*>(container->layout())) {
-                auto* chipBar = new QWidget(container);
-                auto* row = new QHBoxLayout(chipBar);
-                row->setContentsMargins(0, 0, 0, 0);
-                row->setSpacing(6);
-                auto* group = new QButtonGroup(chipBar);
-                group->setExclusive(true);
-                for (int i = 0; i < m_libraryCategory->count(); ++i) {
-                    auto* chip = new QToolButton(chipBar);
-                    chip->setText(m_libraryCategory->itemText(i));
-                    chip->setCheckable(true);
-                    chip->setChecked(i == m_libraryCategory->currentIndex());
-                    chip->setMinimumHeight(40);
-                    chip->setStyleSheet(QStringLiteral(
-                        "QToolButton { border: 1px solid #cbd5e1; border-radius: 18px;"
-                        " padding: 6px 14px; background: #ffffff; color: #334155; }"
-                        "QToolButton:checked { background: #2563eb; border-color: #2563eb;"
-                        " color: #ffffff; }"));
-                    group->addButton(chip, i);
-                    row->addWidget(chip);
-                }
-                row->addStretch(1);
-
-                auto* scroll = new QScrollArea(container);
-                scroll->setObjectName(QStringLiteral("libraryChips"));
-                scroll->setWidget(chipBar);
-                scroll->setWidgetResizable(true);
-                scroll->setFrameShape(QFrame::NoFrame);
-                scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-                scroll->setFixedHeight(56);
-                layout->insertWidget(0, scroll);
-                connect(group, &QButtonGroup::idClicked, this,
-                        [this](int id) { m_libraryCategory->setCurrentIndex(id); });
-                m_libraryCategory->hide();
-            }
-        }
-    }
-
-    // 标签栏左上角的 ☰。放进标签栏的角落控件，不额外占一行高度
-    m_drawerButton = new QToolButton(this);
-    m_drawerButton->setObjectName(QStringLiteral("drawerButton"));
-    // 不要用「☰」这个字形：不少 Android 字体里没有 U+2630，会渲染成一个方框。
-    // 直接画三条横线当图标。
-    {
-        const int side = 48;
-        QPixmap pixmap(side, side);
-        pixmap.fill(Qt::transparent);
-        QPainter painter(&pixmap);
-        painter.setRenderHint(QPainter::Antialiasing, true);
-        painter.setPen(QPen(QColor(0x33, 0x41, 0x55), 3.0, Qt::SolidLine, Qt::RoundCap));
-        const int left = 12;
-        const int right = side - 12;
-        for (int i = 0; i < 3; ++i) {
-            const int y = 16 + i * 8;
-            painter.drawLine(left, y, right, y);
-        }
-        painter.end();
-        m_drawerButton->setIcon(QIcon(pixmap));
-        m_drawerButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
-        m_drawerButton->setIconSize(QSize(side, side));
-    }
-    m_drawerButton->setAutoRaise(true);
-    m_drawerButton->setMinimumSize(44, 40);
-    connect(m_drawerButton, &QToolButton::clicked, this, [this] {
-        m_drawerDock->setVisible(!m_drawerDock->isVisible());
-    });
-    if (m_tabs)
-        m_tabs->setCornerWidget(m_drawerButton, Qt::TopLeftCorner);
 }
-
-
-void MainWindow::resizeEvent(QResizeEvent* event)
-{
-    QMainWindow::resizeEvent(event);
-    applyResponsiveLayout();
-}
-
-void MainWindow::applyResponsiveLayout()
-{
-    // 只在 Android 上存在，进了就是手机：三栏并排放不下
-    //（实测 1080×2400、dpr 2.75 的机器，三栏挤完画布只剩 280 px）。
-    if (m_compactLayout)
-        return;
-    m_compactLayout = true;
-
-    if (!m_libraryDock || !m_propsDock)
-        return;
-
-    // 收起两侧面板，把宽度全给画布；需要时从底部工具栏再叫出来。
-    // 叫出来时停到底部（手机上的「上滑面板」），不要占侧边 ——
-    // 手机上侧边只剩一条，什么也放不下。
-    for (QDockWidget* dock : {m_libraryDock, m_propsDock, m_logDock}) {
-        if (!dock)
-            continue;
-        if (dock->isFloating())
-            dock->setFloating(false);
-        addDockWidget(Qt::BottomDockWidgetArea, dock);
-        dock->hide();
-    }
-    if (m_waveWindow)
-        m_waveWindow->resize(qMin(760, width()), qMin(560, height()));
-}
-
-#endif // Q_OS_ANDROID
 
 void MainWindow::createStatusBar()
 {
@@ -2094,12 +1833,7 @@ void MainWindow::createMonitorWindow()
     m_waveWindow = new QWidget(this, Qt::Window);
     m_waveWindow->setObjectName(QStringLiteral("waveMonitorWindow"));
     m_waveWindow->setWindowTitle(QStringLiteral("波形监控 — 电路仿真大师"));
-#if defined(Q_OS_ANDROID)
-    // 手机上 1040 宽放不下，直接铺满屏幕
-    m_waveWindow->resize(screen()->availableGeometry().size());
-#else
     m_waveWindow->resize(1040, 620);
-#endif
     auto* windowLayout = new QVBoxLayout(m_waveWindow);
     windowLayout->setContentsMargins(0, 0, 0, 0);
 

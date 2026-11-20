@@ -87,11 +87,7 @@ int main(int argc, char* argv[])
     palette.setColor(QPalette::ButtonText, QColor(0x1e, 0x29, 0x3b));
     app.setPalette(palette);
 
-#if !defined(Q_OS_ANDROID)
-    // 桌面窗口管理器靠它显示任务栏图标；Android 用的是清单里那个
-    // mipmap/ic_launcher，这里设了也没人看
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/icons/icon.svg")));
-#endif
 
     QFont font = app.font();
     font.setPointSizeF(10.0);

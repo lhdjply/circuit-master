@@ -132,7 +132,6 @@ void CoreUpdateTest::updatePickerChoosesPlatformAsset()
     add(QStringLiteral("circuit-master-0.2.0-windows-arm64-setup.exe"));
     add(QStringLiteral("circuit-master-0.2.0-macos-arm64.dmg"));
     add(QStringLiteral("circuit-master-0.2.0-macos-x64.dmg"));
-    add(QStringLiteral("circuit-master-0.2.0-android-arm64.apk"));
 
     // Linux：按架构挑 deb，优先 deb 而不是 tar.gz
     const auto pick = [&release](HostPlatform os, HostArch arch,
@@ -174,21 +173,6 @@ void CoreUpdateTest::updatePickerChoosesPlatformAsset()
                                       InstallKind::System).name,
              QStringLiteral("circuit-master-0.2.0-windows-x64.zip"));
 
-    // Android：只有一个 APK，架构对不上时也退回它（装上后系统会拒绝错架构）
-    QCOMPARE(pick(HostPlatform::Android, HostArch::Arm64),
-             QStringLiteral("circuit-master-0.2.0-android-arm64.apk"));
-    QCOMPARE(UpdateChecker::pickAsset(release, HostPlatform::Android, HostArch::Amd64,
-                                      InstallKind::Portable).name,
-             QStringLiteral("circuit-master-0.2.0-android-arm64.apk"));
-    QCOMPARE(UpdateChecker::suffixFor(HostPlatform::Android, HostArch::Arm64,
-                                      PackageFormat::AndroidApk),
-             QStringLiteral("-android-arm64.apk"));
-    // 反过来：别的平台不该认出 apk，apk 也不该认出别的平台
-    QVERIFY(UpdateChecker::suffixFor(HostPlatform::Android, HostArch::Arm64,
-                                     PackageFormat::Deb).isEmpty());
-    QVERIFY(UpdateChecker::suffixFor(HostPlatform::Linux, HostArch::Arm64,
-                                     PackageFormat::AndroidApk).isEmpty());
-
     // 包形态枚举：Linux 出 deb + 便携 tar.gz，Windows 出 setup + 便携 zip
     const auto formats = [](HostPlatform os, InstallKind kind) {
         return UpdateChecker::formatsFor(os, kind);
@@ -198,11 +182,6 @@ void CoreUpdateTest::updatePickerChoosesPlatformAsset()
     // macOS 只有带 .app 的 dmg 一种形态
     QCOMPARE(formats(HostPlatform::MacOS, InstallKind::System).size(), 1);
     QCOMPARE(formats(HostPlatform::MacOS, InstallKind::Portable).size(), 1);
-    // Android 只有 APK，安装方式对形态没有影响
-    QCOMPARE(formats(HostPlatform::Android, InstallKind::System).size(), 1);
-    QCOMPARE(formats(HostPlatform::Android, InstallKind::Portable).size(), 1);
-    QCOMPARE(formats(HostPlatform::Android, InstallKind::Portable).first(),
-             PackageFormat::AndroidApk);
 
     // 便携版运行时要优先给便携包，和安装方式保持一致
     QCOMPARE(formats(HostPlatform::Linux, InstallKind::System).first(), PackageFormat::Deb);

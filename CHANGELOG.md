@@ -5,6 +5,16 @@
 版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)。
 版本号的唯一来源是仓库根目录的 `VERSION` 文件（写法与 tag 一致，如 `v0.4.0`）。
 
+## [未发布]
+
+### 变更
+
+- **Android 相关代码移出主干**：Android 版还在打磨（触摸交互、Qt 6.7.3 在 Android
+  上的 popup bug 都要绕），继续挂在主线上会让每次改动都要照顾两个平台。
+  现在这部分代码搬到了 `android-test` 分支，主干恢复成纯桌面版的构建：
+  CMake 的 Android 打包配置、`Q_OS_ANDROID` 分支、`resources/android/`、
+  CI 的 Android 作业都撤掉了。等 Android 稳定再从那个分支合回来。
+
 ## [v0.4.0] - 2026-11-19
 
 这一版补上了逻辑门、按钮开关和画布排版工具，把许可证补齐，并开始做 Android 版。

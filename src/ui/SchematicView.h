@@ -51,10 +51,6 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
-#if defined(Q_OS_ANDROID)
-    /// 双指捏合缩放（手机上唯一的缩放手段：没有滚轮）
-    bool viewportEvent(QEvent* event) override;
-#endif
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
@@ -73,17 +69,6 @@ private:
     Tool m_tool = Tool::Select;
     /// 实时仿真是否在跑。跑的时候左键点开关就是拨动它，不进入拖动
     bool m_liveRunning = false;
-#if defined(Q_OS_ANDROID)
-    /// 双指捏合：记住上一次的两指距离与中心，用来算缩放比和平移量
-    bool m_pinching = false;
-    double m_pinchDistance = 0.0;
-    QPointF m_pinchCenter;
-    /// 长按 = 右键：手机上只有手指，没有右键
-    void startLongPress(const QPoint& pos);
-    QTimer* m_longPressTimer = nullptr;
-    QPoint m_longPressPos;
-    bool m_longPressFired = false;
-#endif
     /// 当前被按住的那个按钮开关（松开时用来还原）；同时只会有一个
     ComponentItem* m_pressedButton = nullptr;
 

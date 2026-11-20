@@ -5,9 +5,7 @@
 #include "ui/Symbols.h"
 
 #include <QGraphicsPathItem>
-#include <QApplication>
 #include <QContextMenuEvent>
-#include <QTimer>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMimeData>
@@ -28,11 +26,6 @@ SchematicView::SchematicView(SchematicScene* scene, QWidget* parent)
     : QGraphicsView(scene, parent)
     , m_scene(scene)
 {
-#if defined(Q_OS_ANDROID)
-    // 要收 QTouchEvent 才能做双指缩放；单指仍交给 Qt 合成鼠标事件
-    viewport()->setAttribute(Qt::WA_AcceptTouchEvents, true);
-    viewport()->setAttribute(Qt::WA_Hover, false);
-#endif
     setRenderHints(QPainter::Antialiasing | QPainter::TextAntialiasing
                    | QPainter::SmoothPixmapTransform);
     setDragMode(QGraphicsView::RubberBandDrag);
@@ -118,14 +111,6 @@ void SchematicView::mousePressEvent(QMouseEvent* event)
         }
     }
 
-#if defined(Q_OS_ANDROID)
-    // 手指按下：开始计长按。真鼠标（带触控板/鼠标的平板）不参与
-    if (event->button() == Qt::LeftButton && m_tool == Tool::Select
-        && event->source() == Qt::MouseEventSynthesizedByQt) {
-        startLongPress(event->pos());
-    }
-#endif
-
     if (event->button() == Qt::LeftButton && m_tool == Tool::Wire) {
         const QPointF pos = m_scene->snapToPin(mapToScene(event->pos()));
         if (m_wirePoints.isEmpty())
@@ -142,14 +127,6 @@ void SchematicView::mousePressEvent(QMouseEvent* event)
 
 void SchematicView::mouseMoveEvent(QMouseEvent* event)
 {
-#if defined(Q_OS_ANDROID)
-    // 手指划开了就是拖拽，不是长按
-    if (m_longPressTimer && m_longPressTimer->isActive()
-        // 指腹按下去本来就会抖几像素，阈值给到 24（≈9dp）；拖拽很快就会超过它
-        && (event->pos() - m_longPressPos).manhattanLength() > 24) {
-        m_longPressTimer->stop();
-    }
-#endif
     if (m_panning) {
         const QPoint delta = event->pos() - m_panStart;
         m_panStart = event->pos();
@@ -171,16 +148,6 @@ void SchematicView::mouseMoveEvent(QMouseEvent* event)
 
 void SchematicView::mouseReleaseEvent(QMouseEvent* event)
 {
-#if defined(Q_OS_ANDROID)
-    if (m_longPressTimer)
-        m_longPressTimer->stop();
-    if (m_longPressFired) {
-        // 长按已经处理过，别再当成一次点击（否则会开始拖动 / 改选中）
-        m_longPressFired = false;
-        event->accept();
-        return;
-    }
-#endif
     // 按钮开关是瞬时的：不管松手时鼠标跑到哪儿，都把按住的这个还原
     if (m_pressedButton) {
         ComponentItem* released = m_pressedButton;
@@ -202,79 +169,6 @@ void SchematicView::mouseReleaseEvent(QMouseEvent* event)
     if (event->button() == Qt::LeftButton && m_tool == Tool::Select)
         m_scene->commitEdit();
 }
-
-#if defined(Q_OS_ANDROID)
-
-bool SchematicView::viewportEvent(QEvent* event)
-{
-    // 手机上唯一能缩放的手势。单指触摸要放过去 —— 让 Qt 合成鼠标事件，
-    // 否则拖动元件、画线全都会失灵。
-    switch (event->type()) {
-    case QEvent::TouchBegin:
-    case QEvent::TouchUpdate:
-    case QEvent::TouchEnd: {
-        auto* touch = static_cast<QTouchEvent*>(event);
-        const QList<QTouchEvent::TouchPoint>& points = touch->points();
-
-        int active = 0;
-        QPointF center;
-        for (const QTouchEvent::TouchPoint& point : points) {
-            if (point.state() == QEventPoint::State::Released)
-                continue;
-            ++active;
-            center += point.position();
-        }
-
-        if (active < 2) {
-            // 单指：交回给基类，继续按鼠标处理（拖动、框选、连线都靠它）
-            m_pinching = false;
-            return QGraphicsView::viewportEvent(event);
-        }
-
-        if (active == 2) {
-            QPointF a;
-            QPointF b;
-            bool first = true;
-            for (const QTouchEvent::TouchPoint& point : points) {
-                if (point.state() == QEventPoint::State::Released)
-                    continue;
-                if (first) { a = point.position(); first = false; }
-                else       { b = point.position(); }
-            }
-            const double distance = QLineF(a, b).length();
-            const QPointF pinchCenter = (a + b) / 2.0;
-
-            if (!m_pinching) {
-                m_pinching = true;
-                m_pinchDistance = distance;
-                m_pinchCenter = pinchCenter;
-                return true;
-            }
-
-            if (m_pinchDistance > 1.0 && distance > 1.0) {
-                zoomBy(distance / m_pinchDistance);
-                // 两指整体移动当平移用
-                const QPointF delta = pinchCenter - m_pinchCenter;
-                horizontalScrollBar()->setValue(horizontalScrollBar()->value()
-                                                - int(delta.x()));
-                verticalScrollBar()->setValue(verticalScrollBar()->value()
-                                              - int(delta.y()));
-            }
-            m_pinchDistance = distance;
-            m_pinchCenter = pinchCenter;
-            if (event->type() == QEvent::TouchEnd)
-                m_pinching = false;
-            return true;
-        }
-        break;
-    }
-    default:
-        break;
-    }
-    return QGraphicsView::viewportEvent(event);
-}
-
-#endif // Q_OS_ANDROID
 
 void SchematicView::mouseDoubleClickEvent(QMouseEvent* event)
 {
@@ -409,32 +303,6 @@ void addArrangeMenu(QMenu* menu, SchematicScene* scene)
 }
 
 } // namespace
-
-#if defined(Q_OS_ANDROID)
-
-// 长按弹右键菜单：手机上没有右键，旋转 / 翻转 / 剪贴板 / 编辑参数这些
-// 全在右键菜单里，不给入口就一个都用不了。
-// 用鼠标事件的 source() 区分「手指合成」与真鼠标 —— 接了触摸事件之后，
-// 单指仍由 Qt 合成鼠标事件，所以这里还能收到。
-void SchematicView::startLongPress(const QPoint& pos)
-{
-    m_longPressPos = pos;
-    m_longPressFired = false;
-    if (!m_longPressTimer) {
-        m_longPressTimer = new QTimer(this);
-        m_longPressTimer->setSingleShot(true);
-        m_longPressTimer->setInterval(500); // 500ms 是 Android 的惯例
-        connect(m_longPressTimer, &QTimer::timeout, this, [this] {
-            m_longPressFired = true;
-            QContextMenuEvent menuEvent(QContextMenuEvent::Mouse, m_longPressPos,
-                                        viewport()->mapToGlobal(m_longPressPos));
-            QApplication::sendEvent(this, &menuEvent);
-        });
-    }
-    m_longPressTimer->start();
-}
-
-#endif // Q_OS_ANDROID
 
 void SchematicView::contextMenuEvent(QContextMenuEvent* event)
 {

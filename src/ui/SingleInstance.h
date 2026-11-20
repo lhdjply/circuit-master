@@ -18,9 +18,7 @@
 #include <QString>
 #include <QStringList>
 
-#if !defined(Q_OS_ANDROID)
 class QLocalServer;
-#endif
 
 namespace csm {
 
@@ -39,9 +37,8 @@ public:
     static QString socketName(const QString& key);
 
     /// 本进程是否真的在监听。监听失败时 promote() 仍返回 true（宁可多开一个
-    /// 窗口也不能起不来），调用方可以据此判断「单实例」到底生效没有。
-    /// Android 上没有单实例这回事，恒为 false。
-    bool listening() const;
+    /// 窗口也不能起不来），调用方可以据此判断「单实例」到底生效没有
+    bool listening() const { return m_server != nullptr; }
 
 signals:
     /// 另一个实例发来了「打开这些文件」的请求
@@ -51,9 +48,7 @@ private:
     void acceptConnection();
 
     QString m_socketName;
-#if !defined(Q_OS_ANDROID)
     QLocalServer* m_server = nullptr;
-#endif
 };
 
 } // namespace csm

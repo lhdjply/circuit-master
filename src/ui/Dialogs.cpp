@@ -2,8 +2,6 @@
 
 #include <QAbstractButton>
 #include <QApplication>
-#include <QGuiApplication>
-#include <QScreen>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFile>
@@ -22,53 +20,6 @@
 #include <cmath>
 
 namespace csm {
-
-namespace {
-
-/// Android 上的 QDialog 触摸问题是 Qt 的已知 bug：
-///   QTBUG-137407  QDialog 的触摸在 6.6.3 以上的多数版本里是坏的
-///   QTBUG-136221  只有铺满全屏才响应
-/// 我们用的 6.7.3 正好在受影响范围内，所以这里统一铺满 —— 卡片本身还是居中的，
-/// 只是窗口占满屏幕，触摸才落得到按钮上。
-void makeTouchFriendly(QDialog& dialog)
-{
-#if defined(Q_OS_ANDROID)
-    dialog.setWindowState(Qt::WindowFullScreen);
-#else
-    Q_UNUSED(dialog);
-#endif
-}
-
-} // namespace
-
-#if defined(Q_OS_ANDROID)
-
-namespace {
-
-/// 手机屏幕窄，对话框按桌面尺寸摆会超出屏幕（393 逻辑像素的机器上，
-/// 660 宽的「更新日志」直接左右各切掉一半）。Android 构建里按屏幕可用区域收一下。
-int fitWidth(int want)
-{
-    if (QScreen* screen = QGuiApplication::primaryScreen())
-        return qMin(want, screen->availableGeometry().width() - 48);
-    return want;
-}
-
-QSize fitSize(QSize want)
-{
-    if (QScreen* screen = QGuiApplication::primaryScreen()) {
-        const QSize available = screen->availableGeometry().size();
-        return QSize(qMin(want.width(), available.width() - 48),
-                     qMin(want.height(), available.height() - 96));
-    }
-    return want;
-}
-
-} // namespace
-
-#endif // Q_OS_ANDROID
-
-
 
 namespace {
 
@@ -185,12 +136,7 @@ QMessageBox::StandardButton runMessage(QWidget* parent, const QPixmap& icon,
     body->setWordWrap(true);
     body->setTextFormat(Qt::AutoText);
     // 太窄会挤成两三行，太宽读起来费劲；两者之间取个舒服的范围
-#if defined(Q_OS_ANDROID)
-    // 393 逻辑像素的手机上，470 宽会把正文挤出屏幕
-    body->setMinimumWidth(fitWidth(bodyMinWidth));
-#else
     body->setMinimumWidth(bodyMinWidth);
-#endif
     body->setMaximumWidth(bodyMaxWidth);
     body->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     row->addWidget(body, 1);
@@ -221,7 +167,6 @@ QMessageBox::StandardButton runMessage(QWidget* parent, const QPixmap& icon,
             result = QMessageBox::Cancel;
     });
 
-    makeTouchFriendly(dialog);
     dialog.exec();
 
     if (result == QMessageBox::NoButton)
@@ -329,12 +274,7 @@ a { color: #2563eb; }
     buttonRow->addWidget(close);
     outer->addLayout(buttonRow);
 
-#if defined(Q_OS_ANDROID)
-    dialog.resize(fitSize(QSize(660, 560)));
-#else
     dialog.resize(660, 560);
-#endif
-    makeTouchFriendly(dialog);
     dialog.exec();
 }
 
@@ -440,12 +380,7 @@ QLabel#aboutFoot {
     buttonRow->addWidget(ok);
     outer->addLayout(buttonRow);
 
-#if defined(Q_OS_ANDROID)
-    dialog.setMinimumWidth(fitWidth(540));
-#else
     dialog.setMinimumWidth(540);
-#endif
-    makeTouchFriendly(dialog);
     dialog.exec();
 }
 

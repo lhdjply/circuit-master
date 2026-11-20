@@ -78,9 +78,6 @@ if(WIN32)
     set(CSM_HOST_PLATFORM "Windows")
 elseif(APPLE)
     set(CSM_HOST_PLATFORM "MacOS")
-elseif(ANDROID)
-    # Android 也算 UNIX，必须放在它前面判断，否则会被判成 Linux
-    set(CSM_HOST_PLATFORM "Android")
 elseif(UNIX)
     set(CSM_HOST_PLATFORM "Linux")
 else()
@@ -199,50 +196,9 @@ if(WIN32)
     target_sources(CircuitMaster PRIVATE resources/win/circuit-master.rc)
 endif()
 
-# Android：qt_add_executable 会顺带产出 APK/AAB 的构建目标。
-# versionCode 必须是单调递增的整数，这里从 VERSION 推出来
-# （0.3.3 → 303），发布新版本时自然递增。
-if(ANDROID)
-    string(REPLACE "." ";" CSM_VERSION_PARTS "${CSM_VERSION_NUMBER}")
-    list(GET CSM_VERSION_PARTS 0 CSM_VER_MAJOR)
-    list(GET CSM_VERSION_PARTS 1 CSM_VER_MINOR)
-    list(GET CSM_VERSION_PARTS 2 CSM_VER_PATCH)
-    math(EXPR CSM_ANDROID_VERSION_CODE
-         "${CSM_VER_MAJOR} * 10000 + ${CSM_VER_MINOR} * 100 + ${CSM_VER_PATCH}")
-
-    # 自定义清单 + 应用图标。不这么做装出来是 Qt 默认的绿机器人图标，
-    # 清单里也没有侧载更新要用的权限。
-    # 清单由 CMake 用 @变量@ 直接填，不用 androiddeployqt 的 INSERT 占位符
-    # —— 那几个占位符在不同 Qt 版本里替换规则不完全一样。
-    set(CSM_ANDROID_PACKAGE "io.github.lhdjply.circuitmaster")
-    set(CSM_ANDROID_PACKAGE_DIR "${CMAKE_CURRENT_BINARY_DIR}/android-package")
-    configure_file(resources/android/AndroidManifest.xml.in
-                   "${CSM_ANDROID_PACKAGE_DIR}/AndroidManifest.xml" @ONLY)
-    file(COPY resources/android/res DESTINATION "${CSM_ANDROID_PACKAGE_DIR}")
-
-    set_target_properties(CircuitMaster PROPERTIES
-        QT_ANDROID_PACKAGE_NAME "${CSM_ANDROID_PACKAGE}"
-        QT_ANDROID_PACKAGE_SOURCE_DIR "${CSM_ANDROID_PACKAGE_DIR}"
-        QT_ANDROID_VERSION_NAME "${CSM_VERSION_NUMBER}"
-        QT_ANDROID_VERSION_CODE ${CSM_ANDROID_VERSION_CODE}
-        # minSdk / targetSdk 写在清单的 uses-sdk 里（23 / 34）：这两个值要和
-        # Qt 那一侧 Gradle/AGP 对得上，跟着 Qt 6.7 的默认值走最稳
-    )
-    message(STATUS "Android 包名 ${CSM_ANDROID_PACKAGE}，"
-                   "版本 ${CSM_VERSION_NUMBER}（versionCode ${CSM_ANDROID_VERSION_CODE}）")
-endif()
-
 # ---------------------------------------------------------------- 测试
-# 打包时用 -DCSM_BUILD_TESTS=OFF 跳过（见 debian/rules）；
-# Android 上没有能跑 ctest 的环境，也默认关掉
-if(ANDROID)
-    # Android 上 ctest 跑不起来（没有桌面事件循环，也没有 adb 拉日志的钩子），
-    # 默认不建测试二进制，免得白编一遍
-    set(CSM_BUILD_TESTS_DEFAULT OFF)
-else()
-    set(CSM_BUILD_TESTS_DEFAULT ON)
-endif()
-option(CSM_BUILD_TESTS "构建单元测试（需要 Qt6::Test）" ${CSM_BUILD_TESTS_DEFAULT})
+# 打包时用 -DCSM_BUILD_TESTS=OFF 跳过（见 debian/rules）
+option(CSM_BUILD_TESTS "构建单元测试（需要 Qt6::Test）" ON)
 
 if (CSM_BUILD_TESTS AND TARGET Qt6::Test)
     enable_testing()
@@ -282,11 +238,7 @@ if (CSM_BUILD_TESTS AND TARGET Qt6::Test)
 endif()
 
 # ---------------------------------------------------------------- 安装
-# Android 的一切（清单、图标、库）都由 Qt 的 androiddeployqt 负责，
-# 这里不要往 prefix 里装任何东西
-if(ANDROID)
-    # 空分支：交给 Qt 打包
-elseif(APPLE)
+if(APPLE)
     # MACOSX_BUNDLE 的目标必须给 BUNDLE DESTINATION，否则 configure 直接报错。
     # .app 装到 prefix 根下（例如 -DCMAKE_INSTALL_PREFIX=/Applications），
     # 这是 macOS 的惯例；发布用的 .dmg 由 CI 直接对 build/CircuitMaster.app

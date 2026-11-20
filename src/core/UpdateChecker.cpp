@@ -195,9 +195,6 @@ QVector<PackageFormat> UpdateChecker::formatsFor(HostPlatform platform, InstallK
         // macOS 只有一种形态：带 .app 的 dmg。挂载后把 .app 拖进「应用程序」，
         // 所以安装方式（系统/便携）在这里没有区别。
         return QVector<PackageFormat>{PackageFormat::MacDmg};
-    case HostPlatform::Android:
-        // Android 只有 APK：侧载安装，也没有「系统安装 / 便携」之分
-        return QVector<PackageFormat>{PackageFormat::AndroidApk};
     default:
         return {};
     }
@@ -259,14 +256,6 @@ QString UpdateChecker::suffixFor(HostPlatform platform, HostArch arch, PackageFo
         }
         return QStringLiteral("-macos-%1.dmg").arg(name);
     }
-    case PackageFormat::AndroidApk: {
-        if (platform != HostPlatform::Android)
-            return QString();
-        // 目前只出 arm64-v8a 一种（手机基本都在这个架构上）
-        if (arch != HostArch::Arm64)
-            return QString();
-        return QStringLiteral("-android-arm64.apk");
-    }
     }
     return QString();
 }
@@ -303,7 +292,6 @@ ReleaseAsset UpdateChecker::pickAsset(const ReleaseInfo& release, HostPlatform p
     const char* loose = platform == HostPlatform::Linux ? ".deb"
         : platform == HostPlatform::Windows             ? "-setup.exe"
         : platform == HostPlatform::MacOS               ? ".dmg"
-        : platform == HostPlatform::Android             ? ".apk"
                                                         : nullptr;
     if (loose) {
         for (const ReleaseAsset& asset : release.assets) {
