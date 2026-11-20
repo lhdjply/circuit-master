@@ -13,9 +13,8 @@ Rules-Requires-Root: no
 
 Package: circuit-master
 Architecture: any
-Depends:
- ${shlibs:Depends},
- ${misc:Depends},
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends:
  qt6-qpa-plugins,
  qt6-translations-l10n,
 Description: schematic editor and circuit simulator built with Qt6

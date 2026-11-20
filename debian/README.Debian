@@ -32,4 +32,16 @@ JSON 格式，可直接编辑）；窗口与分析设置随工程文件保存。
 打包时会传入 -DCSM_BUILD_TESTS=OFF 跳过测试（测试需要 Qt6::Test，
 与安装内容无关）。
 
- -- Circuit Master Maintainers <lhdjply@users.noreply.github.com>
+依赖与发行版
+------------
+
+`debian/control` 里 `Depends` 只留 `${shlibs:Depends}` / `${misc:Depends}`，
+由 dpkg-shlibdeps 按实际链接出来的库自动生成；`qt6-qpa-plugins` 与
+`qt6-translations-l10n` 放在 `Recommends` —— apt 默认会装，而各发行版对这两个
+包的命名偶有出入，放 Depends 时名字对不上会直接卡住安装。
+
+安装包在 **Debian 12** 里构建（glibc 2.36、Qt 6.4），这是 Debian 12/13、
+Ubuntu 24.04+、Linux Mint 22、Kali 这一大片的公共下限。在更新的发行版里
+构建出来的包，依赖会被拉到那套新版本上，别的发行版就装不上了。
+龙芯（loong64）与 riscv64 仍用 Deepin 镜像构建 —— Debian 官方没有这两个架构
+的可用容器。

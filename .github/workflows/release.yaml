@@ -32,12 +32,19 @@ jobs:
         include:
           # runner 按架构分两类：amd64 用 x86_64 宿主，其余三个架构用 arm64 宿主，
           # 目标架构与宿主不同时靠 QEMU 仿真执行容器。
+          # amd64 / arm64 在 **Debian 12** 里构建：它的 glibc 2.36、Qt 6.4 是
+          # Debian 12 / 13、Ubuntu 24.04+、Mint 22、Kali 这一大片的公共下限，
+          # 在这里打出来的包才能装到这些系统上。在 Deepin crimson 里构建的话，
+          # 依赖会被拉到 Deepin 那套新版本，别的发行版就装不上了。
           - platform: amd64
             runner: ubuntu-26.04
-            image: linuxdeepin/deepin:crimson
+            image: debian:12
           - platform: arm64
             runner: ubuntu-26.04-arm
-            image: linuxdeepin/deepin:crimson-arm64
+            image: debian:12
+          # 龙芯 / 龙架构：Debian 官方镜像没有这两个架构的可用容器，
+          # 只能继续用 Deepin 的镜像。
+
           - platform: loong64
             runner: ubuntu-26.04-arm
             image: linuxdeepin/deepin:crimson-loong64
@@ -76,6 +83,13 @@ jobs:
       # -b：debian/source/format 是 3.0 (native)，加 -b 只是跳过源码包。
       # parallel=N：debuild 不带 -j 是单线程；不能写成不带数字的 --parallel，
       #   Make 生成器会翻成 `make -j`（无限并发），容器直接卡死。
+
+      - name: Show deb dependencies
+        run: |
+          for deb in ./*.deb; do
+            echo "== $deb"
+            dpkg-deb -f "$deb" Depends Recommends
+          done
 
       - name: Collect deb packages
         run: |

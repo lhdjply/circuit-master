@@ -443,6 +443,12 @@ https://github.com/<owner>/<repo>/releases/latest/download/latest.json
 
 ## 打包（Debian / Ubuntu / Deepin）
 
+安装包在 **Debian 12** 里构建（glibc 2.36、Qt 6.4），可装到 Debian 12/13、
+Ubuntu 24.04+、Linux Mint 22、Kali 等大多数 Debian 系发行版；
+龙芯与 riscv64 用 Deepin 镜像构建。`Depends` 由 `dpkg-shlibdeps` 按实际链接的库
+自动生成，平台插件与翻译包放在 `Recommends`，避免包名差异卡住安装。
+
+
 仓库内已包含 `debian/` 打包文件，可直接用 dpkg 工具链构建 `.deb`：
 
 ```bash

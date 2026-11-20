@@ -7,6 +7,15 @@
 
 ## [未发布]
 
+### 变更
+
+- **deb 改装到大多数 Debian 系发行版**：安装包原先在 Deepin crimson 里构建，
+  依赖被拉到 Deepin 那套新版本（glibc / Qt），别的发行版装不上。现在 amd64 与
+  arm64 改在 **Debian 12** 里构建 —— glibc 2.36、Qt 6.4，是 Debian 12/13、
+  Ubuntu 24.04+、Mint 22、Kali 这一大片的公共下限。CMake 的 Qt 下限随之从
+  6.5 降到 6.4（6.5 才有的接口本来就有 QT_VERSION_CHECK 兜着）。
+  `Depends` 只留 `dpkg-shlibdeps` 生成的部分，平台插件与翻译包改成 `Recommends`。
+
 ### 新增
 
 - **跟随系统时会真正跟着变**：监听 `QStyleHints::colorSchemeChanged`，
