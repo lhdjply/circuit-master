@@ -170,16 +170,6 @@ AnalysisKind kindFromTag(const QString& tag)
     return AnalysisKind::Transient;
 }
 
-QString kindSuffix(AnalysisKind kind)
-{
-    switch (kind) {
-    case AnalysisKind::OperatingPoint: return CSM_TR(" (operating point)");
-    case AnalysisKind::AC:             return CSM_TR(" (AC sweep)");
-    case AnalysisKind::Transient:      return CSM_TR(" (transient)");
-    }
-    return QString();
-}
-
 QJsonObject analysisToJson(const SimulationOptions& options)
 {
     QJsonObject object;
@@ -1153,47 +1143,47 @@ void MainWindow::buildLibrary()
     };
     const QVector<Entry> entries = {
         // 按分类排好，同类的挨在一起，「全部」列表也有顺序
-        {ComponentType::Resistor, CSM_TR("Resistor  R"), CSM_TR("Basic")},
-        {ComponentType::Capacitor, CSM_TR("Capacitor  C"), CSM_TR("Basic")},
-        {ComponentType::Inductor, CSM_TR("Inductor  L"), CSM_TR("Basic")},
-        {ComponentType::Transformer, CSM_TR("Transformer  T"), CSM_TR("Basic")},
+        {ComponentType::Resistor, CSM_TR("Resistor"), CSM_TR("Basic")},
+        {ComponentType::Capacitor, CSM_TR("Capacitor"), CSM_TR("Basic")},
+        {ComponentType::Inductor, CSM_TR("Inductor"), CSM_TR("Basic")},
+        {ComponentType::Transformer, CSM_TR("Transformer"), CSM_TR("Basic")},
 
-        {ComponentType::Diode, CSM_TR("Diode  D"), CSM_TR("Semiconductors")},
-        {ComponentType::Led, CSM_TR("LED  LED"), CSM_TR("Semiconductors")},
-        {ComponentType::Npn, CSM_TR("NPN transistor  Q"), CSM_TR("Semiconductors")},
-        {ComponentType::Pnp, CSM_TR("PNP transistor  Q"), CSM_TR("Semiconductors")},
-        {ComponentType::Nmos, CSM_TR("N-MOSFET  M"), CSM_TR("Semiconductors")},
-        {ComponentType::Pmos, CSM_TR("P-MOSFET  M"), CSM_TR("Semiconductors")},
-        {ComponentType::Igbt, QStringLiteral("IGBT  Z"), CSM_TR("Semiconductors")},
+        {ComponentType::Diode, CSM_TR("Diode"), CSM_TR("Semiconductors")},
+        {ComponentType::Led, CSM_TR("LED"), CSM_TR("Semiconductors")},
+        {ComponentType::Npn, CSM_TR("NPN transistor"), CSM_TR("Semiconductors")},
+        {ComponentType::Pnp, CSM_TR("PNP transistor"), CSM_TR("Semiconductors")},
+        {ComponentType::Nmos, CSM_TR("N-MOSFET"), CSM_TR("Semiconductors")},
+        {ComponentType::Pmos, CSM_TR("P-MOSFET"), CSM_TR("Semiconductors")},
+        {ComponentType::Igbt, CSM_TR("IGBT"), CSM_TR("Semiconductors")},
 
-        {ComponentType::OpAmp, CSM_TR("Op-amp  U"), CSM_TR("Analog ICs")},
-        {ComponentType::Tl431, CSM_TR("TL431 reference  VR"), CSM_TR("Analog ICs")},
-        {ComponentType::Optocoupler, CSM_TR("Optocoupler  OC"), CSM_TR("Analog ICs")},
-        {ComponentType::Ob2362, CSM_TR("OB2362 controller  U"), CSM_TR("Analog ICs")},
+        {ComponentType::OpAmp, CSM_TR("Op-amp"), CSM_TR("Analog ICs")},
+        {ComponentType::Tl431, CSM_TR("TL431 reference"), CSM_TR("Analog ICs")},
+        {ComponentType::Optocoupler, CSM_TR("Optocoupler"), CSM_TR("Analog ICs")},
+        {ComponentType::Ob2362, CSM_TR("OB2362 controller"), CSM_TR("Analog ICs")},
 
-        {ComponentType::LogicGate, CSM_TR("AND gate  AND"), CSM_TR("Digital logic"),
+        {ComponentType::LogicGate, CSM_TR("AND gate"), CSM_TR("Digital logic"),
          GroundKind::Gnd, GateKind::And},
-        {ComponentType::LogicGate, CSM_TR("OR gate  OR"), CSM_TR("Digital logic"),
+        {ComponentType::LogicGate, CSM_TR("OR gate"), CSM_TR("Digital logic"),
          GroundKind::Gnd, GateKind::Or},
-        {ComponentType::LogicGate, CSM_TR("NOT gate  NOT"), CSM_TR("Digital logic"),
+        {ComponentType::LogicGate, CSM_TR("NOT gate"), CSM_TR("Digital logic"),
          GroundKind::Gnd, GateKind::Not},
-        {ComponentType::LogicGate, CSM_TR("XOR gate  XOR"), CSM_TR("Digital logic"),
+        {ComponentType::LogicGate, CSM_TR("XOR gate"), CSM_TR("Digital logic"),
          GroundKind::Gnd, GateKind::Xor},
-        {ComponentType::LogicGate, CSM_TR("XNOR gate  XNOR"), CSM_TR("Digital logic"),
+        {ComponentType::LogicGate, CSM_TR("XNOR gate"), CSM_TR("Digital logic"),
          GroundKind::Gnd, GateKind::Xnor},
 
-        {ComponentType::VoltageSource, CSM_TR("Voltage source  V"), CSM_TR("Sources")},
-        {ComponentType::CurrentSource, CSM_TR("Current source  I"), CSM_TR("Sources")},
+        {ComponentType::VoltageSource, CSM_TR("Voltage source"), CSM_TR("Sources")},
+        {ComponentType::CurrentSource, CSM_TR("Current source"), CSM_TR("Sources")},
 
-        {ComponentType::Switch, CSM_TR("Switch  S"), CSM_TR("Switches and Grounds")},
-        {ComponentType::PushButton, CSM_TR("Push button  SB"), CSM_TR("Switches and Grounds")},
-        {ComponentType::Ground, CSM_TR("Ground  GND"), CSM_TR("Switches and Grounds"),
+        {ComponentType::Switch, CSM_TR("Switch"), CSM_TR("Switches and Grounds")},
+        {ComponentType::PushButton, CSM_TR("Push button"), CSM_TR("Switches and Grounds")},
+        {ComponentType::Ground, CSM_TR("Ground"), CSM_TR("Switches and Grounds"),
          GroundKind::Gnd},
-        {ComponentType::NetLabel, CSM_TR("Net label  NET"), CSM_TR("Switches and Grounds")},
+        {ComponentType::NetLabel, CSM_TR("Net label"), CSM_TR("Switches and Grounds")},
 
-        {ComponentType::Probe, CSM_TR("Voltage probe  TP"), CSM_TR("Measurement")},
-        {ComponentType::CurrentProbe, CSM_TR("Current probe  IP"), CSM_TR("Measurement")},
-        {ComponentType::Multimeter, CSM_TR("Multimeter  XMM"), CSM_TR("Measurement")},
+        {ComponentType::Probe, CSM_TR("Voltage probe"), CSM_TR("Measurement")},
+        {ComponentType::CurrentProbe, CSM_TR("Current probe"), CSM_TR("Measurement")},
+        {ComponentType::Multimeter, CSM_TR("Multimeter"), CSM_TR("Measurement")},
     };
 
     const QString category = m_libraryCategory ? m_libraryCategory->currentText() : QString();
@@ -2253,12 +2243,9 @@ void MainWindow::scanExamples()
             continue;
 
         const QString name = exampleDisplayName(root, file);
-        const AnalysisKind kind =
-            kindFromTag(root.value(QStringLiteral("analysis")).toObject()
-                            .value(QStringLiteral("kind"))
-                            .toString());
         m_examplePaths.append(dir.filePath(file));
-        m_exampleTitles.append(name + kindSuffix(kind));
+        // 不拼分析类型：菜单里只列电路名，类型在打开后的分析标签上能看到
+        m_exampleTitles.append(name);
     }
 }
 

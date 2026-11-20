@@ -19,24 +19,12 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</source>
 波形超出量程（手动量程已锁定），点「自动缩放」恢复自动</translation>
     </message>
     <message>
-        <source> (AC sweep)</source>
-        <translation>（交流扫频）</translation>
-    </message>
-    <message>
         <source> (This release has no changelog; open the release page.)</source>
         <translation>（该版本没有更新日志，请打开发布页查看。）</translation>
     </message>
     <message>
         <source> (local)</source>
         <translation>（本地）</translation>
-    </message>
-    <message>
-        <source> (operating point)</source>
-        <translation>（工作点）</translation>
-    </message>
-    <message>
-        <source> (transient)</source>
-        <translation>（瞬态）</translation>
     </message>
     <message>
         <source> comes before </source>
@@ -167,10 +155,6 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>AND gate</source>
         <translation>与门</translation>
-    </message>
-    <message>
-        <source>AND gate  AND</source>
-        <translation>与门  AND</translation>
     </message>
     <message>
         <source>About Circuit Master</source>
@@ -311,10 +295,6 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>电容</translation>
     </message>
     <message>
-        <source>Capacitor  C</source>
-        <translation>电容  C</translation>
-    </message>
-    <message>
         <source>Center horizontally</source>
         <translation>水平居中</translation>
     </message>
@@ -407,16 +387,8 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>电流测试点</translation>
     </message>
     <message>
-        <source>Current probe  IP</source>
-        <translation>电流测试点  IP</translation>
-    </message>
-    <message>
         <source>Current source</source>
         <translation>电流源</translation>
-    </message>
-    <message>
-        <source>Current source  I</source>
-        <translation>电流源  I</translation>
     </message>
     <message>
         <source>Current version v%1. The download is your call; the application never replaces itself.</source>
@@ -489,10 +461,6 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Diode</source>
         <translation>二极管</translation>
-    </message>
-    <message>
-        <source>Diode  D</source>
-        <translation>二极管  D</translation>
     </message>
     <message>
         <source>Discard</source>
@@ -667,10 +635,6 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>接地</translation>
     </message>
     <message>
-        <source>Ground  GND</source>
-        <translation>接地  GND</translation>
-    </message>
-    <message>
         <source>Ground type</source>
         <translation>接地种类</translation>
     </message>
@@ -683,16 +647,16 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>高电平必须大于 0</translation>
     </message>
     <message>
+        <source>IGBT</source>
+        <translation>IGBT</translation>
+    </message>
+    <message>
         <source>In degrees; any angle works, e.g. 15, 45, 60</source>
         <translation>单位是度，可以填任意角度，例如 15、45、60</translation>
     </message>
     <message>
         <source>Inductor</source>
         <translation>电感</translation>
-    </message>
-    <message>
-        <source>Inductor  L</source>
-        <translation>电感  L</translation>
     </message>
     <message>
         <source>Initial value</source>
@@ -725,10 +689,6 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>LED</source>
         <translation>发光二极管</translation>
-    </message>
-    <message>
-        <source>LED  LED</source>
-        <translation>发光二极管  LED</translation>
     </message>
     <message>
         <source>Language</source>
@@ -803,16 +763,12 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>万用表</translation>
     </message>
     <message>
-        <source>Multimeter  XMM</source>
-        <translation>万用表  XMM</translation>
-    </message>
-    <message>
         <source>Multimeter readings:</source>
         <translation>万用表读数：</translation>
     </message>
     <message>
-        <source>N-MOSFET  M</source>
-        <translation>N 沟道 MOS  M</translation>
+        <source>N-MOSFET</source>
+        <translation>N 沟道 MOS</translation>
     </message>
     <message>
         <source>N-channel MOSFET</source>
@@ -823,24 +779,12 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>非门</translation>
     </message>
     <message>
-        <source>NOT gate  NOT</source>
-        <translation>非门  NOT</translation>
-    </message>
-    <message>
         <source>NPN transistor</source>
         <translation>NPN 三极管</translation>
     </message>
     <message>
-        <source>NPN transistor  Q</source>
-        <translation>NPN 三极管  Q</translation>
-    </message>
-    <message>
         <source>Net label</source>
         <translation>网络标签</translation>
-    </message>
-    <message>
-        <source>Net label  NET</source>
-        <translation>网络标签  NET</translation>
     </message>
     <message>
         <source>Net labels with the same name are merged into one net, so no wire is needed.</source>
@@ -951,20 +895,12 @@ Place a voltage (TP) or current (IP) test point and run again</source>
         <translation>OB2362 控制器</translation>
     </message>
     <message>
-        <source>OB2362 controller  U</source>
-        <translation>OB2362 控制器  U</translation>
-    </message>
-    <message>
         <source>OK</source>
         <translation>确定</translation>
     </message>
     <message>
         <source>OR gate</source>
         <translation>或门</translation>
-    </message>
-    <message>
-        <source>OR gate  OR</source>
-        <translation>或门  OR</translation>
     </message>
     <message>
         <source>Offset</source>
@@ -977,10 +913,6 @@ Place a voltage (TP) or current (IP) test point and run again</source>
     <message>
         <source>Op-amp</source>
         <translation>运算放大器</translation>
-    </message>
-    <message>
-        <source>Op-amp  U</source>
-        <translation>运算放大器  U</translation>
     </message>
     <message>
         <source>Open</source>
@@ -1023,16 +955,12 @@ Place a voltage (TP) or current (IP) test point and run again</source>
         <translation>光耦</translation>
     </message>
     <message>
-        <source>Optocoupler  OC</source>
-        <translation>光耦  OC</translation>
-    </message>
-    <message>
         <source>Output high level. Low level is fixed at 0 V; input threshold is half of it (5% hysteresis).</source>
         <translation>输出的高电平。低电平固定 0 V，输入阈值取它的一半（带 5% 回差）。</translation>
     </message>
     <message>
-        <source>P-MOSFET  M</source>
-        <translation>P 沟道 MOS  M</translation>
+        <source>P-MOSFET</source>
+        <translation>P 沟道 MOS</translation>
     </message>
     <message>
         <source>P-channel MOSFET</source>
@@ -1049,10 +977,6 @@ Place a voltage (TP) or current (IP) test point and run again</source>
     <message>
         <source>PNP transistor</source>
         <translation>PNP 三极管</translation>
-    </message>
-    <message>
-        <source>PNP transistor  Q</source>
-        <translation>PNP 三极管  Q</translation>
     </message>
     <message>
         <source>Paste</source>
@@ -1135,10 +1059,6 @@ Place a voltage (TP) or current (IP) test point and run again</source>
         <translation>按钮开关</translation>
     </message>
     <message>
-        <source>Push button  SB</source>
-        <translation>按钮开关  SB</translation>
-    </message>
-    <message>
         <source>Quick Start</source>
         <translation>快速上手</translation>
     </message>
@@ -1181,10 +1101,6 @@ Place a voltage (TP) or current (IP) test point and run again</source>
     <message>
         <source>Resistor</source>
         <translation>电阻</translation>
-    </message>
-    <message>
-        <source>Resistor  R</source>
-        <translation>电阻  R</translation>
     </message>
     <message>
         <source>Resume</source>
@@ -1361,10 +1277,6 @@ to edit its parameters</source>
         <translation>开关</translation>
     </message>
     <message>
-        <source>Switch  S</source>
-        <translation>开关  S</translation>
-    </message>
-    <message>
         <source>Switch %1 %2</source>
         <translation>开关 %1 %2</translation>
     </message>
@@ -1379,10 +1291,6 @@ to edit its parameters</source>
     <message>
         <source>TL431 reference</source>
         <translation>TL431 基准</translation>
-    </message>
-    <message>
-        <source>TL431 reference  VR</source>
-        <translation>TL431 基准  VR</translation>
     </message>
     <message>
         <source>That file is already open in a tab: %1</source>
@@ -1505,10 +1413,6 @@ to edit its parameters</source>
         <translation>变压器</translation>
     </message>
     <message>
-        <source>Transformer  T</source>
-        <translation>变压器  T</translation>
-    </message>
-    <message>
         <source>Transient</source>
         <translation>瞬态</translation>
     </message>
@@ -1611,16 +1515,8 @@ Checked: normally closed, opens while held.</source>
         <translation>电压测试点</translation>
     </message>
     <message>
-        <source>Voltage probe  TP</source>
-        <translation>电压测试点  TP</translation>
-    </message>
-    <message>
         <source>Voltage source</source>
         <translation>电压源</translation>
-    </message>
-    <message>
-        <source>Voltage source  V</source>
-        <translation>电压源  V</translation>
     </message>
     <message>
         <source>Waveform</source>
@@ -1659,16 +1555,8 @@ Checked: normally closed, opens while held.</source>
         <translation>同或门</translation>
     </message>
     <message>
-        <source>XNOR gate  XNOR</source>
-        <translation>同或门  XNOR</translation>
-    </message>
-    <message>
         <source>XOR gate</source>
         <translation>异或门</translation>
-    </message>
-    <message>
-        <source>XOR gate  XOR</source>
-        <translation>异或门  XOR</translation>
     </message>
     <message>
         <source>Zoom In</source>

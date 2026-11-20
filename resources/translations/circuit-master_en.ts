@@ -16,24 +16,12 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</source>
 Waveform exceeds the range (scale locked), click Auto Scale to restore</translation>
     </message>
     <message>
-        <source> (AC sweep)</source>
-        <translation> (AC sweep)</translation>
-    </message>
-    <message>
         <source> (This release has no changelog; open the release page.)</source>
         <translation> (This release has no changelog; open the release page.)</translation>
     </message>
     <message>
         <source> (local)</source>
         <translation> (local)</translation>
-    </message>
-    <message>
-        <source> (operating point)</source>
-        <translation> (operating point)</translation>
-    </message>
-    <message>
-        <source> (transient)</source>
-        <translation> (transient)</translation>
     </message>
     <message>
         <source> comes before </source>
@@ -164,10 +152,6 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>AND gate</source>
         <translation>AND gate</translation>
-    </message>
-    <message>
-        <source>AND gate  AND</source>
-        <translation>AND gate  AND</translation>
     </message>
     <message>
         <source>About Circuit Master</source>
@@ -308,10 +292,6 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Capacitor</translation>
     </message>
     <message>
-        <source>Capacitor  C</source>
-        <translation>Capacitor  C</translation>
-    </message>
-    <message>
         <source>Center horizontally</source>
         <translation>Center horizontally</translation>
     </message>
@@ -404,16 +384,8 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Current probe</translation>
     </message>
     <message>
-        <source>Current probe  IP</source>
-        <translation>Current probe  IP</translation>
-    </message>
-    <message>
         <source>Current source</source>
         <translation>Current source</translation>
-    </message>
-    <message>
-        <source>Current source  I</source>
-        <translation>Current source  I</translation>
     </message>
     <message>
         <source>Current version v%1. The download is your call; the application never replaces itself.</source>
@@ -486,10 +458,6 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Diode</source>
         <translation>Diode</translation>
-    </message>
-    <message>
-        <source>Diode  D</source>
-        <translation>Diode  D</translation>
     </message>
     <message>
         <source>Discard</source>
@@ -664,10 +632,6 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Ground</translation>
     </message>
     <message>
-        <source>Ground  GND</source>
-        <translation>Ground  GND</translation>
-    </message>
-    <message>
         <source>Ground type</source>
         <translation>Ground type</translation>
     </message>
@@ -680,16 +644,16 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>High level must be greater than 0</translation>
     </message>
     <message>
+        <source>IGBT</source>
+        <translation>IGBT</translation>
+    </message>
+    <message>
         <source>In degrees; any angle works, e.g. 15, 45, 60</source>
         <translation>In degrees; any angle works, e.g. 15, 45, 60</translation>
     </message>
     <message>
         <source>Inductor</source>
         <translation>Inductor</translation>
-    </message>
-    <message>
-        <source>Inductor  L</source>
-        <translation>Inductor  L</translation>
     </message>
     <message>
         <source>Initial value</source>
@@ -722,10 +686,6 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>LED</source>
         <translation>LED</translation>
-    </message>
-    <message>
-        <source>LED  LED</source>
-        <translation>LED  LED</translation>
     </message>
     <message>
         <source>Language</source>
@@ -800,16 +760,12 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Multimeter</translation>
     </message>
     <message>
-        <source>Multimeter  XMM</source>
-        <translation>Multimeter  XMM</translation>
-    </message>
-    <message>
         <source>Multimeter readings:</source>
         <translation>Multimeter readings:</translation>
     </message>
     <message>
-        <source>N-MOSFET  M</source>
-        <translation>N-MOSFET  M</translation>
+        <source>N-MOSFET</source>
+        <translation>N-MOSFET</translation>
     </message>
     <message>
         <source>N-channel MOSFET</source>
@@ -820,24 +776,12 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>NOT gate</translation>
     </message>
     <message>
-        <source>NOT gate  NOT</source>
-        <translation>NOT gate  NOT</translation>
-    </message>
-    <message>
         <source>NPN transistor</source>
         <translation>NPN transistor</translation>
     </message>
     <message>
-        <source>NPN transistor  Q</source>
-        <translation>NPN transistor  Q</translation>
-    </message>
-    <message>
         <source>Net label</source>
         <translation>Net label</translation>
-    </message>
-    <message>
-        <source>Net label  NET</source>
-        <translation>Net label  NET</translation>
     </message>
     <message>
         <source>Net labels with the same name are merged into one net, so no wire is needed.</source>
@@ -948,20 +892,12 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
         <translation>OB2362 controller</translation>
     </message>
     <message>
-        <source>OB2362 controller  U</source>
-        <translation>OB2362 controller  U</translation>
-    </message>
-    <message>
         <source>OK</source>
         <translation>OK</translation>
     </message>
     <message>
         <source>OR gate</source>
         <translation>OR gate</translation>
-    </message>
-    <message>
-        <source>OR gate  OR</source>
-        <translation>OR gate  OR</translation>
     </message>
     <message>
         <source>Offset</source>
@@ -974,10 +910,6 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
     <message>
         <source>Op-amp</source>
         <translation>Op-amp</translation>
-    </message>
-    <message>
-        <source>Op-amp  U</source>
-        <translation>Op-amp  U</translation>
     </message>
     <message>
         <source>Open</source>
@@ -1020,16 +952,12 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
         <translation>Optocoupler</translation>
     </message>
     <message>
-        <source>Optocoupler  OC</source>
-        <translation>Optocoupler  OC</translation>
-    </message>
-    <message>
         <source>Output high level. Low level is fixed at 0 V; input threshold is half of it (5% hysteresis).</source>
         <translation>Output high level. Low level is fixed at 0 V; input threshold is half of it (5% hysteresis).</translation>
     </message>
     <message>
-        <source>P-MOSFET  M</source>
-        <translation>P-MOSFET  M</translation>
+        <source>P-MOSFET</source>
+        <translation>P-MOSFET</translation>
     </message>
     <message>
         <source>P-channel MOSFET</source>
@@ -1046,10 +974,6 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
     <message>
         <source>PNP transistor</source>
         <translation>PNP transistor</translation>
-    </message>
-    <message>
-        <source>PNP transistor  Q</source>
-        <translation>PNP transistor  Q</translation>
     </message>
     <message>
         <source>Paste</source>
@@ -1132,10 +1056,6 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
         <translation>Push button</translation>
     </message>
     <message>
-        <source>Push button  SB</source>
-        <translation>Push button  SB</translation>
-    </message>
-    <message>
         <source>Quick Start</source>
         <translation>Quick Start</translation>
     </message>
@@ -1178,10 +1098,6 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
     <message>
         <source>Resistor</source>
         <translation>Resistor</translation>
-    </message>
-    <message>
-        <source>Resistor  R</source>
-        <translation>Resistor  R</translation>
     </message>
     <message>
         <source>Resume</source>
@@ -1358,10 +1274,6 @@ to edit its parameters</translation>
         <translation>Switch</translation>
     </message>
     <message>
-        <source>Switch  S</source>
-        <translation>Switch  S</translation>
-    </message>
-    <message>
         <source>Switch %1 %2</source>
         <translation>Switch %1 %2</translation>
     </message>
@@ -1376,10 +1288,6 @@ to edit its parameters</translation>
     <message>
         <source>TL431 reference</source>
         <translation>TL431 reference</translation>
-    </message>
-    <message>
-        <source>TL431 reference  VR</source>
-        <translation>TL431 reference  VR</translation>
     </message>
     <message>
         <source>That file is already open in a tab: %1</source>
@@ -1502,10 +1410,6 @@ to edit its parameters</translation>
         <translation>Transformer</translation>
     </message>
     <message>
-        <source>Transformer  T</source>
-        <translation>Transformer  T</translation>
-    </message>
-    <message>
         <source>Transient</source>
         <translation>Transient</translation>
     </message>
@@ -1608,16 +1512,8 @@ Checked: normally closed, opens while held.</translation>
         <translation>Voltage probe</translation>
     </message>
     <message>
-        <source>Voltage probe  TP</source>
-        <translation>Voltage probe  TP</translation>
-    </message>
-    <message>
         <source>Voltage source</source>
         <translation>Voltage source</translation>
-    </message>
-    <message>
-        <source>Voltage source  V</source>
-        <translation>Voltage source  V</translation>
     </message>
     <message>
         <source>Waveform</source>
@@ -1656,16 +1552,8 @@ Checked: normally closed, opens while held.</translation>
         <translation>XNOR gate</translation>
     </message>
     <message>
-        <source>XNOR gate  XNOR</source>
-        <translation>XNOR gate  XNOR</translation>
-    </message>
-    <message>
         <source>XOR gate</source>
         <translation>XOR gate</translation>
-    </message>
-    <message>
-        <source>XOR gate  XOR</source>
-        <translation>XOR gate  XOR</translation>
     </message>
     <message>
         <source>Zoom In</source>
