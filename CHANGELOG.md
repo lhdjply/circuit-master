@@ -18,6 +18,12 @@
 
 ### 新增
 
+- **跟随系统不再依赖 Qt 6.5**：原来只挂在 `QStyleHints::colorSchemeChanged` 上，
+  而那是 6.5 才有的接口；`QT_VERSION_CHECK` 是编译期判断，Debian 12 用 Qt 6.4
+  编出来的包就算跑在 Qt 6.8 上也不带这段。现在补了一条与版本无关的路径：
+  监听 `QEvent::ThemeChange`，并用 `gsettings` / `kdeglobals` / GTK `settings.ini`
+  判断系统深浅。探测结果做了缓存（`isDark()` 每次绘制都会调，不缓存等于每次重画
+  都 fork 一个进程）。
 - **跟随系统时会真正跟着变**：监听 `QStyleHints::colorSchemeChanged`，
   系统从浅色切到深色（或反过来）时整体重刷。之前只是「启动时判断一次」，
   系统中途切换会出现深色画布配浅色界面。平台不报配色时退回看系统调色板。

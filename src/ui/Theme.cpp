@@ -4,6 +4,10 @@
 #include <QGuiApplication>
 #include <QPalette>
 #include <QPointer>
+#include <QEvent>
+#include <QProcess>
+#include <QStandardPaths>
+#include <QTimer>
 #include <QSettings>
 #include <QStyle>
 #include <QStyleFactory>
@@ -36,12 +40,60 @@ public:
 Mode g_mode = Mode::System;
 std::function<void()> g_changeHandler;
 bool g_watchingScheme = false;
+bool g_watchingSchemeHints = false;
+bool g_schemeApplyPending = false;
+bool g_systemDark = false;
+bool g_systemDarkCached = false;
 
 /// 登记过的控件 + 它们的样式生成器
 QVector<QPair<QPointer<QWidget>, std::function<QString()>>>& styledWidgets()
 {
     static QVector<QPair<QPointer<QWidget>, std::function<QString()>>> list;
     return list;
+}
+
+/// Qt 6.5 以下的兜底：直接问桌面环境。
+/// 返回 -1 表示问不出来。
+int desktopPrefersDark()
+{
+#ifdef Q_OS_LINUX
+    // GNOME 42+ 以及遵循它的桌面（color-scheme 是 freedesktop 的事实标准）
+    QProcess gsettings;
+    gsettings.start(QStringLiteral("gsettings"),
+                    {QStringLiteral("get"), QStringLiteral("org.gnome.desktop.interface"),
+                     QStringLiteral("color-scheme")});
+    if (gsettings.waitForFinished(400)) {
+        const QString out = QString::fromUtf8(gsettings.readAllStandardOutput()).trimmed();
+        if (out.contains(QLatin1String("prefer-dark")))
+            return 1;
+        if (out.contains(QLatin1String("prefer-light")) || out.contains(QLatin1String("default")))
+            return 0;
+    }
+
+    // KDE：kdeglobals 里的配色方案名字
+    const QString kdePath = QStandardPaths::locate(
+        QStandardPaths::GenericConfigLocation, QStringLiteral("kdeglobals"));
+    if (!kdePath.isEmpty()) {
+        QSettings kde(kdePath, QSettings::IniFormat);
+        const QString scheme = kde.value(QStringLiteral("General/ColorScheme")).toString();
+        if (!scheme.isEmpty())
+            return scheme.contains(QLatin1String("dark"), Qt::CaseInsensitive) ? 1 : 0;
+    }
+
+    // GTK3 / GTK4
+    for (const QString& dir : {QStringLiteral("gtk-3.0"), QStringLiteral("gtk-4.0")}) {
+        const QString path = QStandardPaths::locate(
+            QStandardPaths::GenericConfigLocation, dir + QStringLiteral("/settings.ini"));
+        if (path.isEmpty())
+            continue;
+        QSettings gtk(path, QSettings::IniFormat);
+        const QVariant prefer =
+            gtk.value(QStringLiteral("Settings/gtk-application-prefer-dark-theme"));
+        if (prefer.isValid())
+            return prefer.toBool() ? 1 : 0;
+    }
+#endif
+    return -1;
 }
 
 /// 启动时（我们还没装自己的调色板之前）系统给的调色板。
@@ -63,7 +115,11 @@ bool systemIsDark()
         }
     }
 #endif
-    // 平台不报：退回「启动时系统调色板的明暗」
+    // Qt 6.5 以下或平台不报配色：直接问桌面环境
+    if (const int pref = desktopPrefersDark(); pref >= 0)
+        return pref == 1;
+
+    // 问不出来：退回「启动时系统调色板的明暗」
     const QPalette& palette = g_startupPaletteSampled ? g_startupPalette
                                                      : QGuiApplication::palette();
     return palette.color(QPalette::Window).lightness() < 128;
@@ -73,6 +129,7 @@ bool systemIsDark()
 
 void load()
 {
+    g_systemDarkCached = false;
     const QString saved = QSettings().value(QStringLiteral("theme/mode"),
                                             QStringLiteral("system")).toString();
     if (saved == QLatin1String("light"))
@@ -90,7 +147,17 @@ Mode mode()
 
 bool isDark()
 {
-    return g_mode == Mode::Dark || (g_mode == Mode::System && systemIsDark());
+    if (g_mode == Mode::Dark)
+        return true;
+    if (g_mode == Mode::Light)
+        return false;
+    // 跟随系统：判断一次要 fork 一个 gsettings（十几毫秒），而 isDark() 是每次
+    // 绘制都会调的（取画布色、网格色…），所以必须缓存，只在主题变化时失效。
+    if (!g_systemDarkCached) {
+        g_systemDark = systemIsDark();
+        g_systemDarkCached = true;
+    }
+    return g_systemDark;
 }
 
 void setChangeHandler(std::function<void()> handler)
@@ -109,9 +176,40 @@ void apply(QApplication& app)
     // 跟随系统模式：系统深浅色一变就重新应用一次。不挂这个监听的话，
     // 系统切到深色时只有画布会变（它绘制时读 isDark()），其余控件仍用旧调色板 ——
     // 结果就是「深色画布 + 浅色界面」。
-#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
-    if (!g_watchingScheme && QGuiApplication::styleHints()) {
+    // 系统主题变了会发 QEvent::ThemeChange 给所有控件（Qt 6.0 就有），
+    // 这条路径与 Qt 版本无关 —— 6.4 上也能跟着系统变。
+    // 注意只认 ThemeChange，不能认 ApplicationPaletteChange：
+    // 那是我们自己 setPalette() 触发的，会无限递归。
+    if (!g_watchingScheme) {
         g_watchingScheme = true;
+        class ThemeWatcher : public QObject
+        {
+        public:
+            bool eventFilter(QObject* watched, QEvent* event) override
+            {
+                if (event->type() == QEvent::ThemeChange && g_mode == Mode::System
+                    && !g_schemeApplyPending) {
+                    g_schemeApplyPending = true;
+                    // 一个主题变化会给每个控件各发一次，合并成一拍
+                    QTimer::singleShot(0, qApp, [] {
+                        g_schemeApplyPending = false;
+                        g_systemDarkCached = false;   // 重新探测系统配色
+                        if (g_mode != Mode::System)
+                            return;
+                        apply(*qApp);
+                        if (g_changeHandler)
+                            g_changeHandler();
+                    });
+                }
+                return QObject::eventFilter(watched, event);
+            }
+        };
+        qApp->installEventFilter(new ThemeWatcher);
+    }
+
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+    if (QGuiApplication::styleHints() && !g_watchingSchemeHints) {
+        g_watchingSchemeHints = true;
         QObject::connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged,
                          [](Qt::ColorScheme) {
                              if (g_mode != Mode::System)
@@ -209,6 +307,7 @@ void styleWidget(QWidget* widget, std::function<QString()> builder)
 void save(Mode mode)
 {
     g_mode = mode;
+    g_systemDarkCached = false;
     QSettings settings;
     switch (mode) {
     case Mode::System: settings.setValue(QStringLiteral("theme/mode"), QStringLiteral("system")); break;

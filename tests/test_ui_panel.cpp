@@ -42,6 +42,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QPixmap>
+#include <QEvent>
 #include <QPlainTextEdit>
 #include <QMetaObject>
 #include <QStyleHints>
@@ -622,6 +623,20 @@ void UiPanelTest::themeFollowsSystemSchemeChanges()
     QMetaObject::invokeMethod(QGuiApplication::styleHints(), "colorSchemeChanged",
                               Q_ARG(Qt::ColorScheme, Qt::ColorScheme::Dark));
     QCOMPARE(notified, 1); // 固定模式不响应
+
+    // 平台发 QEvent::ThemeChange 也要能触发（这条与 Qt 版本无关，
+    // Debian 12 的 Qt 6.4 上没有 colorSchemeChanged 信号，靠的就是它）
+    Theme::save(Theme::Mode::System);
+    Theme::apply(*qApp);
+    MainWindow window;
+    window.show();
+    waitShown(window);
+    int themeHits = 0;
+    Theme::setChangeHandler([&themeHits] { ++themeHits; });
+    QEvent themeEvent(QEvent::ThemeChange);
+    QCoreApplication::sendEvent(&window, &themeEvent);
+    settle();
+    QCOMPARE(themeHits, 1);
 
     Theme::setChangeHandler(nullptr); // 别把捕获局部变量的 lambda 留着
 }
