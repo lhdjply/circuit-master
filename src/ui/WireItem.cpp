@@ -207,7 +207,7 @@ void WireItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, 
     const int activeSegment = segmentAt(m_pressLocal);
     const bool segmentOnly = selected && m_hasPress && activeSegment >= 0
         && activeSegment + 1 < m_points.size();
-    QColor color = segmentOnly ? theme::wire : (selected ? theme::selected : theme::wire);
+    QColor color = segmentOnly ? Theme::wire() : (selected ? Theme::selected() : Theme::wire());
     QPen pen(color, selected && !segmentOnly ? 3.0 : (m_hover ? 3.0 : 2.2));
     pen.setCapStyle(Qt::RoundCap);
     pen.setJoinStyle(Qt::RoundJoin);
@@ -216,7 +216,7 @@ void WireItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* option, 
     painter->drawPath(m_path);
 
     if (segmentOnly) {
-        QPen hot(theme::selected, 3.2);
+        QPen hot(Theme::selected(), 3.2);
         hot.setCapStyle(Qt::RoundCap);
         painter->setPen(hot);
         painter->drawLine(m_points.at(activeSegment), m_points.at(activeSegment + 1));

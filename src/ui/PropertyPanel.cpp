@@ -1,5 +1,7 @@
 #include "ui/PropertyPanel.h"
 
+#include "ui/Theme.h"
+
 #include "core/Units.h"
 #include "ui/ComponentItem.h"
 
@@ -80,7 +82,7 @@ void PropertyPanel::buildUi()
     // 于是面板只需要文字那么高，滚动区域再把它拉到视口大小，文字正好居中。
     m_placeholder = new QLabel(QStringLiteral("在原理图中选择一个元件\n以编辑其参数"), this);
     m_placeholder->setAlignment(Qt::AlignCenter);
-    m_placeholder->setStyleSheet(QStringLiteral("color:#94a3b8;"));
+    Theme::styleWidget(m_placeholder, [] { return QStringLiteral("color:%1;").arg(Theme::textMuted().name()); });
     m_placeholder->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Ignored);
     root->addWidget(m_placeholder, 1);
 
@@ -92,11 +94,11 @@ void PropertyPanel::buildUi()
     pageLayout->setSpacing(10);
 
     m_title = new QLabel(page);
-    m_title->setStyleSheet(QStringLiteral("font-size:14px; font-weight:600; color:#1e293b;"));
+    Theme::styleWidget(m_title, [] { return QStringLiteral("font-size:14px; font-weight:600; color:%1;").arg(Theme::textPrimary().name()); });
     pageLayout->addWidget(m_title);
 
     m_subtitle = new QLabel(page);
-    m_subtitle->setStyleSheet(QStringLiteral("color:#64748b;"));
+    Theme::styleWidget(m_subtitle, [] { return QStringLiteral("color:%1;").arg(Theme::textMuted().name()); });
     pageLayout->addWidget(m_subtitle);
 
     m_form = new QFormLayout();
@@ -241,7 +243,7 @@ void PropertyPanel::buildUi()
                        "不写单位时按元件默认单位。"),
         page);
     hint->setWordWrap(true);
-    hint->setStyleSheet(QStringLiteral("color:#94a3b8; font-size:11px;"));
+    Theme::styleWidget(hint, [] { return QStringLiteral("color:%1; font-size:11px;").arg(Theme::textMuted().name()); });
     pageLayout->addWidget(hint);
 
     m_stack->addWidget(page);
@@ -865,7 +867,7 @@ void PropertyPanel::applyPulse()
 
 void PropertyPanel::markInvalid(QLineEdit* edit, const QString& reason)
 {
-    edit->setStyleSheet(QStringLiteral("border:1px solid #dc2626; border-radius:3px;"));
+    edit->setStyleSheet(QStringLiteral("border:1px solid ") + Theme::danger().name() + QStringLiteral("; border-radius:3px;"));
     edit->setToolTip(reason.isEmpty()
                          ? QStringLiteral("无法识别该数值，示例：10kΩ、4.7µF、1meg")
                          : reason);

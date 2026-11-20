@@ -1,5 +1,7 @@
 #include "ui/UpdateDialog.h"
 
+#include "ui/Theme.h"
+
 #include "csm_version.h"
 #include "ui/Dialogs.h"
 
@@ -98,7 +100,7 @@ UpdateDialog::UpdateDialog(const ReleaseInfo& release, QWidget* parent)
             .arg(QLatin1String(CSM_VERSION_NUMBER)),
         this);
     subheading->setWordWrap(true);
-    subheading->setStyleSheet(QStringLiteral("color:#64748b;"));
+    Theme::styleWidget(subheading, [] { return QStringLiteral("color:%1;").arg(Theme::textMuted().name()); });
     root->addWidget(subheading);
 
     // 正文：Release 的 body 就是作者写的更新日志
@@ -132,7 +134,7 @@ UpdateDialog::UpdateDialog(const ReleaseInfo& release, QWidget* parent)
 
     m_status = new QLabel(hint, this);
     m_status->setWordWrap(true);
-    m_status->setStyleSheet(QStringLiteral("color:#64748b;"));
+    Theme::styleWidget(m_status, [] { return QStringLiteral("color:%1;").arg(Theme::textMuted().name()); });
     root->addWidget(m_status);
 
     m_progress = new QProgressBar(this);
@@ -145,7 +147,7 @@ UpdateDialog::UpdateDialog(const ReleaseInfo& release, QWidget* parent)
     m_transfer->setVisible(false);
     m_transfer->setWordWrap(true);
     m_transfer->setTextInteractionFlags(Qt::TextSelectableByMouse);
-    m_transfer->setStyleSheet(QStringLiteral("color:#64748b; font-size:11px;"));
+    Theme::styleWidget(m_transfer, [] { return QStringLiteral("color:%1; font-size:11px;").arg(Theme::textMuted().name()); });
     root->addWidget(m_transfer);
 
     auto* actions = new QHBoxLayout();

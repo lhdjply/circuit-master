@@ -127,6 +127,7 @@ set(CSM_UI_SOURCES
     src/ui/Dialogs.cpp
     src/ui/SingleInstance.cpp
     src/ui/Symbols.cpp
+    src/ui/Theme.cpp
     src/ui/ComponentItem.cpp
     src/ui/WireItem.cpp
     src/ui/SchematicScene.cpp

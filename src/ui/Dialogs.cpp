@@ -1,5 +1,7 @@
 #include "ui/Dialogs.h"
 
+#include "ui/Theme.h"
+
 #include <QAbstractButton>
 #include <QApplication>
 #include <QDialog>
@@ -56,39 +58,49 @@ QPixmap badge(const QString& glyph, const QColor& fill, int size = 40)
 /// 提示框与「关于」共用的一套按钮 / 正文样式，只作用在单个实例上
 QString dialogStyleSheet()
 {
+    // 颜色从 Theme 取：深色下换成深底浅字，别把浅色写死在这里
+    const QString surface = Theme::surface().name();
+    const QString text = Theme::textPrimary().name();
+    const QString border = Theme::border().name();
+    const QString hover = Theme::surfaceAlt().name();
+    const QString pressed = Theme::border().name();
+    const QString accent = Theme::accent().name();
+    const QString accentStrong = Theme::accentStrong().name();
+
     return QStringLiteral(R"(
 QDialog {
-    background: #ffffff;
+    background: %1;
 }
 QLabel {
-    color: #1e293b;
+    color: %2;
     font-size: 13px;
 }
 QPushButton {
     min-width: 56px;
     padding: 6px 12px;
-    border: 1px solid #d5dde8;
+    border: 1px solid %3;
     border-radius: 6px;
-    background: #ffffff;
-    color: #1e293b;
+    background: %1;
+    color: %2;
 }
 QPushButton:hover {
-    background: #f1f5f9;
-    border-color: #b6c2d1;
+    background: %4;
+    border-color: %3;
 }
 QPushButton:pressed {
-    background: #e2e8f0;
+    background: %5;
 }
 QPushButton:default {
-    background: #2563eb;
-    border-color: #2563eb;
+    background: %6;
+    border-color: %6;
     color: #ffffff;
 }
 QPushButton:default:hover {
-    background: #1d4ed8;
-    border-color: #1d4ed8;
+    background: %7;
+    border-color: %7;
 }
-)");
+)")
+        .arg(surface, text, border, hover, pressed, accent, accentStrong);
 }
 
 /// 一个按钮的说明：文字 + 是否是主操作
@@ -223,14 +235,14 @@ void Dialogs::changelog(QWidget* parent)
     dialog.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
     dialog.setStyleSheet(dialogStyleSheet() + QStringLiteral(R"(
 QTextBrowser {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
+    background: %1;
+    border: 1px solid %2;
     border-radius: 8px;
     padding: 10px 14px;
-    selection-background-color: #2563eb;
+    selection-background-color: %3;
     selection-color: #ffffff;
 }
-)"));
+)").arg(Theme::surface().name(), Theme::border().name(), Theme::accent().name()));
 
     auto* outer = new QVBoxLayout(&dialog);
     outer->setContentsMargins(20, 18, 20, 14);
@@ -242,13 +254,15 @@ QTextBrowser {
     // 标题 / 列表的字号颜色统一成界面那套灰阶。必须在灌内容之前设，
     // QTextDocument 会在灌入时就把默认样式表套上去。
     viewer->document()->setDefaultStyleSheet(QStringLiteral(R"(
-h1 { font-size: 17px; color: #1e293b; margin: 2px 0 10px 0; }
-h2 { font-size: 15px; color: #1d4ed8; margin: 18px 0 6px 0; }
-h3 { font-size: 13px; color: #334155; margin: 12px 0 4px 0; }
-p, li { color: #334155; font-size: 12.5px; }
-code { color: #1e293b; background-color: #f1f5f9; }
-a { color: #2563eb; }
-)"));
+h1 { font-size: 17px; color: %1; margin: 2px 0 10px 0; }
+h2 { font-size: 15px; color: %2; margin: 18px 0 6px 0; }
+h3 { font-size: 13px; color: %3; margin: 12px 0 4px 0; }
+p, li { color: %3; font-size: 12.5px; }
+code { color: %1; background-color: %4; }
+a { color: %5; }
+)").arg(Theme::textPrimary().name(), Theme::accentStrong().name(),
+       Theme::textSecondary().name(), Theme::surfaceAlt().name(),
+       Theme::accent().name()));
 
     QFile file(QStringLiteral(":/docs/CHANGELOG.md"));
     const bool loaded = file.open(QIODevice::ReadOnly | QIODevice::Text);
@@ -259,8 +273,8 @@ a { color: #2563eb; }
             viewer->setMarkdown(markdown); // Qt 自带 CommonMark 子集的渲染
     }
     if (!loaded || viewer->document()->isEmpty()) {
-        viewer->setHtml(QStringLiteral(
-            "<p style='color:#94a3b8'>这个构建里没有内置更新日志。</p>"));
+        viewer->setHtml(QStringLiteral("<p style='color:%1'>这个构建里没有内置更新日志。</p>")
+                            .arg(Theme::textMuted().name()));
     }
     viewer->moveCursor(QTextCursor::Start);
 
@@ -286,27 +300,29 @@ void Dialogs::about(QWidget* parent, const QString& version)
     dialog.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
     dialog.setStyleSheet(dialogStyleSheet() + QStringLiteral(R"(
 QLabel#aboutTitle {
-    color: #1e293b;
+    color: %1;
     font-size: 18px;
     font-weight: 600;
 }
 QLabel#aboutVersion {
-    color: #1d4ed8;
-    background: #e0ebff;
+    color: %2;
+    background: %3;
     border-radius: 8px;
     padding: 2px 8px;
     font-size: 11px;
     font-weight: 600;
 }
 QLabel#aboutBody {
-    color: #334155;
+    color: %4;
     font-size: 12.5px;
 }
 QLabel#aboutFoot {
-    color: #94a3b8;
+    color: %5;
     font-size: 11.5px;
 }
-)"));
+)").arg(Theme::textPrimary().name(), Theme::accentStrong().name(),
+       Theme::surfaceAlt().name(), Theme::textSecondary().name(),
+       Theme::textMuted().name()));
 
     auto* outer = new QVBoxLayout(&dialog);
     outer->setContentsMargins(22, 20, 22, 16);

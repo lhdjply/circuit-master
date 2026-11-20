@@ -1,5 +1,7 @@
 #include "ui/WaveformWindow.h"
 
+#include "ui/Theme.h"
+
 #include "core/Circuit.h"
 
 #include "core/Units.h"
@@ -138,7 +140,7 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     sideLayout->setSpacing(8);
 
     auto* title = new QLabel(QStringLiteral("信号"), side);
-    title->setStyleSheet(QStringLiteral("font-weight:600; color:#1e293b;"));
+    Theme::styleWidget(title, [] { return QStringLiteral("font-weight:600; color:%1;").arg(Theme::textPrimary().name()); });
     sideLayout->addWidget(title);
 
     m_list = new QListWidget(side);
@@ -156,7 +158,7 @@ WaveformWindow::WaveformWindow(QWidget* parent)
 
     m_info = new QLabel(side);
     m_info->setWordWrap(true);
-    m_info->setStyleSheet(QStringLiteral("color:#64748b; font-size:11px;"));
+    Theme::styleWidget(m_info, [] { return QStringLiteral("color:%1; font-size:11px;").arg(Theme::textMuted().name()); });
     sideLayout->addWidget(m_info);
 
     auto* chartSide = new QWidget(splitter);
@@ -172,7 +174,7 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     auto* pngButton = new QPushButton(QStringLiteral("导出图片"), chartSide);
     toolbar->addSpacing(12);
     m_tipLabel = new QLabel(QStringLiteral("在图上拖拽可框选放大，右键复位"), chartSide);
-    m_tipLabel->setStyleSheet(QStringLiteral("color:#94a3b8; font-size:11px;"));
+    Theme::styleWidget(m_tipLabel, [] { return QStringLiteral("color:%1; font-size:11px;").arg(Theme::textMuted().name()); });
     toolbar->addWidget(m_tipLabel);
     toolbar->addStretch(1);
     m_liveControls = new QWidget(chartSide);
@@ -353,16 +355,12 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     m_chart = new QChart();
     m_chart->legend()->hide();
     m_chart->setAnimationOptions(QChart::NoAnimation);
-    m_chart->setBackgroundBrush(Qt::white);
     m_chart->setPlotAreaBackgroundVisible(true);
-    m_chart->setPlotAreaBackgroundBrush(QColor(0xf8, 0xfa, 0xfc));
     m_chart->setMargins(QMargins(10, 10, 10, 10));
-    m_chart->setTitleBrush(QColor(0x64, 0x74, 0x8b));
 
     m_view = new QChartView(m_chart, chartSide);
     m_view->setRenderHint(QPainter::Antialiasing, true);
     m_view->setRubberBand(QChartView::RectangleRubberBand);
-    m_view->setBackgroundBrush(Qt::white);
 
     // 工作点分析没有时间序列：同一个位置改显示报告，切到「波形监控」就能看
     m_report = new QPlainTextEdit(chartSide);
@@ -390,6 +388,18 @@ WaveformWindow::WaveformWindow(QWidget* parent)
         if (!m_building)
             rebuild();
     });
+}
+
+void WaveformWindow::applyTheme()
+{
+    if (m_chart) {
+        m_chart->setBackgroundBrush(Theme::surface());
+        m_chart->setPlotAreaBackgroundBrush(Theme::surfaceAlt());
+        m_chart->setTitleBrush(Theme::textMuted());
+    }
+    if (m_view)
+        m_view->setBackgroundBrush(Theme::surface());
+    update();
 }
 
 void WaveformWindow::closeEvent(QCloseEvent* event)
@@ -473,7 +483,7 @@ void WaveformWindow::applyAnalysisFields()
         QString reason;
         const double value = parseQuantity(edit->text(), unit, &ok, &reason);
         if (!ok) {
-            edit->setStyleSheet(QStringLiteral("border:1px solid #dc2626;"));
+            edit->setStyleSheet(QStringLiteral("border:1px solid ") + Theme::danger().name() + QStringLiteral(";"));
             return false;
         }
         edit->setStyleSheet(QString());
@@ -768,9 +778,9 @@ void WaveformWindow::rebuild()
         if (!entry.first)
             continue;
         QAbstractAxis* axis = entry.first;
-        axis->setGridLineColor(QColor(0xe2, 0xe8, 0xf0));
-        axis->setLinePenColor(QColor(0x94, 0xa3, 0xb8));
-        axis->setLabelsColor(QColor(0x47, 0x55, 0x69));
+        axis->setGridLineColor(Theme::border());
+        axis->setLinePenColor(Theme::textMuted());
+        axis->setLabelsColor(Theme::textSecondary());
         axis->setTitleBrush(QColor(0x47, 0x55, 0x69));
         m_chart->addAxis(axis, entry.second);
     }

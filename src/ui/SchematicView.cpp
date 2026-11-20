@@ -424,7 +424,7 @@ void SchematicView::startWire(const QPointF& scenePos)
 
     if (!m_preview) {
         m_preview = new QGraphicsPathItem();
-        QPen pen(theme::wire, 2.0, Qt::DashLine);
+        QPen pen(Theme::wire(), 2.0, Qt::DashLine);
         pen.setCapStyle(Qt::RoundCap);
         m_preview->setPen(pen);
         m_preview->setZValue(5.0);

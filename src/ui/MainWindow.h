@@ -48,6 +48,8 @@ private:
     void createToolBar();
     void createDocks();
     void createStatusBar();
+    /// 切换主题后重装调色板并让所有窗口重画
+    void applyTheme();
 
     void newCircuit();
     void openCircuit();

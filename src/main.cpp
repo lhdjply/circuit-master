@@ -1,5 +1,6 @@
 #include "csm_version.h"
 #include "ui/I18n.h"
+#include "ui/Theme.h"
 #include "ui/MainWindow.h"
 #include "ui/SingleInstance.h"
 #include "ui/UpdateDialog.h"
@@ -74,18 +75,12 @@ int main(int argc, char* argv[])
     // Qt 自带控件的中文（输入框右键菜单、标准按钮等）
     csm::installQtTranslations(&app);
 
-    if (QStyle* fusion = QStyleFactory::create(QStringLiteral("Fusion")))
-        QApplication::setStyle(fusion);
+    // Fusion + 关掉禁用文字的浮雕（深色下那道浮雕会变成重影）
+    QApplication::setStyle(csm::Theme::appStyle());
 
-    QPalette palette = app.palette();
-    palette.setColor(QPalette::Window, QColor(0xf5, 0xf7, 0xfa));
-    palette.setColor(QPalette::WindowText, QColor(0x1e, 0x29, 0x3b));
-    palette.setColor(QPalette::Base, Qt::GlobalColor::white);
-    palette.setColor(QPalette::Highlight, QColor(0x25, 0x63, 0xeb));
-    palette.setColor(QPalette::HighlightedText, Qt::white);
-    palette.setColor(QPalette::Button, QColor(0xf1, 0xf5, 0xf9));
-    palette.setColor(QPalette::ButtonText, QColor(0x1e, 0x29, 0x3b));
-    app.setPalette(palette);
+    // 浅色 / 深色：模式存在 QSettings 里，这里读回来再装调色板
+    csm::Theme::load();
+    csm::Theme::apply(app);
 
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/icons/icon.svg")));
 

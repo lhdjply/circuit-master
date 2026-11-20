@@ -192,7 +192,7 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
     // 斜放时引脚会吸附到网格，符号画出的引脚端点可能差几像素，补一小段引线
     if (m_comp.rotation % 90 != 0) {
         painter->save();
-        painter->setPen(QPen(theme::symbol, 1.6));
+        painter->setPen(QPen(Theme::symbol(), 1.6));
         for (int i = 0; i < pinOffsets(m_comp).size(); ++i) {
             const QPointF raw = m_comp.pinPositionRaw(i) - m_comp.pos;
             const QPointF snapped = m_comp.pinPosition(i) - m_comp.pos;
@@ -236,7 +236,7 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
         f.setPointSizeF(8.5);
         f.setBold(false);
         painter->setFont(f);
-        painter->setPen(theme::text);
+        painter->setPen(Theme::textSecondary());
         painter->save();
         painter->translate(at);
         painter->rotate(textRotation);
@@ -253,7 +253,7 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
         f.setPointSizeF(8.5);
         f.setBold(true);
         painter->setFont(f);
-        painter->setPen(selected ? theme::selected : theme::text);
+        painter->setPen(selected ? Theme::selected() : Theme::textSecondary());
         painter->drawText(QRectF(offset.x() - 40.0, offset.y() - 9.0, 80.0, 18.0),
                           Qt::AlignCenter, m_comp.refdes);
         return;
@@ -320,7 +320,7 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
     f.setPointSizeF(8.5);
     f.setBold(true);
     painter->setFont(f);
-    painter->setPen(selected ? theme::selected : theme::text);
+    painter->setPen(selected ? Theme::selected() : Theme::textSecondary());
 
     Q_UNUSED(vertical);
     QRectF refRect;
@@ -333,7 +333,7 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
 
     f.setBold(false);
     painter->setFont(f);
-    painter->setPen(theme::text);
+    painter->setPen(Theme::textSecondary());
     const QString value = m_comp.displayValue();
     const QFontMetrics fm(f);
     const QString elided = fm.elidedText(value, Qt::ElideRight, int(valueRect.width()));

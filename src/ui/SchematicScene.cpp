@@ -916,14 +916,14 @@ void SchematicScene::recomputeJunctions()
 void SchematicScene::drawBackground(QPainter* painter, const QRectF& rect)
 {
     painter->save();
-    painter->fillRect(rect, theme::canvas);
+    painter->fillRect(rect, Theme::canvas());
 
     if (m_showGrid && !rect.isEmpty()) {
         const qreal scale = painter->worldTransform().m11();
         const qreal step = scale < 0.55 ? 50.0 : 10.0;
 
-        QPen minorPen(theme::gridMinor, 0.0);
-        QPen majorPen(theme::gridMajor, 0.0);
+        QPen minorPen(Theme::gridMinor(), 0.0);
+        QPen majorPen(Theme::gridMajor(), 0.0);
 
         const qreal startX = std::floor(rect.left() / step) * step;
         const qreal startY = std::floor(rect.top() / step) * step;
@@ -950,7 +950,7 @@ void SchematicScene::drawForeground(QPainter* painter, const QRectF& rect)
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing, true);
     painter->setPen(QPen(Qt::white, 1.5));
-    painter->setBrush(theme::junction);
+    painter->setBrush(Theme::junction());
     for (const QPointF& p : m_junctions)
         painter->drawEllipse(p, 3.4, 3.4);
     painter->restore();

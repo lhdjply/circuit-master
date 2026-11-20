@@ -1,6 +1,7 @@
 #include "ui/Symbols.h"
 
 #include <QFont>
+#include <QGuiApplication>
 #include <QPainter>
 #include <QPixmap>
 #include <QtSvg/QSvgRenderer>
@@ -23,9 +24,9 @@ void drawPinDots(QPainter* p, const Component& comp, bool selected)
     const QVector<QPointF> offsets = pinOffsets(comp);
     if (offsets.isEmpty())
         return;
-    const QColor color = selected ? theme::selected : theme::pin;
+    const QColor color = selected ? Theme::selected() : Theme::pin();
     p->setPen(QPen(color, 1.3));
-    p->setBrush(theme::symbolFill);
+    p->setBrush(Theme::symbolFill());
     for (const QPointF& off : offsets)
         p->drawEllipse(off, 2.8, 2.8);
 }
@@ -126,7 +127,7 @@ QPainterPath symbolShape(ComponentType type)
 void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPins, int rotation,
                  bool mirrorX, bool mirrorY, double glow, double heat)
 {
-    QColor color = selected ? theme::selected : theme::symbol;
+    QColor color = selected ? Theme::selected() : Theme::symbol();
     if (heat > 0.01) {
         // 红温：符号颜色朝炽红过渡，heat = 1 时基本是暗红
         const QColor hot(200, 30, 10);
@@ -247,7 +248,7 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         p->drawLine(QPointF(18.0, 0.0), QPointF(30.0, 0.0));
         QPolygonF triangle;
         triangle << QPointF(-18.0, -22.0) << QPointF(-18.0, 22.0) << QPointF(18.0, 0.0);
-        p->setBrush(theme::symbolFill);
+        p->setBrush(Theme::symbolFill());
         p->drawPolygon(triangle);
         p->setBrush(Qt::NoBrush);
         // 同相输入 +
@@ -296,7 +297,7 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
             body.closeSubpath();
         }
 
-        p->setBrush(theme::symbolFill);
+        p->setBrush(Theme::symbolFill());
         p->drawPath(body);
         p->setBrush(Qt::NoBrush);
 
@@ -645,7 +646,7 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
     case ComponentType::VoltageSource: {
         p->drawLine(QPointF(-30.0, 0.0), QPointF(-14.0, 0.0));
         p->drawLine(QPointF(14.0, 0.0), QPointF(30.0, 0.0));
-        p->setBrush(theme::symbolFill);
+        p->setBrush(Theme::symbolFill());
         p->drawEllipse(QPointF(0.0, 0.0), 14.0, 14.0);
         p->setBrush(Qt::NoBrush);
         drawVoltageSourceInside(p, comp, color);
@@ -655,7 +656,7 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
     case ComponentType::CurrentSource: {
         p->drawLine(QPointF(-30.0, 0.0), QPointF(-14.0, 0.0));
         p->drawLine(QPointF(14.0, 0.0), QPointF(30.0, 0.0));
-        p->setBrush(theme::symbolFill);
+        p->setBrush(Theme::symbolFill());
         p->drawEllipse(QPointF(0.0, 0.0), 14.0, 14.0);
         p->setBrush(Qt::NoBrush);
         p->setPen(symbolPen(color, 1.8));
@@ -667,7 +668,7 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
 
     case ComponentType::Probe: {
         p->drawLine(QPointF(0.0, 0.0), QPointF(0.0, -8.0));
-        p->setBrush(theme::symbolFill);
+        p->setBrush(Theme::symbolFill());
         p->drawEllipse(QPointF(0.0, -16.0), 7.0, 7.0);
         p->setBrush(Qt::NoBrush);
         QFont font = p->font();
@@ -686,7 +687,7 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
     case ComponentType::CurrentProbe: {
         p->drawLine(QPointF(-30.0, 0.0), QPointF(-12.0, 0.0));
         p->drawLine(QPointF(12.0, 0.0), QPointF(30.0, 0.0));
-        p->setBrush(theme::symbolFill);
+        p->setBrush(Theme::symbolFill());
         p->drawEllipse(QPointF(0.0, 0.0), 12.0, 12.0);
         p->setBrush(Qt::NoBrush);
         QFont font = p->font();
@@ -706,7 +707,7 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         // 圆形表盘（双圈，与电压/电流测试点区分），中间是档位字母
         p->drawLine(QPointF(-30.0, 0.0), QPointF(-14.0, 0.0));
         p->drawLine(QPointF(14.0, 0.0), QPointF(30.0, 0.0));
-        p->setBrush(theme::symbolFill);
+        p->setBrush(Theme::symbolFill());
         p->drawEllipse(QPointF(0.0, 0.0), 15.0, 15.0);
         p->setBrush(Qt::NoBrush);
         p->setPen(symbolPen(color, 1.0));
@@ -783,7 +784,7 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
             p->scale(-1.0, 1.0);
 
         p->drawLine(QPointF(0.0, 0.0), QPointF(dx * x0, 0.0));
-        p->setBrush(theme::symbolFill);
+        p->setBrush(Theme::symbolFill());
         p->drawRoundedRect(QRectF(bx, -h / 2.0, w, h), 3.0, 3.0);
         p->setBrush(Qt::NoBrush);
         p->drawText(QRectF(bx + 6.0, -h / 2.0, textW + 1.0, h),
@@ -864,6 +865,84 @@ QIcon svgIcon(const QString& path, bool forceFallback)
         icon.addPixmap(pixmap);
     }
     return icon;
+}
+
+QIcon iconForDarkSurface(const QIcon& source, int size)
+{
+    if (source.isNull())
+        return source;
+
+    const qreal ratio = qGuiApp ? qGuiApp->devicePixelRatio() : 1.0;
+    QImage image = source.pixmap(QSize(size, size), ratio).toImage().convertToFormat(QImage::Format_ARGB32);
+    if (image.isNull())
+        return source;
+
+    for (int y = 0; y < image.height(); ++y) {
+        for (int x = 0; x < image.width(); ++x) {
+            QColor color = image.pixelColor(x, y);
+            if (color.alpha() == 0)
+                continue;
+            float h = 0.0F;
+            float s = 0.0F;
+            float l = 0.0F;
+            float a = 0.0F;
+            color.getHslF(&h, &s, &l, &a);
+            if (s < 0.25F) {
+                // 中性色：深浅对调（#334155 → 浅灰、#e2e8f0 → 深灰）
+                l = 1.0F - l;
+            } else {
+                // 有彩色：保住色相，把亮度抬到深底上看得清的位置
+                l = qBound(0.0F, l * 0.45F + 0.45F, 0.85F);
+            }
+            color.setHslF(h < 0 ? 0 : h, s, l, a);
+            image.setPixelColor(x, y, color);
+        }
+    }
+
+    QPixmap pixmap = QPixmap::fromImage(image);
+    pixmap.setDevicePixelRatio(ratio);
+    return QIcon(pixmap);
+}
+
+QIcon tintIcon(const QIcon& source, const QColor& color, int size)
+{
+    if (source.isNull())
+        return source;
+
+    const qreal ratio = qGuiApp ? qGuiApp->devicePixelRatio() : 1.0;
+    QPixmap pixmap = source.pixmap(QSize(size, size), ratio);
+    if (pixmap.isNull())
+        return source;
+    pixmap.setDevicePixelRatio(ratio);
+
+    QPainter painter(&pixmap);
+    painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    painter.fillRect(pixmap.rect(), color);
+    painter.end();
+
+    return QIcon(pixmap);
+}
+
+QIcon themedSvgIcon(const QString& path, int size, const QColor& color)
+{
+    QSvgRenderer renderer(path);
+    if (!renderer.isValid())
+        return QIcon();
+
+    const qreal ratio = qGuiApp ? qGuiApp->devicePixelRatio() : 1.0;
+    QPixmap pixmap(QSize(size, size) * ratio);
+    pixmap.setDevicePixelRatio(ratio);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    renderer.render(&painter, QRectF(0, 0, size, size));
+    // 用源像素的 alpha 当蒙版，整体刷成主题色
+    painter.setCompositionMode(QPainter::CompositionMode_SourceIn);
+    painter.fillRect(QRectF(0, 0, size, size), color.isValid() ? color : Theme::symbol());
+    painter.end();
+
+    return QIcon(pixmap);
 }
 
 QIcon componentIcon(ComponentType type, const QSize& size)

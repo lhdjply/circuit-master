@@ -13,6 +13,7 @@
 #include "ui/SchematicScene.h"
 #include "ui/SchematicView.h"
 #include "ui/Symbols.h"
+#include "ui/Theme.h"
 #include "ui/UpdateDialog.h"
 #include "ui/WaveformWindow.h"
 #include "ui/Dialogs.h"
@@ -322,15 +323,50 @@ bool applyProbeSignals(const Circuit& circuit, const Netlist& net, SimulationRes
 }
 
 /// 优先使用内置 SVG 图标，缺失时回退到系统主题图标。
+/// 图标规格：切主题时要按同样的参数重新生成
+struct IconSpec {
+    QString name;
+    QString themeName;
+    QStyle::StandardPixmap fallback = QStyle::SP_CustomBase;
+};
+
+/// 用 QIcon::cacheKey() 当键，就不用去改二十多个创建动作的地方
+QHash<qint64, IconSpec>& iconSpecs()
+{
+    static QHash<qint64, IconSpec> map;
+    return map;
+}
+
+QIcon buildActionIcon(const IconSpec& spec)
+{
+    // 工具栏图标平时保持仓库里那套配色（蓝色描边、绿色播放…），
+    // 只有在深色主题下才统一刷成浅色 —— 深底上那套深色图标看不清楚。
+    const bool dark = Theme::isDark();
+
+    QIcon icon = svgIcon(QStringLiteral(":/icons/%1.svg").arg(spec.name));
+    if (!icon.isNull()) {
+        if (dark)
+            icon = iconForDarkSurface(icon);
+        iconSpecs().insert(icon.cacheKey(), spec);
+        return icon;
+    }
+    icon = QIcon::fromTheme(spec.themeName);
+    if (!icon.isNull()) {
+        if (dark)
+            icon = iconForDarkSurface(icon);
+        iconSpecs().insert(icon.cacheKey(), spec);
+        return icon;
+    }
+    icon = qApp->style()->standardIcon(spec.fallback);
+    if (dark)
+        icon = iconForDarkSurface(icon);
+    iconSpecs().insert(icon.cacheKey(), spec);
+    return icon;
+}
+
 QIcon actionIcon(const QString& name, const QString& themeName, QStyle::StandardPixmap fallback)
 {
-    QIcon icon = svgIcon(QStringLiteral(":/icons/%1.svg").arg(name));
-    if (!icon.isNull())
-        return icon;
-    icon = QIcon::fromTheme(themeName);
-    if (icon.isNull())
-        icon = qApp->style()->standardIcon(fallback);
-    return icon;
+    return buildActionIcon(IconSpec{name, themeName, fallback});
 }
 
 } // namespace
@@ -381,6 +417,11 @@ QTabBar::close-button:hover {
     createToolBar();
     createDocks();
     createMonitorWindow();
+    // 波形窗口有两个实例（静态 / 动态），图表配色各刷一次
+    if (m_wavePlot)
+        m_wavePlot->applyTheme();
+    if (m_waveLive)
+        m_waveLive->applyTheme();
     createStatusBar();
 
     appendLog(QStringLiteral("电路仿真大师 %1  —  Qt6 / MNA 求解器")
@@ -985,6 +1026,30 @@ void MainWindow::createMenus()
     viewMenu->addSeparator();
     // 面板开关。三块面板的标题栏上都有 ✕，关掉之后原本没有任何入口能再打开
     viewMenu->setObjectName(QStringLiteral("menuView"));
+    viewMenu->addSeparator();
+
+    // 主题：跟随系统 / 浅色 / 深色，选完立刻生效并存盘
+    QMenu* themeMenu = viewMenu->addMenu(QStringLiteral("主题"));
+    themeMenu->setObjectName(QStringLiteral("menuTheme"));
+    auto* themeGroup = new QActionGroup(this);
+    themeGroup->setExclusive(true);
+    const QVector<QPair<QString, Theme::Mode>> themeItems = {
+        {QStringLiteral("跟随系统"), Theme::Mode::System},
+        {QStringLiteral("浅色"), Theme::Mode::Light},
+        {QStringLiteral("深色"), Theme::Mode::Dark},
+    };
+    for (const auto& item : themeItems) {
+        QAction* action = themeMenu->addAction(item.first);
+        action->setCheckable(true);
+        action->setChecked(Theme::mode() == item.second);
+        themeGroup->addAction(action);
+        const Theme::Mode mode = item.second;
+        connect(action, &QAction::triggered, this, [this, mode] {
+            Theme::save(mode);
+            applyTheme();
+        });
+    }
+    viewMenu->addSeparator();
 
     QMenu* simMenu = menuBar()->addMenu(QStringLiteral("仿真(&S)"));
     simMenu->addAction(m_actRun);
@@ -1129,7 +1194,7 @@ void MainWindow::createDocks()
 
     auto* hint = new QLabel(QStringLiteral("把元件拖到画布上放置"), libraryContainer);
     hint->setWordWrap(true);
-    hint->setStyleSheet(QStringLiteral("color:#64748b; font-size:11px;"));
+    Theme::styleWidget(hint, [] { return QStringLiteral("color:%1; font-size:11px;").arg(Theme::textMuted().name()); });
     libraryLayout->addWidget(hint);
 
     m_library = new ComponentLibrary(libraryContainer);
@@ -1168,8 +1233,10 @@ void MainWindow::createDocks()
     m_log = new QPlainTextEdit(logDock);
     m_log->setReadOnly(true);
     m_log->setMaximumBlockCount(500);
-    m_log->setStyleSheet(
-        QStringLiteral("background:#f8fafc; color:#334155; font-family:monospace;"));
+    Theme::styleWidget(m_log, [] {
+        return QStringLiteral("background:%1; color:%2; font-family:monospace;")
+            .arg(Theme::surfaceAlt().name(), Theme::textSecondary().name());
+    });
     logDock->setWidget(m_log);
     addDockWidget(Qt::BottomDockWidgetArea, logDock);
     logDock->setMaximumHeight(170);
@@ -1184,6 +1251,38 @@ void MainWindow::createDocks()
     }
 }
 
+void MainWindow::applyTheme()
+{
+    Theme::apply(*qApp);
+    // 画布颜色是每次绘制时向 Theme 取的，这里只需要让它重画一次
+    for (Document* document : m_documents) {
+        if (document->scene)
+            document->scene->invalidate(document->scene->sceneRect(), QGraphicsScene::BackgroundLayer);
+        if (document->scene)
+            document->scene->update();
+    }
+    if (m_wavePlot)
+        m_wavePlot->applyTheme();
+    if (m_waveLive)
+        m_waveLive->applyTheme();
+
+    // 工具栏 / 菜单图标是按主题着色渲染的，切主题要按名字重新生成
+    for (QAction* action : findChildren<QAction*>()) {
+        const auto spec = iconSpecs().value(action->icon().cacheKey());
+        if (spec.name.isEmpty())
+            continue;
+        action->setIcon(buildActionIcon(spec));
+    }
+    // 元件库的图标同样是渲染出来的，重建一遍列表
+    if (m_library) {
+        m_library->clear();
+        buildLibrary();
+    }
+
+    for (QWidget* widget : QApplication::topLevelWidgets())
+        widget->update();
+}
+
 void MainWindow::createStatusBar()
 {
     m_hintLabel = new QLabel(
@@ -1191,7 +1290,7 @@ void MainWindow::createStatusBar()
     m_coordLabel = new QLabel(QStringLiteral("x: 0   y: 0"), this);
     m_coordLabel->setMinimumWidth(120);
     m_analysisLabel = new QLabel(this);
-    m_analysisLabel->setStyleSheet(QStringLiteral("color:#475569;"));
+    Theme::styleWidget(m_analysisLabel, [] { return QStringLiteral("color:%1;").arg(Theme::textSecondary().name()); });
 
     statusBar()->addWidget(m_hintLabel, 1);
     statusBar()->addPermanentWidget(m_analysisLabel);
@@ -2235,7 +2334,8 @@ void MainWindow::showQuickGuide()
         "按 <b>F5</b> 运行仿真，波形显示在查看器中。</li>"
         "</ol>"
         "<b>注意</b>：电路必须包含接地符号（GND），否则无法确定参考电位。<br><br>"
-        "<span style='color:#64748b'>提示：菜单「仿真 → 示例电路」内置多个可直接运行的例子。</span>"));
+        "<span style='color:%1'>提示：菜单「仿真 → 示例电路」内置多个可直接运行的例子。</span>")
+                      .arg(Theme::textMuted().name()));
 }
 
 void MainWindow::showAbout()

@@ -29,6 +29,8 @@ namespace csm {
 class WaveformWindow : public QWidget {
     Q_OBJECT
 public:
+    /// 按当前主题刷新图表配色（切深浅色时调用）
+    void applyTheme();
     explicit WaveformWindow(QWidget* parent = nullptr);
 
     void setResult(const SimulationResult& result);

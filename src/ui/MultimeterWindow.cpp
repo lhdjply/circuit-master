@@ -1,5 +1,7 @@
 #include "ui/MultimeterWindow.h"
 
+#include "ui/Theme.h"
+
 #include "core/Component.h"
 
 #include <QComboBox>
@@ -404,12 +406,12 @@ MultimeterWindow::MultimeterWindow(const QString& refdes, MultimeterMode mode, Q
         QStringLiteral("%1 · %2").arg(multimeterModeName(mode),
                                       multimeterModeLetter(mode)),
         this);
-    m_modeLabel->setStyleSheet(QStringLiteral("color:#64748b;"));
+    Theme::styleWidget(m_modeLabel, [] { return QStringLiteral("color:%1;").arg(Theme::textMuted().name()); });
     header->addWidget(m_modeLabel);
     header->addStretch(1);
 
     auto* digitsLabel = new QLabel(QStringLiteral("位数"), this);
-    digitsLabel->setStyleSheet(QStringLiteral("color:#64748b;"));
+    Theme::styleWidget(digitsLabel, [] { return QStringLiteral("color:%1;").arg(Theme::textMuted().name()); });
     header->addWidget(digitsLabel);
     auto* digits = new QComboBox(this);
     digits->addItem(QStringLiteral("3½"), int(MultimeterDigits::Half3));

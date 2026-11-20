@@ -5,6 +5,7 @@
 #include "ui/ComponentItem.h"
 #include "ui/I18n.h"
 #include "ui/MainWindow.h"
+#include "ui/Theme.h"
 #include "ui/MultimeterWindow.h"
 #include "ui/PropertyPanel.h"
 #include "ui/SchematicScene.h"
@@ -78,6 +79,7 @@ private slots:
     void editPropertiesAndRotate();
     void libraryFiltersByCategory();
     void logicGateRowsInPanel();
+    void themeSwitchesLightAndDark();
     void logicGateIconsDiffer();
     void libraryDragPixmapHasNoSelectionBackground();
 
@@ -598,6 +600,70 @@ void UiPanelTest::logicGateIconsDiffer()
         seen.insert(bytes);
     }
     QCOMPARE(seen.size(), 5); // 五个门的图标互不相同
+}
+
+void UiPanelTest::themeSwitchesLightAndDark()
+{
+    // 深浅色：模式存 QSettings，切换后调色板与「写死过样式」的控件都要跟着变
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    const QColor lightWindow = QColor(0xf5, 0xf7, 0xfa);
+
+    Theme::save(Theme::Mode::Light);
+    Theme::apply(*qApp);
+    settle();
+    QVERIFY(!Theme::isDark());
+    QCOMPARE(qApp->palette().color(QPalette::Window), lightWindow);
+    const QColor lightCanvas = Theme::canvas();
+
+    Theme::save(Theme::Mode::Dark);
+    Theme::apply(*qApp);
+    settle();
+    QVERIFY(Theme::isDark());
+    QVERIFY2(qApp->palette().color(QPalette::Window) != lightWindow,
+             "切到深色后窗口底色应当变化");
+    QVERIFY2(Theme::canvas() != lightCanvas, "画布底色也应当变化");
+    // 深色下画布是暗的（亮度低于 40%），浅色下是亮的
+    QVERIFY2(Theme::canvas().lightness() < 100, qPrintable(Theme::canvas().name()));
+    QVERIFY2(lightCanvas.lightness() > 200, qPrintable(lightCanvas.name()));
+
+    // 写死过样式的控件（消息区）也要跟着重建 —— 它走的是 Theme::styleWidget
+    QPlainTextEdit* log = nullptr;
+    for (QPlainTextEdit* edit : window.findChildren<QPlainTextEdit*>()) {
+        if (edit->isReadOnly() && edit->toPlainText().contains(QStringLiteral("求解器")))
+            log = edit;
+    }
+    QVERIFY(log);
+    const QString darkStyle = log->styleSheet();
+    Theme::save(Theme::Mode::Light);
+    Theme::apply(*qApp);
+    settle();
+    QVERIFY2(log->styleSheet() != darkStyle, "切换主题后消息区的样式应当重建");
+
+    // 来回切多次也要对：第一版按 WA_SetPalette 过滤子控件，
+    // 结果深色能切过去、切回浅色却回不来（setPalette 自己会打上这个属性）
+    for (int round = 0; round < 2; ++round) {
+        Theme::save(Theme::Mode::Dark);
+        Theme::apply(*qApp);
+        settle();
+        QCOMPARE(qApp->palette().color(QPalette::Window).name(), QStringLiteral("#111827"));
+        Theme::save(Theme::Mode::Light);
+        Theme::apply(*qApp);
+        settle();
+        QCOMPARE(qApp->palette().color(QPalette::Window).name(), lightWindow.name());
+    }
+
+    // save() 立刻改内存里的模式（落盘依赖可写的配置目录，测试环境里不一定有，
+    // 所以这里只验内存状态，不去读文件）
+    Theme::save(Theme::Mode::Dark);
+    QCOMPARE(Theme::mode(), Theme::Mode::Dark);
+    QVERIFY(Theme::isDark());
+
+    Theme::save(Theme::Mode::Light); // 别把深色留给后面的用例
+    QVERIFY(!Theme::isDark());
 }
 
 void UiPanelTest::logicGateRowsInPanel()
