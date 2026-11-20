@@ -2096,5 +2096,6 @@
             ]
         ]
     ],
-    "name": "220 V 转 12 V 反激电源（OB2362）"
+    "name": "220 V 转 12 V 反激电源（OB2362）",
+    "name_en": "220 V to 12 V flyback supply (OB2362)"
 }

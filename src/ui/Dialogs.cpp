@@ -1,4 +1,5 @@
 #include "ui/Dialogs.h"
+#include "core/Language.h"
 
 #include "ui/Theme.h"
 
@@ -190,7 +191,7 @@ QMessageBox::StandardButton runInfo(QWidget* parent, const QString& title, const
                                     const QPixmap& icon)
 {
     return runMessage(parent, icon, title, text,
-                      {{QMessageBox::Ok, QObject::tr("确定"), true}}, QMessageBox::Ok);
+                      {{QMessageBox::Ok, CSM_TR("OK"), true}}, QMessageBox::Ok);
 }
 
 } // namespace
@@ -213,7 +214,7 @@ void Dialogs::error(QWidget* parent, const QString& title, const QString& text)
 void Dialogs::guide(QWidget* parent, const QString& title, const QString& richText)
 {
     runMessage(parent, badge(QStringLiteral("i"), kAccent), title, richText,
-               {{QMessageBox::Ok, QObject::tr("知道了"), true}}, QMessageBox::Ok,
+               {{QMessageBox::Ok, CSM_TR("Got it"), true}}, QMessageBox::Ok,
                460, 560);
 }
 
@@ -221,16 +222,16 @@ QMessageBox::StandardButton Dialogs::askSaveDiscardCancel(QWidget* parent, const
                                                           const QString& text)
 {
     return runMessage(parent, badge(QStringLiteral("?"), kAccent), title, text,
-                      {{QMessageBox::Save, QObject::tr("保存"), true},
-                       {QMessageBox::Discard, QObject::tr("丢弃"), false},
-                       {QMessageBox::Cancel, QObject::tr("取消"), false}},
+                      {{QMessageBox::Save, CSM_TR("Save"), true},
+                       {QMessageBox::Discard, CSM_TR("Discard"), false},
+                       {QMessageBox::Cancel, CSM_TR("Cancel"), false}},
                       QMessageBox::Save);
 }
 
 void Dialogs::changelog(QWidget* parent)
 {
     QDialog dialog(parent);
-    dialog.setWindowTitle(QObject::tr("更新日志"));
+    dialog.setWindowTitle(CSM_TR("Changelog"));
     dialog.setModal(true);
     dialog.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
     dialog.setStyleSheet(dialogStyleSheet() + QStringLiteral(R"(
@@ -264,7 +265,11 @@ a { color: %5; }
        Theme::textSecondary().name(), Theme::surfaceAlt().name(),
        Theme::accent().name()));
 
-    QFile file(QStringLiteral(":/docs/CHANGELOG.md"));
+    // 中英文各一份，跟着界面语言走
+    const QString path = csm::language() == csm::Language::Chinese
+                             ? QStringLiteral(":/docs/CHANGELOG.md")
+                             : QStringLiteral(":/docs/CHANGELOG.en.md");
+    QFile file(path);
     const bool loaded = file.open(QIODevice::ReadOnly | QIODevice::Text);
     if (loaded) {
         const QString markdown = QString::fromUtf8(file.readAll());
@@ -273,7 +278,7 @@ a { color: %5; }
             viewer->setMarkdown(markdown); // Qt 自带 CommonMark 子集的渲染
     }
     if (!loaded || viewer->document()->isEmpty()) {
-        viewer->setHtml(QStringLiteral("<p style='color:%1'>这个构建里没有内置更新日志。</p>")
+        viewer->setHtml(CSM_TR("<p style='color:%1'>This build has no bundled changelog.</p>")
                             .arg(Theme::textMuted().name()));
     }
     viewer->moveCursor(QTextCursor::Start);
@@ -282,7 +287,7 @@ a { color: %5; }
 
     auto* buttonRow = new QHBoxLayout;
     buttonRow->addStretch(1);
-    auto* close = new QPushButton(QObject::tr("关闭"), &dialog);
+    auto* close = new QPushButton(CSM_TR("Close"), &dialog);
     close->setDefault(true);
     QObject::connect(close, &QPushButton::clicked, &dialog, &QDialog::accept);
     buttonRow->addWidget(close);
@@ -295,7 +300,7 @@ a { color: %5; }
 void Dialogs::about(QWidget* parent, const QString& version)
 {
     QDialog dialog(parent);
-    dialog.setWindowTitle(QObject::tr("关于电路仿真大师"));
+    dialog.setWindowTitle(CSM_TR("About Circuit Master"));
     dialog.setModal(true);
     dialog.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
     dialog.setStyleSheet(dialogStyleSheet() + QStringLiteral(R"(
@@ -349,7 +354,7 @@ QLabel#aboutFoot {
 
     auto* titleRow = new QHBoxLayout;
     titleRow->setSpacing(8);
-    auto* title = new QLabel(QObject::tr("电路仿真大师"), &dialog);
+    auto* title = new QLabel(CSM_TR("Circuit Master"), &dialog);
     title->setObjectName(QStringLiteral("aboutTitle"));
     titleRow->addWidget(title);
 
@@ -365,19 +370,19 @@ QLabel#aboutFoot {
     body->setTextFormat(Qt::RichText);
     // 每段一句、手动断行：中文在 QLabel 里可以任意字间折行，
     // 「运算放大器」被拆成两行很难看，不如自己控制排版
-    body->setText(QStringLiteral(
-        "跨平台的电路原理图与仿真软件。<br><br>"
-        "<b>求解器</b>　改进节点法（MNA）+ 牛顿-拉夫逊迭代，<br>"
-        "　　　　　　支持直流工作点、瞬态与交流小信号扫频。<br>"
-        "<b>元件</b>　　电阻、电容、电感、变压器、二极管、三极管、<br>"
-        "　　　　　　MOS、运放、逻辑门、开关、电源、万用表、测试点、接地。"));
+    body->setText(
+        CSM_TR("Cross-platform schematic capture and circuit simulation.<br><br>"
+               "<b>Solver</b>　modified nodal analysis (MNA) with Newton-Raphson iteration,<br>"
+               "　　　　　supporting DC operating point, transient and AC small-signal sweep.<br>"
+               "<b>Parts</b>　resistors, capacitors, inductors, transformers, diodes, transistors,<br>"
+               "　　　　　MOSFETs, op-amps, logic gates, switches, sources, multimeters, probes, grounds."));
     right->addWidget(body);
     top->addLayout(right, 1);
     outer->addLayout(top);
 
     auto* foot = new QLabel(
-        QStringLiteral("基于 Qt6 / C++17 / CMake　·　GPL-3.0 自由软件，"
-                       "可作为 Multisim 在 Linux 上的替代方案"),
+        CSM_TR("Built with Qt6 / C++17 / CMake　·　GPL-3.0 free software, "
+               "a replacement for Multisim on Linux"),
         &dialog);
     foot->setObjectName(QStringLiteral("aboutFoot"));
     foot->setWordWrap(true);
@@ -385,12 +390,12 @@ QLabel#aboutFoot {
 
     auto* buttonRow = new QHBoxLayout;
     buttonRow->addStretch(1);
-    auto* changelogButton = new QPushButton(QObject::tr("更新日志"), &dialog);
+    auto* changelogButton = new QPushButton(CSM_TR("Changelog"), &dialog);
     changelogButton->setAutoDefault(false);
     QObject::connect(changelogButton, &QPushButton::clicked, &dialog,
                      [&dialog] { Dialogs::changelog(&dialog); });
     buttonRow->addWidget(changelogButton);
-    auto* ok = new QPushButton(QObject::tr("确定"), &dialog);
+    auto* ok = new QPushButton(CSM_TR("OK"), &dialog);
     ok->setDefault(true);
     QObject::connect(ok, &QPushButton::clicked, &dialog, &QDialog::accept);
     buttonRow->addWidget(ok);

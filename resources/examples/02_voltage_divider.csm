@@ -107,6 +107,7 @@
     ],
     "format": "circuit-master",
     "name": "电阻分压",
+    "name_en": "Resistive divider",
     "version": 2,
     "wires": [
         [

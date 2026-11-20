@@ -1,4 +1,5 @@
 #include "csm_version.h"
+#include "core/Language.h"
 #include "ui/I18n.h"
 #include "ui/Theme.h"
 #include "ui/MainWindow.h"
@@ -55,22 +56,25 @@ QStringList fileArguments(int argc, char* argv[])
 int main(int argc, char* argv[])
 {
     if (hasArgument(argc, argv, "--version") || hasArgument(argc, argv, "-v")) {
-        std::printf("电路仿真大师 %s\n", CSM_VERSION_STRING);
+        std::printf("Circuit Master %s\n", CSM_VERSION_STRING);
         return 0;
     }
     if (hasArgument(argc, argv, "--help") || hasArgument(argc, argv, "-h")) {
-        std::printf("电路仿真大师 %s\n\n", CSM_VERSION_STRING);
-        std::printf("用法: CircuitMaster [选项] [文件.csm]\n\n");
-        std::printf("选项:\n");
-        std::printf("  -h, --help     显示本帮助并退出\n");
-        std::printf("  -v, --version  显示版本号并退出\n");
+        std::printf("Circuit Master %s\n\n", CSM_VERSION_STRING);
+        std::printf("Usage: CircuitMaster [options] [file.csm]\n\n");
+        std::printf("Options:\n");
+        std::printf("  -h, --help     show this help and exit\n");
+        std::printf("  -v, --version  show the version and exit\n");
         return 0;
     }
 
     QApplication app(argc, argv);
-    QApplication::setApplicationName(QStringLiteral("电路仿真大师"));
+    QApplication::setApplicationName("Circuit Master");
     QApplication::setApplicationVersion(QStringLiteral(CSM_VERSION_NUMBER));
     QApplication::setOrganizationName(QStringLiteral("CircuitMaster"));
+
+    // 界面语言：源码是英文，中文靠 resources/translations 里的 .qm
+    csm::loadLanguage();
 
     // Qt 自带控件的中文（输入框右键菜单、标准按钮等）
     csm::installQtTranslations(&app);

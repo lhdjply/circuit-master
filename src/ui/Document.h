@@ -11,6 +11,7 @@
 // ---------------------------------------------------------------------------
 
 #include "sim/Simulator.h"
+#include "core/Language.h"
 
 #include <QByteArray>
 #include <QJsonObject>
@@ -30,7 +31,7 @@ struct Document {
     /// 所以后台图纸的仿真不会停；界面上的「动态示波器」页显示当前图纸这一份。
     WaveformWindow* liveScope = nullptr;
 
-    QString name = QStringLiteral("未命名");
+    QString name = CSM_TR("Untitled");
     QString filePath;
     bool dirty = false;
 

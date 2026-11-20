@@ -1,4 +1,5 @@
 #include "core/Circuit.h"
+#include "core/Language.h"
 
 #include "core/Units.h"
 
@@ -231,7 +232,7 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
     Circuit circuit;
     if (obj.value(QStringLiteral("format")).toString() != QLatin1String("circuit-master")) {
         if (error)
-            *error = QStringLiteral("不是电路仿真大师的电路文件。");
+            *error = CSM_TR("Not a Circuit Master circuit file.");
         return circuit;
     }
 

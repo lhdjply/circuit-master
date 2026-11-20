@@ -1,4 +1,6 @@
 #include "core/Circuit.h"
+
+#include "core/Language.h"
 #include "core/Units.h"
 #include "core/UpdateChecker.h"
 #include "csm_version.h"
@@ -1912,6 +1914,12 @@ void CoreDeviceTest::groundKindsAreSeparateNets()
     QVERIFY(std::abs(diff->y.last() - (va->y.last() - vb->y.last())) < 1e-9);
 }
 
-QTEST_GUILESS_MAIN(CoreDeviceTest)
+int main(int argc, char** argv)
+{
+    QCoreApplication app(argc, argv);
+    csm::saveLanguage(csm::Language::Chinese);   // 断言里的提示文案是中文
+    CoreDeviceTest tc;
+    return QTest::qExec(&tc, argc, argv);
+}
 
 #include "test_core_device.moc"

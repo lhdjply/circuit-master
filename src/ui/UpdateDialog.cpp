@@ -1,4 +1,5 @@
 #include "ui/UpdateDialog.h"
+#include "core/Language.h"
 
 #include "ui/Theme.h"
 
@@ -83,7 +84,7 @@ UpdateDialog::UpdateDialog(const ReleaseInfo& release, QWidget* parent)
     // 包形态由编译期平台决定：Linux 取 deb，Windows 取 setup.exe，
     // 该形态缺失时 pickAsset 会自动退回同平台的便携包
     m_asset = UpdateChecker::pickAssetForHost(release);
-    setWindowTitle(QStringLiteral("发现新版本"));
+    setWindowTitle(CSM_TR("New version available"));
     setModal(true);
     setMinimumSize(620, 560);
 
@@ -91,12 +92,12 @@ UpdateDialog::UpdateDialog(const ReleaseInfo& release, QWidget* parent)
     root->setContentsMargins(20, 18, 20, 16);
     root->setSpacing(12);
 
-    auto* heading = new QLabel(QStringLiteral("新版本 %1 已发布").arg(release.tagName), this);
+    auto* heading = new QLabel(CSM_TR("Version %1 has been released").arg(release.tagName), this);
     heading->setStyleSheet(QStringLiteral("font-size: 17px; font-weight: 600;"));
     root->addWidget(heading);
 
     auto* subheading = new QLabel(
-        QStringLiteral("当前版本 v%1。下载由你决定，本程序不会自行替换自身。")
+        CSM_TR("Current version v%1. The download is your call; the application never replaces itself.")
             .arg(QLatin1String(CSM_VERSION_NUMBER)),
         this);
     subheading->setWordWrap(true);
@@ -104,14 +105,18 @@ UpdateDialog::UpdateDialog(const ReleaseInfo& release, QWidget* parent)
     root->addWidget(subheading);
 
     // 正文：Release 的 body 就是作者写的更新日志
-    QString notesText = release.notes.trimmed();
+    // 英文界面优先用 notes_en；清单里没有（老版本清单）就退回中文那份
+    const bool englishUi = (csm::language() == csm::Language::English);
+    QString notesText = englishUi && !release.notesEn.trimmed().isEmpty()
+                            ? release.notesEn.trimmed()
+                            : release.notes.trimmed();
     const QString title = release.title.trimmed();
     const bool titleIsVersion =
         QRegularExpression(QStringLiteral("^[vV]?\\d+(\\.\\d+)*([-+].*)?$")).match(title).hasMatch();
     if (!title.isEmpty() && !titleIsVersion && !notesText.startsWith(title))
         notesText = QStringLiteral("## %1\n\n%2").arg(title, notesText);
     if (notesText.isEmpty())
-        notesText = QStringLiteral("（该版本没有更新日志，请打开发布页查看。）");
+        notesText = CSM_TR(" (This release has no changelog; open the release page.)");
 
     auto* notes = new QTextBrowser(this);
     notes->setOpenExternalLinks(false);
@@ -120,17 +125,17 @@ UpdateDialog::UpdateDialog(const ReleaseInfo& release, QWidget* parent)
 
     const QDateTime published = QDateTime::fromString(release.publishedAt, Qt::ISODate).toLocalTime();
     const QString runKind = UpdateChecker::detectInstallKind() == InstallKind::Portable
-        ? QStringLiteral("便携版")
-        : QStringLiteral("安装版");
+        ? CSM_TR("Portable")
+        : CSM_TR("Installed");
     QString hint = m_asset.name.isEmpty()
-        ? QStringLiteral("没有找到适合当前系统的安装包，可到发布页手动下载：%1")
+        ? CSM_TR("No package matches this system; download it manually from the release page: %1")
               .arg(m_release.pageUrl.toString())
-        : QStringLiteral("检测到当前是%1运行，将下载：%2%3")
+        : CSM_TR("Detected a %1 build; will download: %2%3")
               .arg(runKind, m_asset.name, humanSize(m_asset.size).isEmpty()
                                      ? QString()
                                      : QStringLiteral("（%1）").arg(humanSize(m_asset.size)));
     if (published.isValid())
-        hint = QStringLiteral("发布于 %1。%2").arg(published.toString(QStringLiteral("yyyy-MM-dd")), hint);
+        hint = CSM_TR("Published %1. %2").arg(published.toString(QStringLiteral("yyyy-MM-dd")), hint);
 
     m_status = new QLabel(hint, this);
     m_status->setWordWrap(true);
@@ -154,13 +159,13 @@ UpdateDialog::UpdateDialog(const ReleaseInfo& release, QWidget* parent)
     actions->setContentsMargins(0, 0, 0, 0);
     actions->setSpacing(8);
 
-    m_folderButton = new QPushButton(QStringLiteral("打开所在文件夹"), this);
+    m_folderButton = new QPushButton(CSM_TR("Open Containing Folder"), this);
     m_folderButton->setVisible(false);
     actions->addWidget(m_folderButton);
     actions->addStretch(1);
 
-    m_laterButton = new QPushButton(QStringLiteral("稍后"), this);
-    m_downloadButton = new QPushButton(QStringLiteral("下载并安装"), this);
+    m_laterButton = new QPushButton(CSM_TR("Later"), this);
+    m_downloadButton = new QPushButton(CSM_TR("Download and Install"), this);
     m_downloadButton->setEnabled(!m_asset.name.isEmpty());
     m_downloadButton->setDefault(!m_asset.name.isEmpty());
     actions->addWidget(m_laterButton);
@@ -203,13 +208,13 @@ void UpdateDialog::chooseAndDownload()
 
     m_installAfterDownload = true;
     if (downloadTo(QDir(dir).filePath(m_asset.name)))
-        m_status->setText(QStringLiteral("正在下载 %1，完成后会自动安装…").arg(m_asset.name));
+        m_status->setText(CSM_TR("Downloading %1; it installs automatically when done…").arg(m_asset.name));
 }
 
 bool UpdateDialog::downloadTo(const QString& path)
 {
     if (m_reply) {
-        m_status->setText(QStringLiteral("正在下载，请稍候…"));
+        m_status->setText(CSM_TR("Downloading, please wait…"));
         return false;
     }
 
@@ -217,7 +222,7 @@ bool UpdateDialog::downloadTo(const QString& path)
     m_urls = downloadCandidates();
     m_attempt = 0;
     if (m_urls.isEmpty()) {
-        abortDownload(QStringLiteral("清单里没有下载地址"));
+        abortDownload(CSM_TR("The manifest has no download URL"));
         return false;
     }
 
@@ -246,12 +251,12 @@ bool UpdateDialog::downloadTo(const QString& path)
 void UpdateDialog::startAttempt()
 {
     if (m_attempt >= m_urls.size()) {
-        abortDownload(QStringLiteral("所有下载地址都失败了"));
+        abortDownload(CSM_TR("All download mirrors failed"));
         return;
     }
 
     const QUrl url = m_urls.at(m_attempt++);
-    trace(QStringLiteral("尝试 %1/%2  %3").arg(m_attempt).arg(m_urls.size()).arg(url.toString()));
+    trace(CSM_TR("Try %1/%2  %3").arg(m_attempt).arg(m_urls.size()).arg(url.toString()));
     QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::UserAgentHeader,
                       QStringLiteral("circuit-master/%1").arg(QLatin1String(CSM_VERSION_NUMBER)));
@@ -270,7 +275,7 @@ void UpdateDialog::startAttempt()
 
     // 状态里写清楚这一轮走的是哪条路（镜像 host 一眼能认出来）
     const QString host = url.host().isEmpty() ? url.toString() : url.host();
-    m_status->setText(QStringLiteral("正在从 %1 下载 %2 …").arg(host, m_asset.name));
+    m_status->setText(CSM_TR("Downloading %2 from %1 …").arg(host, m_asset.name));
     m_transfer->setToolTip(url.toString());
     updateTransferInfo();
     if (!m_stallTimer) {
@@ -323,20 +328,20 @@ void UpdateDialog::updateTransferInfo()
     QStringList parts;
     if (!m_urls.isEmpty() && m_attempt > 0) {
         const QUrl current = m_urls.at(m_attempt - 1);
-        parts << QStringLiteral("地址 %1").arg(current.host().isEmpty() ? QStringLiteral("（本地）")
+        parts << CSM_TR("Mirror %1").arg(current.host().isEmpty() ? CSM_TR(" (local)")
                                                                        : current.host());
     }
-    parts << QStringLiteral("速度 %1/s").arg(human(m_speedBps));
+    parts << CSM_TR("%1/s").arg(human(m_speedBps));
     if (m_asset.size > 0) {
-        parts << QStringLiteral("已下载 %1 / %2").arg(human(double(m_attemptBytes)),
+        parts << CSM_TR("Downloaded %1 / %2").arg(human(double(m_attemptBytes)),
                                                       human(double(m_asset.size)));
         if (m_speedBps > 1024.0) {
             const double left = (double(m_asset.size) - double(m_attemptBytes)) / m_speedBps;
             if (left > 0.0)
-                parts << QStringLiteral("剩余 %1 s").arg(left, 0, 'f', left < 10.0 ? 1 : 0);
+                parts << CSM_TR("%1 s left").arg(left, 0, 'f', left < 10.0 ? 1 : 0);
         }
     } else {
-        parts << QStringLiteral("已下载 %1").arg(human(double(m_attemptBytes)));
+        parts << CSM_TR("Downloaded %1").arg(human(double(m_attemptBytes)));
     }
 
     m_transfer->setText(parts.join(QStringLiteral(" · ")));
@@ -360,17 +365,17 @@ void UpdateDialog::onStallTick()
     QString why;
     if (m_idleTicks * stallCheckMs() >= stallLimitMs()) {
         switchAway = true;
-        why = QStringLiteral("这个地址一直没有数据，换一个");
+        why = CSM_TR("This mirror sent no data, switching");
     } else if (m_attemptClock.elapsed() >= slowGraceMs()
                && m_attemptBytes < slowFloorBytes()) {
         switchAway = true;
-        why = QStringLiteral("这个地址太慢，换一个");
+        why = CSM_TR("This mirror is too slow, switching");
     }
 
     if (!switchAway)
         return;
 
-    trace(QStringLiteral("放弃当前地址（%1）：已收 %2 字节，用时 %3 ms")
+    trace(CSM_TR("Giving up on %1: received %2 bytes in %3 ms")
               .arg(why)
               .arg(m_attemptBytes)
               .arg(m_attemptClock.elapsed()));
@@ -391,7 +396,7 @@ void UpdateDialog::onFinished()
 
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     const bool ok = reply->error() == QNetworkReply::NoError && status >= 200 && status < 300;
-    trace(QStringLiteral("结束：HTTP %1，已收 %2 字节，错误 %3（%4）")
+    trace(CSM_TR("Finished: HTTP %1, %2 bytes received, error %3 (%4)")
               .arg(status)
               .arg(m_attemptBytes)
               .arg(int(reply->error()))
@@ -404,7 +409,7 @@ void UpdateDialog::onFinished()
             m_file = nullptr;
         }
         if (m_attempt < m_urls.size()) {
-            m_status->setText(QStringLiteral("换个地址重试（%1/%2）…")
+            m_status->setText(CSM_TR("Retrying with another mirror (%1/%2)…")
                                   .arg(m_attempt + 1)
                                   .arg(m_urls.size()));
             if (!m_file) {
@@ -437,7 +442,7 @@ void UpdateDialog::onFinished()
     m_savedPath = m_savePath;
     m_progress->setValue(m_progress->maximum());
     m_downloadButton->setEnabled(true);
-    m_downloadButton->setText(QStringLiteral("重新下载并安装"));
+    m_downloadButton->setText(CSM_TR("Download and Install Again"));
     m_folderButton->setVisible(true);
     emit downloadFinished(m_savedPath);
 
@@ -445,7 +450,7 @@ void UpdateDialog::onFinished()
         m_installAfterDownload = false;
         installDownloaded(m_savedPath);
     } else {
-        m_status->setText(QStringLiteral("已保存到 %1").arg(m_savedPath));
+        m_status->setText(CSM_TR("Saved to %1").arg(m_savedPath));
     }
 }
 
@@ -456,13 +461,13 @@ void UpdateDialog::installDownloaded(const QString& path)
 
     // Windows 安装包：直接拉起，装完由下次启动清理
     if (suffix == QLatin1String("exe")) {
-        m_status->setText(QStringLiteral("已下载，正在启动安装程序…"));
+        m_status->setText(CSM_TR("Downloaded, starting the installer…"));
         if (!QProcess::startDetached(path, {})) {
-            m_status->setText(QStringLiteral("无法启动安装程序：%1").arg(path));
+            m_status->setText(CSM_TR("Cannot start the installer: %1").arg(path));
             return;
         }
         QSettings().setValue(QStringLiteral("pendingInstaller"), path);
-        m_status->setText(QStringLiteral("安装程序已启动，按提示完成后会自动清理安装包"));
+        m_status->setText(CSM_TR("The installer has started; the package is cleaned up automatically once you finish"));
         return;
     }
 
@@ -470,11 +475,11 @@ void UpdateDialog::installDownloaded(const QString& path)
     if (suffix == QLatin1String("deb")) {
         const QString tool = QStandardPaths::findExecutable(QStringLiteral("pkexec"));
         if (tool.isEmpty()) {
-            m_status->setText(QStringLiteral("未找到 pkexec，无法自动安装：%1").arg(path));
+            m_status->setText(CSM_TR("pkexec not found, cannot install automatically: %1").arg(path));
             QDesktopServices::openUrl(QUrl::fromLocalFile(info.absolutePath()));
             return;
         }
-        m_status->setText(QStringLiteral("正在安装，请在授权窗口里确认…"));
+        m_status->setText(CSM_TR("Installing, confirm in the authorization window…"));
         QApplication::setOverrideCursor(Qt::WaitCursor);
         QProcess process;
         process.start(tool, {QStringLiteral("dpkg"), QStringLiteral("-i"), path});
@@ -484,10 +489,10 @@ void UpdateDialog::installDownloaded(const QString& path)
 
         if (finished && code == 0) {
             QFile::remove(path);
-            m_status->setText(QStringLiteral("安装完成，安装包已删除。重新启动程序即可用新版本。"));
+            m_status->setText(CSM_TR("Install finished and the installer was removed. Restart the application to use the new version."));
         } else {
             const QString detail = QString::fromLocal8Bit(process.readAllStandardError()).trimmed();
-            m_status->setText(QStringLiteral("安装未完成（退出码 %1）。安装包保留在：%2%3")
+            m_status->setText(CSM_TR("Install did not finish (exit code %1). Installer kept at: %2%3")
                                   .arg(code)
                                   .arg(path, detail.isEmpty() ? QString()
                                                               : QStringLiteral("\n") + detail));
@@ -496,7 +501,7 @@ void UpdateDialog::installDownloaded(const QString& path)
     }
 
     // 便携包（tar.gz / zip）：不能自动覆盖正在运行的程序，打开所在文件夹让用户自己解压
-    m_status->setText(QStringLiteral("便携包已下载到 %1，解压后覆盖原目录即可").arg(path));
+    m_status->setText(CSM_TR("Portable package downloaded to %1; unzip it over the original folder").arg(path));
     QDesktopServices::openUrl(QUrl::fromLocalFile(info.absolutePath()));
 }
 
@@ -526,7 +531,7 @@ void UpdateDialog::abortDownload(const QString& reason)
     }
     m_progress->setVisible(false);
     m_downloadButton->setEnabled(!m_asset.name.isEmpty());
-    m_status->setText(QStringLiteral("下载失败：%1").arg(reason));
+    m_status->setText(CSM_TR("Download failed: %1").arg(reason));
 }
 
 } // namespace csm

@@ -491,6 +491,12 @@ scripts/package-linux-tarball.sh --arch amd64 --from-deb ../circuit-master_0.3.3
 
 ## 开发约定
 
+界面文案一律写英文（`CSM_TR("Open File")`），中文放在
+`resources/translations/circuit-master_zh_CN.ts`；改了文案跑
+`python3 scripts/update-translations.py`（或 `update_translations` 目标），
+`--check` 只查漏翻。更新日志有中英两份：`CHANGELOG.md` 与 `CHANGELOG.en.md`。
+
+
 提交信息遵循 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/)：
 `feat` / `fix` / `docs` / `refactor` / `perf` / `test` / `build` / `chore` 等，
 格式为 `<type>(<scope>): <subject>`。详见 [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md)。

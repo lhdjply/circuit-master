@@ -56,6 +56,7 @@ void CoreUpdateTest::updateCheckerReadsManifest()
         object.insert(QStringLiteral("tag"), tag);
         object.insert(QStringLiteral("name"), QStringLiteral("circuit-master %1").arg(tag));
         object.insert(QStringLiteral("notes"), QStringLiteral("### 新增\n\n- 条目"));
+        object.insert(QStringLiteral("notes_en"), QStringLiteral("### Added\n\n- item"));
         object.insert(QStringLiteral("published_at"), QStringLiteral("2026-12-01T10:00:00Z"));
         if (!page.isEmpty())
             object.insert(QStringLiteral("page"), page);
@@ -78,6 +79,9 @@ void CoreUpdateTest::updateCheckerReadsManifest()
 
         const auto release = spy.first().at(0).value<ReleaseInfo>();
         QCOMPARE(release.version, QStringLiteral("99.0.0"));
+        // 清单里两种语言的正文各有一份，界面按语言挑
+        QVERIFY(release.notes.contains(QStringLiteral("条目")));
+        QCOMPARE(release.notesEn, QStringLiteral("### Added\n\n- item"));
         QCOMPARE(release.tagName, QStringLiteral("v99.0.0"));
         QCOMPARE(release.pageUrl.host(), QStringLiteral("github.com"));
         QVERIFY(release.pageUrl.path().contains(QStringLiteral("/lhdjply/circuit-master/")));

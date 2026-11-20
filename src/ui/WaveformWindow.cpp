@@ -1,4 +1,5 @@
 #include "ui/WaveformWindow.h"
+#include "core/Language.h"
 
 #include "ui/Theme.h"
 
@@ -119,9 +120,9 @@ void applyFixedTicks(QValueAxis* axis, double lo, double hi, int divisions)
 QString kindName(AnalysisKind kind)
 {
     switch (kind) {
-    case AnalysisKind::OperatingPoint: return QStringLiteral("工作点");
-    case AnalysisKind::Transient:      return QStringLiteral("瞬态分析");
-    case AnalysisKind::AC:             return QStringLiteral("交流扫频");
+    case AnalysisKind::OperatingPoint: return CSM_TR("Operating point");
+    case AnalysisKind::Transient:      return CSM_TR("Transient analysis");
+    case AnalysisKind::AC:             return CSM_TR("AC Sweep");
     }
     return QString();
 }
@@ -131,7 +132,7 @@ QString kindName(AnalysisKind kind)
 WaveformWindow::WaveformWindow(QWidget* parent)
     : QWidget(parent)
 {
-    setWindowTitle(QStringLiteral("波形监控 — 电路仿真大师"));
+    setWindowTitle(CSM_TR("Waveform Monitor — Circuit Master"));
     setMinimumSize(720, 320);
 
     auto* root = new QHBoxLayout(this);
@@ -146,7 +147,7 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     sideLayout->setContentsMargins(10, 10, 10, 10);
     sideLayout->setSpacing(8);
 
-    auto* title = new QLabel(QStringLiteral("信号"), side);
+    auto* title = new QLabel(CSM_TR("Signals"), side);
     Theme::styleWidget(title, [] { return QStringLiteral("font-weight:600; color:%1;").arg(Theme::textPrimary().name()); });
     sideLayout->addWidget(title);
 
@@ -157,8 +158,8 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     sideLayout->addWidget(m_list, 1);
 
     auto* buttons = new QHBoxLayout();
-    auto* allButton = new QPushButton(QStringLiteral("全选"), side);
-    auto* noneButton = new QPushButton(QStringLiteral("清除"), side);
+    auto* allButton = new QPushButton(CSM_TR("Select All"), side);
+    auto* noneButton = new QPushButton(CSM_TR("Clear"), side);
     buttons->addWidget(allButton);
     buttons->addWidget(noneButton);
     sideLayout->addLayout(buttons);
@@ -177,10 +178,10 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     toolbar->setContentsMargins(10, 8, 10, 8);
     // 静态页只留导出；「自动缩放」归到动态示波器那一栏
     //（静态图有框选放大 + 右键复位，本来也不需要它）
-    auto* csvButton = new QPushButton(QStringLiteral("导出 CSV"), chartSide);
-    auto* pngButton = new QPushButton(QStringLiteral("导出图片"), chartSide);
+    auto* csvButton = new QPushButton(CSM_TR("Export CSV"), chartSide);
+    auto* pngButton = new QPushButton(CSM_TR("Export Image"), chartSide);
     toolbar->addSpacing(12);
-    m_tipLabel = new QLabel(QStringLiteral("在图上拖拽可框选放大，右键复位"), chartSide);
+    m_tipLabel = new QLabel(CSM_TR("Drag on the plot to zoom, right-click to reset"), chartSide);
     Theme::styleWidget(m_tipLabel, [] { return QStringLiteral("color:%1; font-size:11px;").arg(Theme::textMuted().name()); });
     toolbar->addWidget(m_tipLabel);
     toolbar->addStretch(1);
@@ -189,10 +190,10 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     auto* liveLayout = new QHBoxLayout(m_liveControls);
     liveLayout->setContentsMargins(0, 0, 0, 0);
     liveLayout->setSpacing(6);
-    m_liveButton = new QPushButton(QStringLiteral("暂停"), m_liveControls);
-    m_liveAutoButton = new QPushButton(QStringLiteral("自动缩放"), m_liveControls);
+    m_liveButton = new QPushButton(CSM_TR("Pause"), m_liveControls);
+    m_liveAutoButton = new QPushButton(CSM_TR("Auto Scale"), m_liveControls);
     m_liveAutoButton->setToolTip(
-        QStringLiteral("按当前波形重新自动选量程（手动改过「电压/格」之后用它恢复自动）"));
+        CSM_TR("Re-pick the scale from the current waveform (use after setting Volt/div manually)"));
     liveLayout->addWidget(m_liveAutoButton);
     m_liveWindowBox = new QComboBox(m_liveControls);
     const QVector<QPair<QString, double>> divisions = {
@@ -262,12 +263,12 @@ WaveformWindow::WaveformWindow(QWidget* parent)
         return widget;
     };
 
-    m_liveVoltWidget = makePair(QStringLiteral("电压/格"), m_liveVoltDivBox);
-    m_liveAmpWidget = makePair(QStringLiteral("电流/格"), m_liveAmpDivBox);
+    m_liveVoltWidget = makePair(CSM_TR("Volt/div"), m_liveVoltDivBox);
+    m_liveAmpWidget = makePair(CSM_TR("Amp/div"), m_liveAmpDivBox);
 
-    auto* stopLiveButton = new QPushButton(QStringLiteral("停止"), m_liveControls);
+    auto* stopLiveButton = new QPushButton(CSM_TR("Stop"), m_liveControls);
     liveLayout->addWidget(m_liveButton);
-    liveLayout->addWidget(makePair(QStringLiteral("时间/格"), m_liveWindowBox));
+    liveLayout->addWidget(makePair(CSM_TR("Time/div"), m_liveWindowBox));
     liveLayout->addWidget(m_liveVoltWidget);
     liveLayout->addWidget(m_liveAmpWidget);
     liveLayout->addWidget(stopLiveButton);
@@ -291,9 +292,9 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     analysisLayout->setSpacing(6);
 
     m_kindBox = new QComboBox(m_analysisBar);
-    m_kindBox->addItem(QStringLiteral("瞬态"), int(AnalysisKind::Transient));
-    m_kindBox->addItem(QStringLiteral("交流扫频"), int(AnalysisKind::AC));
-    m_kindBox->addItem(QStringLiteral("工作点"), int(AnalysisKind::OperatingPoint));
+    m_kindBox->addItem(CSM_TR("Transient"), int(AnalysisKind::Transient));
+    m_kindBox->addItem(CSM_TR("AC Sweep"), int(AnalysisKind::AC));
+    m_kindBox->addItem(CSM_TR("Operating point"), int(AnalysisKind::OperatingPoint));
 
     const auto makeField = [this](const QString& placeholder, int width) {
         auto* edit = new QLineEdit(m_analysisBar);
@@ -302,24 +303,24 @@ WaveformWindow::WaveformWindow(QWidget* parent)
         return edit;
     };
     m_tStopEdit = makeField(QStringLiteral("5m"), 78);
-    m_tStepEdit = makeField(QStringLiteral("自动"), 78);
+    m_tStepEdit = makeField(CSM_TR("Auto"), 78);
     m_fStartEdit = makeField(QStringLiteral("10"), 74);
     m_fStopEdit = makeField(QStringLiteral("1M"), 74);
     m_pointsEdit = makeField(QStringLiteral("100"), 60);
 
-    auto* runButton = new QPushButton(QStringLiteral("重新仿真"), m_analysisBar);
+    auto* runButton = new QPushButton(CSM_TR("Run Again"), m_analysisBar);
 
-    analysisLayout->addWidget(new QLabel(QStringLiteral("分析"), m_analysisBar));
+    analysisLayout->addWidget(new QLabel(CSM_TR("Analysis"), m_analysisBar));
     analysisLayout->addWidget(m_kindBox);
-    analysisLayout->addWidget(new QLabel(QStringLiteral("停止时间"), m_analysisBar));
+    analysisLayout->addWidget(new QLabel(CSM_TR("Stop Time"), m_analysisBar));
     analysisLayout->addWidget(m_tStopEdit);
-    analysisLayout->addWidget(new QLabel(QStringLiteral("最大步长"), m_analysisBar));
+    analysisLayout->addWidget(new QLabel(CSM_TR("Max Step"), m_analysisBar));
     analysisLayout->addWidget(m_tStepEdit);
-    analysisLayout->addWidget(new QLabel(QStringLiteral("起始"), m_analysisBar));
+    analysisLayout->addWidget(new QLabel(CSM_TR("Start"), m_analysisBar));
     analysisLayout->addWidget(m_fStartEdit);
-    analysisLayout->addWidget(new QLabel(QStringLiteral("终止"), m_analysisBar));
+    analysisLayout->addWidget(new QLabel(CSM_TR("Stop"), m_analysisBar));
     analysisLayout->addWidget(m_fStopEdit);
-    analysisLayout->addWidget(new QLabel(QStringLiteral("点数"), m_analysisBar));
+    analysisLayout->addWidget(new QLabel(CSM_TR("Points"), m_analysisBar));
     analysisLayout->addWidget(m_pointsEdit);
     analysisLayout->addWidget(runButton);
     analysisLayout->addStretch(1);
@@ -473,10 +474,10 @@ void WaveformWindow::updateAnalysisRows()
     const QList<QLabel*> labels = m_analysisBar->findChildren<QLabel*>();
     for (QLabel* label : labels) {
         const QString text = label->text();
-        if (text == QStringLiteral("停止时间") || text == QStringLiteral("最大步长"))
+        if (text == CSM_TR("Stop Time") || text == CSM_TR("Max Step"))
             label->setVisible(transient);
-        else if (text == QStringLiteral("起始") || text == QStringLiteral("终止")
-                 || text == QStringLiteral("点数"))
+        else if (text == CSM_TR("Start") || text == CSM_TR("Stop")
+                 || text == CSM_TR("Points"))
             label->setVisible(ac);
     }
 }
@@ -532,12 +533,12 @@ bool WaveformWindow::updateLiveCircuit(const Circuit& circuit,
 
     QString error;
     if (!m_live->updateCircuit(circuit, &error)) {
-        m_info->setText(QStringLiteral("电路更新失败：%1").arg(error));
+        m_info->setText(CSM_TR("Circuit update failed: %1").arg(error));
         return false;
     }
 
     m_liveCircuit = circuit;
-    m_info->setText(QStringLiteral("电路已更新，仿真继续"));
+    m_info->setText(CSM_TR("Circuit updated, simulation continues"));
     emit liveUpdated(); // 立刻按新电流刷新 LED 等指示
     return true;
 }
@@ -579,7 +580,7 @@ void WaveformWindow::setResult(const SimulationResult& result)
 
     populateList();
     rebuild();
-    setWindowTitle(QStringLiteral("波形查看器 — %1 — 电路仿真大师").arg(kindName(result.kind)));
+    setWindowTitle(CSM_TR("Waveform Viewer — %1 — Circuit Master").arg(kindName(result.kind)));
 }
 
 void WaveformWindow::populateList()
@@ -646,13 +647,11 @@ void WaveformWindow::rebuild()
     if (selected.isEmpty() || m_result.waves.isEmpty()) {
         // 工作点分析没有时间序列，和「没有测试点」不是一回事，别让用户误会
         if (m_result.kind == AnalysisKind::OperatingPoint && !m_result.report.isEmpty()) {
-            m_chart->setTitle(QStringLiteral(
-                "直流工作点没有时间序列\n报告显示在本页；要看连续波形请切到「动态示波器」"));
-            m_info->setText(QStringLiteral("工作点分析：结果为稳态值。"));
+            m_chart->setTitle(CSM_TR("A DC operating point has no time series\nSee the report on this page; switch to Live Scope for waveforms"));
+            m_info->setText(CSM_TR("Operating point analysis: steady-state values."));
         } else {
-            m_chart->setTitle(QStringLiteral(
-                "没有可显示的波形\n请在原理图中放置电压测试点（TP）或电流测试点（IP）后重新运行"));
-            m_info->setText(QStringLiteral("没有测试点，波形为空。"));
+            m_chart->setTitle(CSM_TR("Nothing to plot\nPlace a voltage (TP) or current (IP) test point and run again"));
+            m_info->setText(CSM_TR("No test points, the waveform is empty."));
         }
         return;
     }
@@ -719,7 +718,7 @@ void WaveformWindow::rebuild()
             label.remove(QLatin1Char(' '));
             categoryAxis->append(label, double(decade));
         }
-        categoryAxis->setTitleText(QStringLiteral("频率 (Hz)"));
+        categoryAxis->setTitleText(CSM_TR("Frequency (Hz)"));
         axisX = categoryAxis;
         logX = true;
     } else {
@@ -728,7 +727,7 @@ void WaveformWindow::rebuild()
         valueAxis->setRange(xmin * xFactor, xmax * xFactor);
         valueAxis->setTickCount(11);
         valueAxis->setLabelFormat(QStringLiteral("%.4g"));
-        valueAxis->setTitleText(QStringLiteral("时间 (%1)").arg(xUnit));
+        valueAxis->setTitleText(CSM_TR("Time (%1)").arg(xUnit));
         axisX = valueAxis;
     }
 
@@ -758,19 +757,19 @@ void WaveformWindow::rebuild()
     QString yTitle;
     if (ac) {
         applyFixedTicks(axisY, others.min, others.max, 6);
-        yTitle = QStringLiteral("幅值 (dB)");
+        yTitle = CSM_TR("Magnitude (dB)");
     } else if (dualAxis) {
         applyFixedTicks(axisY, volts.min * voltageScale, volts.max * voltageScale, 6);
-        yTitle = QStringLiteral("电压 (%1V)").arg(voltagePrefix);
+        yTitle = CSM_TR("Voltage (%1V)").arg(voltagePrefix);
     } else if (volts.valid()) {
         applyFixedTicks(axisY, volts.min * voltageScale, volts.max * voltageScale, 6);
-        yTitle = QStringLiteral("电压 (%1V)").arg(voltagePrefix);
+        yTitle = CSM_TR("Voltage (%1V)").arg(voltagePrefix);
     } else if (amps.valid()) {
         applyFixedTicks(axisY, amps.min * currentScale, amps.max * currentScale, 6);
-        yTitle = QStringLiteral("电流 (%1A)").arg(currentPrefix);
+        yTitle = CSM_TR("Current (%1A)").arg(currentPrefix);
     } else {
         applyFixedTicks(axisY, others.min, others.max, 6);
-        yTitle = QStringLiteral("数值");
+        yTitle = CSM_TR("Value");
     }
     axisY->setLabelFormat(QStringLiteral("%.4g"));
     axisY->setTitleText(yTitle);
@@ -780,7 +779,7 @@ void WaveformWindow::rebuild()
         axisY2 = new QValueAxis();
         applyFixedTicks(axisY2, amps.min * currentScale, amps.max * currentScale, 6);
         axisY2->setLabelFormat(QStringLiteral("%.4g"));
-        axisY2->setTitleText(QStringLiteral("电流 (%1A)").arg(currentPrefix));
+        axisY2->setTitleText(CSM_TR("Current (%1A)").arg(currentPrefix));
         axisY2->setGridLineVisible(false);
     }
 
@@ -823,7 +822,7 @@ void WaveformWindow::rebuild()
             series->attachAxis(axisY);
     }
 
-    m_info->setText(QStringLiteral("%1 个信号，已选 %2 个\n共 %3 个数据点")
+    m_info->setText(CSM_TR("%1 signals, %2 selected\n%3 data points")
                         .arg(m_result.waves.size())
                         .arg(selected.size())
                         .arg(pointCount));
@@ -836,9 +835,9 @@ void WaveformWindow::applyLiveScales()
 
     const bool leftIsCurrent = !m_liveHasVoltage && m_liveHasCurrent;
     if (leftIsCurrent)
-        m_liveAxisY->setTitleText(QStringLiteral("电流 (A)"));
+        m_liveAxisY->setTitleText(CSM_TR("Current (A)"));
     else
-        m_liveAxisY->setTitleText(QStringLiteral("电压 (V)"));
+        m_liveAxisY->setTitleText(CSM_TR("Voltage (V)"));
 
     m_liveAxisY->setTickCount(7);
     m_liveAxisY->setRange(-3.0 * (leftIsCurrent ? m_liveAmpDiv : m_liveVoltDiv),
@@ -846,7 +845,7 @@ void WaveformWindow::applyLiveScales()
 
     if (m_liveAxisY2) {
         m_liveAxisY2->setTickCount(7);
-        m_liveAxisY2->setTitleText(QStringLiteral("电流 (A)"));
+        m_liveAxisY2->setTitleText(CSM_TR("Current (A)"));
         m_liveAxisY2->setRange(-3.0 * m_liveAmpDiv, 3.0 * m_liveAmpDiv);
     }
 }
@@ -946,7 +945,7 @@ void WaveformWindow::restartLiveEngine()
     QString error;
     if (!m_live->start(m_liveCircuit, step, &error)) {
         m_live.reset();
-        m_info->setText(QStringLiteral("无法启动实时仿真：%1").arg(error));
+        m_info->setText(CSM_TR("Cannot start the live simulation: %1").arg(error));
         return;
     }
 
@@ -1037,8 +1036,8 @@ void WaveformWindow::startLive(const Circuit& circuit,
     m_liveAxisY = new QValueAxis();
     m_liveAxisY->setLabelFormat(QStringLiteral("%.4g"));
     m_liveAxisY->setTickCount(7);
-    m_liveAxisY->setTitleText(hasVoltage ? QStringLiteral("电压 (V)")
-                                         : QStringLiteral("电流 (A)"));
+    m_liveAxisY->setTitleText(hasVoltage ? CSM_TR("Voltage (V)")
+                                         : CSM_TR("Current (A)"));
     m_chart->addAxis(m_liveAxisY, Qt::AlignLeft);
 
     m_liveAxisY2 = nullptr;
@@ -1046,7 +1045,7 @@ void WaveformWindow::startLive(const Circuit& circuit,
         m_liveAxisY2 = new QValueAxis();
         m_liveAxisY2->setLabelFormat(QStringLiteral("%.4g"));
         m_liveAxisY2->setTickCount(7);
-        m_liveAxisY2->setTitleText(QStringLiteral("电流 (A)"));
+        m_liveAxisY2->setTitleText(CSM_TR("Current (A)"));
         m_liveAxisY2->setGridLineVisible(false);
         m_chart->addAxis(m_liveAxisY2, Qt::AlignRight);
     }
@@ -1075,11 +1074,11 @@ void WaveformWindow::startLive(const Circuit& circuit,
     // 实时模式没有「分析参数」的概念，整条收起
     if (m_analysisBar)
         m_analysisBar->setVisible(false);
-    setWindowTitle(QStringLiteral("实时示波器 — 电路仿真大师"));
+    setWindowTitle(CSM_TR("Live Scope — Circuit Master"));
     m_info->setText(m_liveBuffers.isEmpty()
-                        ? QStringLiteral("电路中没有测试点，波形为空。\n"
-                                         "放置电压测试点（TP）或电流测试点（IP）后再运行。")
-                        : QStringLiteral("实时仿真启动…"));
+                        ? CSM_TR("No test points in the circuit, the waveform is empty.\n"
+                                 "Add a voltage (TP) or current (IP) test point and run again.")
+                        : CSM_TR("Live simulation starting…"));
 
     restartLiveEngine();
     m_liveClock.start();
@@ -1119,7 +1118,7 @@ void WaveformWindow::setLivePlaying(bool playing)
 {
     m_livePlaying = playing;
     if (m_liveButton)
-        m_liveButton->setText(playing ? QStringLiteral("暂停") : QStringLiteral("继续"));
+        m_liveButton->setText(playing ? CSM_TR("Pause") : CSM_TR("Resume"));
     if (!m_liveTimer)
         return;
     if (playing) {
@@ -1168,7 +1167,7 @@ void WaveformWindow::liveTick()
     for (int k = 0; k < steps; ++k) {
         if (!m_live->advance(1, &error)) {
             setLivePlaying(false);
-            m_info->setText(QStringLiteral("实时仿真中止：%1").arg(error));
+            m_info->setText(CSM_TR("Live simulation stopped: %1").arg(error));
             return;
         }
         const bool keep = (m_liveSampleCounter % m_liveDecimation == 0) || (k == steps - 1);
@@ -1214,7 +1213,7 @@ void WaveformWindow::liveTick()
         timeScale = 1e3;
         timeUnit = QStringLiteral("ms");
     }
-    const QString timeTitle = QStringLiteral("时间 (%1)").arg(timeUnit);
+    const QString timeTitle = CSM_TR("Time (%1)").arg(timeUnit);
     if (m_liveAxisX->titleText() != timeTitle)
         m_liveAxisX->setTitleText(timeTitle);
 
@@ -1255,12 +1254,12 @@ void WaveformWindow::liveTick()
         }
     }
 
-    QString info = QStringLiteral("t = %1  ·  %2/div  ·  步长 %3")
+    QString info = CSM_TR("t = %1  ·  %2/div  ·  step %3")
                        .arg(formatEng(time, QStringLiteral("s"), 3),
                             formatEng(m_liveDiv, QStringLiteral("s"), 2),
                             formatEng(h, QStringLiteral("s"), 2));
     if (clipped)
-        info += QStringLiteral("\n波形超出量程（手动量程已锁定），点「自动缩放」恢复自动");
+        info += CSM_TR("\nWaveform exceeds the range (scale locked), click Auto Scale to restore");
     m_info->setText(info);
 }
 
@@ -1422,15 +1421,15 @@ void WaveformWindow::exportCsv()
     if (selected.isEmpty())
         return;
 
-    const QString path = QFileDialog::getSaveFileName(this, QStringLiteral("导出波形数据"),
+    const QString path = QFileDialog::getSaveFileName(this, CSM_TR("Export waveform data"),
                                                       QStringLiteral("waveform.csv"),
-                                                      QStringLiteral("CSV 文件 (*.csv)"));
+                                                      CSM_TR("CSV files (*.csv)"));
     if (path.isEmpty())
         return;
 
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        Dialogs::warn(this, QStringLiteral("导出失败"), file.errorString());
+        Dialogs::warn(this, CSM_TR("Export failed"), file.errorString());
         return;
     }
     QTextStream out(&file);
@@ -1453,14 +1452,14 @@ void WaveformWindow::exportCsv()
 
 void WaveformWindow::exportImage()
 {
-    const QString path = QFileDialog::getSaveFileName(this, QStringLiteral("导出图片"),
+    const QString path = QFileDialog::getSaveFileName(this, CSM_TR("Export Image"),
                                                       QStringLiteral("waveform.png"),
-                                                      QStringLiteral("PNG 图片 (*.png)"));
+                                                      CSM_TR("PNG images (*.png)"));
     if (path.isEmpty())
         return;
     const QPixmap shot = m_view->grab();
     if (!shot.save(path))
-        Dialogs::warn(this, QStringLiteral("导出失败"), QStringLiteral("无法写入图片文件。"));
+        Dialogs::warn(this, CSM_TR("Export failed"), CSM_TR("Cannot write the image file."));
 }
 
 } // namespace csm

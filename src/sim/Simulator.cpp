@@ -1,4 +1,5 @@
 #include "sim/Simulator.h"
+#include "core/Language.h"
 
 #include "core/Units.h"
 #include "sim/Matrix.h"
@@ -852,9 +853,9 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
         QString solveError;
         if (!a.solve(b, xnew, &solveError)) {
             if (error)
-                *error = solveError
-                    + QStringLiteral("。请检查是否存在电压源短路回路、理想电压源并联，"
-                                     "或未连接的悬空节点。");
+                *error = solveError + CSM_TR(
+                    ". Check for shorted voltage sources or parallel ideal sources, "
+                    "or for floating nodes that are not connected.");
             return false;
         }
 
@@ -863,7 +864,7 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
         for (int i = 0; i < n; ++i) {
             if (!std::isfinite(xnew[size_t(i)])) {
                 if (error)
-                    *error = QStringLiteral("求解结果出现非有限数值，电路可能发散。");
+                    *error = CSM_TR("The solution contains non-finite values; the circuit may be diverging.");
                 return false;
             }
             if (i < p.nNodes) {
@@ -998,7 +999,7 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
         if (nodeConverged && diodeConverged && gateConverged && iter >= 1) {
             if (maxAbs > 1e9) {
                 if (error)
-                    *error = QStringLiteral("节点电压超出合理范围（>1 GV），请检查电路连接。");
+                    *error = CSM_TR("Node voltages exceed a sane range (>1 GV); check the circuit wiring.");
                 return false;
             }
             return true;
@@ -1006,7 +1007,7 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
     }
 
     if (error)
-        *error = QStringLiteral("牛顿迭代 150 次仍未收敛，请检查二极管/开关所在回路。");
+        *error = CSM_TR("Newton iteration did not converge in 150 steps; check the loops with diodes or switches.");
     return false;
 }
 
@@ -1281,8 +1282,8 @@ QString nodeLabel(const Circuit& circuit, const Netlist& net, int node)
         parts << pin;
     }
     if (parts.isEmpty())
-        return QStringLiteral("节点 %1").arg(node);
-    return QStringLiteral("节点 %1 (%2)").arg(node).arg(parts.join(QStringLiteral(", ")));
+        return CSM_TR("Node %1").arg(node);
+    return CSM_TR("Node %1 (%2)").arg(node).arg(parts.join(QStringLiteral(", ")));
 }
 
 QString buildReport(const Circuit& circuit, const Problem& p, const Netlist& net,
@@ -1290,9 +1291,9 @@ QString buildReport(const Circuit& circuit, const Problem& p, const Netlist& net
                     double t)
 {
     QStringList lines;
-    lines << QStringLiteral("直流工作点分析结果");
+    lines << CSM_TR("DC operating point result");
     lines << QStringLiteral("————————————————————————————");
-    lines << QStringLiteral("节点电压：");
+    lines << CSM_TR("Node voltages:");
     for (int i = 1; i <= p.nNodes; ++i) {
         lines << QStringLiteral("  %1 = %2")
                      .arg(nodeLabel(circuit, net, i).leftJustified(28, QLatin1Char(' ')),
@@ -1300,7 +1301,7 @@ QString buildReport(const Circuit& circuit, const Problem& p, const Netlist& net
     }
 
     lines << QString();
-    lines << QStringLiteral("元件电流：");
+    lines << CSM_TR("Element currents:");
     QVector<double> currents;
     sample(p, x, st, false, 0.0, t, dm, currents);
     int idx = p.nNodes;
@@ -1334,7 +1335,7 @@ QString buildReport(const Circuit& circuit, const Problem& p, const Netlist& net
     }
     if (!meters.isEmpty()) {
         lines << QString();
-        lines << QStringLiteral("万用表读数：");
+        lines << CSM_TR("Multimeter readings:");
         for (int k = 0; k < meters.size(); ++k) {
             const double value = meterBase + k < currents.size()
                 ? currents.at(meterBase + k) : 0.0;
@@ -1583,7 +1584,7 @@ bool LiveTransient::start(const Circuit& circuit, double step, QString* error)
     }
     if (d.net.nodeCount == 0) {
         if (error)
-            *error = QStringLiteral("电路中没有可求解的节点。");
+            *error = CSM_TR("The circuit has no solvable nodes.");
         return false;
     }
 
@@ -1637,7 +1638,7 @@ bool LiveTransient::updateCircuit(const Circuit& circuit, QString* error)
     }
     if (net.nodeCount == 0) {
         if (error)
-            *error = QStringLiteral("电路中没有可求解的节点。");
+            *error = CSM_TR("The circuit has no solvable nodes.");
         return false;
     }
 
@@ -1761,7 +1762,7 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
         return result;
     }
     if (net.nodeCount == 0) {
-        result.error = QStringLiteral("电路中没有可求解的节点。请放置元件并用导线连接。");
+        result.error = CSM_TR("The circuit has no solvable nodes. Place parts and wire them together.");
         return result;
     }
 
@@ -1772,7 +1773,7 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
     for (int i = 1; i <= net.nodeCount; ++i)
         result.nodeLabels << nodeLabel(circuit, net, i);
 
-    result.log << QStringLiteral("节点数 %1，支路未知量 %2，元件 %3")
+    result.log << CSM_TR("Nodes %1, branch unknowns %2, components %3")
                       .arg(net.nodeCount)
                       .arg(p.nBranches)
                       .arg(p.elements.size());
@@ -1783,7 +1784,7 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
 
     // 统一先求直流工作点，作为瞬态初值与交流线性化点
     if (!newtonSolve(p, st, false, 0.0, 0.0, x, dm, &error)) {
-        result.error = QStringLiteral("直流工作点求解失败：") + error;
+        result.error = CSM_TR("DC operating point failed: ") + error;
         return result;
     }
 
@@ -1818,9 +1819,8 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
         // 只提示、不擅自改步长：改步长会改变结果（老工程与测试都按给定步长算）
         const double suggested = circuit.suggestedMaxStep();
         if (suggested > 0.0 && h > suggested) {
-            result.log << QStringLiteral(
-                              "提示：最大步长 %1 比电路的开关动态粗（建议 ≤ %2），"
-                              "开关波形会失真，输出可能算不出来。")
+            result.log << CSM_TR("Tip: the max step %1 is coarser than the switching dynamics (suggest ≤ %2), "
+                                 "the waveforms will be distorted and the output may not resolve.")
                               .arg(formatEng(h, QStringLiteral("s"), 3),
                                    formatEng(suggested, QStringLiteral("s"), 3));
         }
@@ -1829,13 +1829,13 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
         if (steps > kMaxPoints) {
             h = tStop / kMaxPoints;
             steps = kMaxPoints;
-            result.log << QStringLiteral("步数过多，已自动调整为 %1 步（步长 %2）。")
+            result.log << CSM_TR("Too many steps; adjusted to %1 steps (step %2).")
                               .arg(kMaxPoints)
                               .arg(formatEng(h, QStringLiteral("s"), 3));
             if (suggested > 0.0 && h > suggested) {
-                result.log << QStringLiteral(
-                                  "注意：受点数上限限制，当前步长仍比电路动态粗，"
-                                  "开关波形会失真。建议把停止时间缩短到 %1 以内。")
+                result.log << CSM_TR("Note: limited by the point cap, the step is still coarser than the "
+                                     "circuit dynamics, so switching waveforms will be distorted. "
+                                     "Consider a stop time below %1.")
                                   .arg(formatEng(suggested * kMaxPoints, QStringLiteral("s"), 2));
             }
         }
@@ -1861,7 +1861,7 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
         for (int k = 1; k <= stepCount; ++k) {
             const double t = h * k;
             if (!newtonSolve(p, st, true, h, t, x, dm, &error)) {
-                result.error = QStringLiteral("瞬态求解在 t = %1 时失败：%2")
+                result.error = CSM_TR("Transient failed at t = %1: %2")
                                    .arg(formatEng(t, QStringLiteral("s"), 4), error);
                 result.waves.clear();
                 return result;
@@ -1888,9 +1888,9 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
             const double freq = comp.acFrequency > 0.1 ? comp.acFrequency : 50.0;
             const double period = 1.0 / freq;
             if (tStop < period) {
-                result.log << QStringLiteral(
-                                  "提示：%1 是交流档，需要一个完整周期（%2 Hz → %3）才有读数；"
-                                  "当前停止时间 %4 不够，读数会显示横杠。")
+                result.log << CSM_TR("Tip: %1 is an AC range and needs one full period (%2 Hz → %3) "
+                                     "before it reads; the current stop time %4 is too short, "
+                                     "readings will show dashes.")
                                   .arg(comp.refdes)
                                   .arg(freq, 0, 'g', 4)
                                   .arg(formatEng(period, QStringLiteral("s"), 3),
@@ -1898,7 +1898,7 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
             }
         }
 
-        result.log << QStringLiteral("瞬态分析完成：%1 步，步长 %2，终止于 %3")
+        result.log << CSM_TR("Transient analysis done: %1 steps, step %2, ended at %3")
                           .arg(stepCount)
                           .arg(formatEng(h, QStringLiteral("s"), 3),
                                formatEng(tStop, QStringLiteral("s"), 3));
@@ -1971,7 +1971,7 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
         std::fill(b.begin(), b.end(), Cx(0.0, 0.0));
         assembleAc(p, st, omega, a, b, dm);
         if (!a.solve(b, xc, &error)) {
-            result.error = QStringLiteral("交流分析在 %1 处失败：%2")
+            result.error = CSM_TR("AC analysis failed at %1: %2")
                                .arg(formatEng(f, QStringLiteral("Hz"), 4), error);
             result.waves.clear();
             return result;
@@ -2013,7 +2013,7 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
     }
 
     result.ok = true;
-    result.log << QStringLiteral("交流分析完成：%1 个频点（%2 ~ %3）")
+    result.log << CSM_TR("AC analysis done: %1 points (%2 ~ %3)")
                       .arg(points)
                       .arg(formatEng(fStart, QStringLiteral("Hz"), 3),
                            formatEng(fStop, QStringLiteral("Hz"), 3));

@@ -155,6 +155,7 @@
     ],
     "format": "circuit-master",
     "name": "RC 充电与放电",
+    "name_en": "RC charge and discharge",
     "version": 2,
     "wires": [
         [

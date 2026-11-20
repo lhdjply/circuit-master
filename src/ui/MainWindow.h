@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/UpdateChecker.h"
+#include "core/Language.h"
 #include "ui/Document.h"
 #include "sim/Simulator.h"
 
@@ -122,7 +123,7 @@ private:
     /// 当前文档（永远非空：至少保留一个空白标签）
     Document* doc() const;
     /// 新建一个空白标签并切过去
-    Document* addDocument(const QString& name = QStringLiteral("未命名"),
+    Document* addDocument(const QString& name = CSM_TR("Untitled"),
                           const QString& path = QString());
     /// 把 scene / view 的信号接到主窗口（每个文档接一次）
     void wireDocument(Document* document);

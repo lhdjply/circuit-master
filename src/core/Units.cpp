@@ -1,4 +1,5 @@
 #include "core/Units.h"
+#include "core/Language.h"
 
 #include <QRegularExpression>
 #include <cmath>
@@ -12,7 +13,7 @@ struct PrefixEntry {
     double factor;
 };
 
-// 长前缀必须排在短前缀之前（"meg" 先于 "m"）。
+// 长前缀必须排在短前缀之前（"megCSM_TR(" comes before ")m"）。
 const PrefixEntry kPrefixes[] = {
     {"meg", 1e6},
     {"MEG", 1e6},
@@ -146,7 +147,7 @@ double parseQuantity(const QString& text, UnitKind expected, bool* ok, QString* 
 
     if (s.isEmpty()) {
         if (error)
-            *error = QStringLiteral("请输入数值");
+            *error = CSM_TR("Enter a value");
         return 0.0;
     }
 
@@ -155,7 +156,7 @@ double parseQuantity(const QString& text, UnitKind expected, bool* ok, QString* 
     const QRegularExpressionMatch match = re.match(s);
     if (!match.hasMatch()) {
         if (error)
-            *error = QStringLiteral("无法识别的数值：%1").arg(text);
+            *error = CSM_TR("Unknown value: %1").arg(text);
         return 0.0;
     }
 
@@ -163,7 +164,7 @@ double parseQuantity(const QString& text, UnitKind expected, bool* ok, QString* 
     const double number = match.captured(1).toDouble(&numberOk);
     if (!numberOk) {
         if (error)
-            *error = QStringLiteral("无法识别的数值：%1").arg(text);
+            *error = CSM_TR("Unknown value: %1").arg(text);
         return 0.0;
     }
 
@@ -180,17 +181,17 @@ double parseQuantity(const QString& text, UnitKind expected, bool* ok, QString* 
     UnitKind kind = unitFromSymbol(rest);
     if (!rest.isEmpty() && kind == UnitKind::None) {
         if (error)
-            *error = QStringLiteral("无法识别的单位：%1").arg(rest);
+            *error = CSM_TR("Unknown unit: %1").arg(rest);
         return 0.0;
     }
     if (expected == UnitKind::None && !rest.isEmpty()) {
         if (error)
-            *error = QStringLiteral("该参数没有单位，请直接输入数字");
+            *error = CSM_TR("This parameter is unitless; enter a plain number");
         return 0.0;
     }
     if (expected != UnitKind::None && !rest.isEmpty() && kind != expected) {
         if (error)
-            *error = QStringLiteral("单位不匹配，应为 %1").arg(unitSymbol(expected));
+            *error = CSM_TR("Unit mismatch, expected %1").arg(unitSymbol(expected));
         return 0.0;
     }
 
@@ -223,7 +224,7 @@ QString formatEng(double value, const QString& unit, int precision)
         exponent += 3;
     }
 
-    // 用定点格式并按有效位数四舍五入，避免 "100" 被格式化成 "1e+02"
+    // 用定点格式并按有效位数四舍五入，避免 "100CSM_TR(" is formatted as ")1e+02"
     const double absMantissa = std::abs(mantissa);
     const int digits = absMantissa > 0.0 ? int(std::floor(std::log10(absMantissa))) + 1 : 1;
     const int decimals = std::max(0, precision - digits);

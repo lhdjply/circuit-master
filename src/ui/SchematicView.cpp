@@ -1,4 +1,5 @@
 #include "ui/SchematicView.h"
+#include "core/Language.h"
 
 #include "ui/ComponentItem.h"
 #include "ui/SchematicScene.h"
@@ -61,11 +62,11 @@ void SchematicView::updateCursorAndHint()
     switch (m_tool) {
     case Tool::Select:
         viewport()->setCursor(Qt::ArrowCursor);
-        emit hintChanged(QStringLiteral("选择模式：拖动元件移动，双击元件编辑参数，空格键旋转"));
+        emit hintChanged(CSM_TR("Select mode: drag to move, double-click to edit, Space to rotate"));
         break;
     case Tool::Wire:
         viewport()->setCursor(Qt::CrossCursor);
-        emit hintChanged(QStringLiteral("连线模式：单击放置拐点，双击或右键结束，Esc 取消"));
+        emit hintChanged(CSM_TR("Wire mode: click to add a corner, double-click or right-click to finish, Esc to cancel"));
         break;
     }
 }
@@ -269,16 +270,16 @@ void addArrangeMenu(QMenu* menu, SchematicScene* scene)
     if (!scene)
         return;
     const int count = scene->selectedComponents().size();
-    QMenu* arrange = menu->addMenu(QObject::tr("对齐与分布"));
+    QMenu* arrange = menu->addMenu(CSM_TR("Align and Distribute"));
     arrange->setEnabled(count >= 2);
 
     const QVector<QPair<QString, SchematicScene::AlignMode>> aligns = {
-        {QObject::tr("左对齐"), SchematicScene::AlignMode::Left},
-        {QObject::tr("水平居中"), SchematicScene::AlignMode::CenterH},
-        {QObject::tr("右对齐"), SchematicScene::AlignMode::Right},
-        {QObject::tr("顶对齐"), SchematicScene::AlignMode::Top},
-        {QObject::tr("垂直居中"), SchematicScene::AlignMode::CenterV},
-        {QObject::tr("底对齐"), SchematicScene::AlignMode::Bottom},
+        {CSM_TR("Align left"), SchematicScene::AlignMode::Left},
+        {CSM_TR("Center horizontally"), SchematicScene::AlignMode::CenterH},
+        {CSM_TR("Right align"), SchematicScene::AlignMode::Right},
+        {CSM_TR("Align top"), SchematicScene::AlignMode::Top},
+        {CSM_TR("Center vertically"), SchematicScene::AlignMode::CenterV},
+        {CSM_TR("Align bottom"), SchematicScene::AlignMode::Bottom},
     };
     for (const auto& entry : aligns) {
         QAction* action = arrange->addAction(entry.first);
@@ -289,8 +290,8 @@ void addArrangeMenu(QMenu* menu, SchematicScene* scene)
     }
     arrange->addSeparator();
     const QVector<QPair<QString, Qt::Orientation>> distributes = {
-        {QObject::tr("水平等距"), Qt::Horizontal},
-        {QObject::tr("垂直等距"), Qt::Vertical},
+        {CSM_TR("Distribute horizontally"), Qt::Horizontal},
+        {CSM_TR("Distribute vertically"), Qt::Vertical},
     };
     for (const auto& entry : distributes) {
         QAction* action = arrange->addAction(entry.first);
@@ -327,19 +328,19 @@ void SchematicView::contextMenuEvent(QContextMenuEvent* event)
 
     QMenu menu(this);
     if (component) {
-        QAction* rotate = menu.addAction(QStringLiteral("旋转 90°"));
-        QAction* flipH = menu.addAction(QStringLiteral("水平翻转"));
-        QAction* flipV = menu.addAction(QStringLiteral("垂直翻转"));
-        QAction* resetLabels = menu.addAction(QStringLiteral("还原标签位置"));
+        QAction* rotate = menu.addAction(CSM_TR("Rotate 90°"));
+        QAction* flipH = menu.addAction(CSM_TR("Flip horizontally"));
+        QAction* flipV = menu.addAction(CSM_TR("Flip vertically"));
+        QAction* resetLabels = menu.addAction(CSM_TR("Reset label positions"));
         addArrangeMenu(&menu, m_scene);
         menu.addSeparator();
-        QAction* cut = menu.addAction(QStringLiteral("剪切"));
-        QAction* copy = menu.addAction(QStringLiteral("复制"));
-        QAction* paste = menu.addAction(QStringLiteral("粘贴"));
+        QAction* cut = menu.addAction(CSM_TR("Cut"));
+        QAction* copy = menu.addAction(CSM_TR("Copy"));
+        QAction* paste = menu.addAction(CSM_TR("Paste"));
         paste->setEnabled(m_scene->hasClipboard());
         menu.addSeparator();
-        QAction* edit = menu.addAction(QStringLiteral("编辑参数…"));
-        QAction* remove = menu.addAction(QStringLiteral("删除"));
+        QAction* edit = menu.addAction(CSM_TR("Edit parameters…"));
+        QAction* remove = menu.addAction(CSM_TR("Delete"));
 
         QAction* chosen = menu.exec(event->globalPos());
         if (!chosen)
@@ -365,9 +366,9 @@ void SchematicView::contextMenuEvent(QContextMenuEvent* event)
         }
     } else {
         const QPointF scenePos = m_scene->snap(mapToScene(event->pos()));
-        QAction* junction = menu.addAction(QStringLiteral("在此处打交点"));
+        QAction* junction = menu.addAction(CSM_TR("Add junction here"));
         junction->setEnabled(m_scene->hasCrossingAt(scenePos));
-        QAction* paste = menu.addAction(QStringLiteral("粘贴"));
+        QAction* paste = menu.addAction(CSM_TR("Paste"));
         paste->setEnabled(m_scene->hasClipboard());
         QAction* chosen = menu.exec(event->globalPos());
         if (chosen == junction)

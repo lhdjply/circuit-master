@@ -116,6 +116,7 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/generated")
 # 构建目录里不再产出 libcsm_core.a / libcsm_ui.a 这类中间产物。
 # 测试目标同样链接这两个对象库（每个目标各拿一份对象文件）。
 add_library(csm_core OBJECT
+    src/core/Language.cpp
     src/core/Units.cpp
     src/core/Component.cpp
     src/core/Netlist.cpp
@@ -170,11 +171,49 @@ set(CSM_RESOURCES
     resources/examples/examples.qrc
 )
 
+# ---------------------------------------------------------------- 翻译
+# 源码里文案是英文，中文放在 resources/translations/*.ts。
+# lrelease 把 .ts 编成 .qm，再以 :/i18n 前缀嵌进资源 —— 运行时按设置装/卸。
+find_package(Qt6 QUIET COMPONENTS LinguistTools)
+
 # ---------------------------------------------------------------- 可执行程序
 qt_add_executable(CircuitMaster
     src/main.cpp
     ${CSM_RESOURCES}
 )
+
+# 从源码里抽 CSM_TR("...") 更新 .ts。lupdate 认不出这个宏（它只认 tr/translate），
+# 所以用 scripts/update-translations.py：
+#     cmake --build build --target update_translations
+#     cmake --build build --target check_translations   # 只查漏翻
+add_custom_target(update_translations
+    COMMAND ${CMAKE_COMMAND} -E echo "更新 resources/translations/*.ts ..."
+    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/update-translations.py
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Extracting CSM_TR() strings into .ts files"
+)
+add_custom_target(check_translations
+    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/update-translations.py --check
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Checking for untranslated strings"
+)
+
+if(Qt6LinguistTools_FOUND)
+    # 注意要挂在 csm_core（而非可执行文件）上：测试只链库、不链可执行文件，
+    # 挂在可执行文件上的话测试里拿不到 .qm，界面语言就退回英文了。
+    # 英文是源语言，不需要 .qm，只编译中文。
+    qt_add_lrelease(csm_core
+        TS_FILES resources/translations/circuit-master_zh_CN.ts
+        QM_FILES_OUTPUT_VARIABLE CSM_QM_FILES
+    )
+    qt_add_resources(csm_core "translations"
+        PREFIX "/i18n"
+        BASE "${CMAKE_CURRENT_BINARY_DIR}"
+        FILES ${CSM_QM_FILES}
+    )
+else()
+    message(WARNING "没找到 Qt LinguistTools：中文翻译不会被打包，界面将只有英文")
+endif()
 # OBJECT 库的对象文件不会自动跟着依赖传递，这里显式把两个都列上
 target_link_libraries(CircuitMaster PRIVATE csm_ui csm_core)
 # WIN32_EXECUTABLE 在非 Windows 上无副作用，MACOSX_BUNDLE 同理。

@@ -1,4 +1,6 @@
 #include "core/Circuit.h"
+
+#include "core/Language.h"
 #include "core/Netlist.h"
 #include "csm_platform.h"
 #include "csm_version.h"
@@ -141,6 +143,7 @@ private:
 
 void UiMeterTest::initTestCase()
 {
+    csm::saveLanguage(csm::Language::Chinese);   // 断言按中文写的
     // 和 main.cpp 一样装上 Qt 自带的中文翻译（输入框右键菜单等）
     // 崩溃时缓冲区里的输出会丢：Windows 上 stdout 重定向到管道是全缓冲的，
     // CI 上只会看到「Failed」却不知道停在哪一步。改成不缓冲，一行一行往外写。

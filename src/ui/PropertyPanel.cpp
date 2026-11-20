@@ -1,4 +1,5 @@
 #include "ui/PropertyPanel.h"
+#include "core/Language.h"
 
 #include "ui/Theme.h"
 
@@ -80,7 +81,7 @@ void PropertyPanel::buildUi()
     // 放进去会被表单页一起撑到上千像素高 —— 提示文字被顶到很下面，
     // 右边还多出一条滚动条。单独摆一个标签，没选中元件时它才是这一页的全部内容，
     // 于是面板只需要文字那么高，滚动区域再把它拉到视口大小，文字正好居中。
-    m_placeholder = new QLabel(QStringLiteral("在原理图中选择一个元件\n以编辑其参数"), this);
+    m_placeholder = new QLabel(CSM_TR("Select a part on the schematic\nto edit its parameters"), this);
     m_placeholder->setAlignment(Qt::AlignCenter);
     Theme::styleWidget(m_placeholder, [] { return QStringLiteral("color:%1;").arg(Theme::textMuted().name()); });
     m_placeholder->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Ignored);
@@ -109,37 +110,37 @@ void PropertyPanel::buildUi()
     m_form->setVerticalSpacing(8);
 
     m_refdes = makeEdit();
-    m_form->addRow(QStringLiteral("编号"), m_refdes);
+    m_form->addRow(CSM_TR("Designator"), m_refdes);
 
-    m_rotation = makeEdit(QStringLiteral("例如 45"));
-    m_rotation->setToolTip(QStringLiteral("单位是度，可以填任意角度，例如 15、45、60"));
-    m_form->addRow(QStringLiteral("旋转角度 (°)"), m_rotation);
+    m_rotation = makeEdit(CSM_TR("e.g. 45"));
+    m_rotation->setToolTip(CSM_TR("In degrees; any angle works, e.g. 15, 45, 60"));
+    m_form->addRow(CSM_TR("Rotation (°)"), m_rotation);
 
-    m_value = makeEdit(QStringLiteral("例如 10k / 4.7u"));
-    m_form->addRow(QStringLiteral("数值"), m_value);
+    m_value = makeEdit(CSM_TR("e.g. 10k / 4.7u"));
+    m_form->addRow(CSM_TR("Value"), m_value);
     m_valueLabel = qobject_cast<QLabel*>(m_form->labelForField(m_value));
 
-    m_polarized = new QCheckBox(QStringLiteral("有极性（电解电容）"), page);
-    m_polarized->setToolTip(QStringLiteral("符号带「+」，正极在引脚 1 一侧"));
-    m_form->addRow(QStringLiteral("极性"), m_polarized);
+    m_polarized = new QCheckBox(CSM_TR("Polarized (electrolytic)"), page);
+    m_polarized->setToolTip(CSM_TR("Marked with '+': positive terminal on pin 1"));
+    m_form->addRow(CSM_TR("Polarity"), m_polarized);
 
-    m_k = makeEdit(QStringLiteral("例如 2m"));
+    m_k = makeEdit(CSM_TR("e.g. 2m"));
     m_form->addRow(QStringLiteral("K (A/V²)"), m_k);
-    m_vf = makeEdit(QStringLiteral("例如 0.7"));
-    m_form->addRow(QStringLiteral("导通压降 Vf"), m_vf);
-    m_ctr = makeEdit(QStringLiteral("例如 3"));
-    m_form->addRow(QStringLiteral("电流传输比 CTR"), m_ctr);
-    m_vceSat = makeEdit(QStringLiteral("例如 0.2"));
-    m_form->addRow(QStringLiteral("饱和压降 Vce(sat)"), m_vceSat);
-    m_lpri = makeEdit(QStringLiteral("例如 1"));
-    m_form->addRow(QStringLiteral("初级电感 L1"), m_lpri);
+    m_vf = makeEdit(CSM_TR("e.g. 0.7"));
+    m_form->addRow(CSM_TR("On-state drop Vf"), m_vf);
+    m_ctr = makeEdit(CSM_TR("e.g. 3"));
+    m_form->addRow(CSM_TR("CTR"), m_ctr);
+    m_vceSat = makeEdit(CSM_TR("e.g. 0.2"));
+    m_form->addRow(CSM_TR("Saturation Vce(sat)"), m_vceSat);
+    m_lpri = makeEdit(CSM_TR("e.g. 1"));
+    m_form->addRow(CSM_TR("Primary inductance L1"), m_lpri);
 
     m_windings = new QComboBox(page);
-    m_windings->addItem(QStringLiteral("单绕组（1 初级 + 1 次级）"),
+    m_windings->addItem(CSM_TR("Single winding (1 primary + 1 secondary)"),
                         int(TransformerKind::Single));
-    m_windings->addItem(QStringLiteral("初级 + 辅助绕组 + 次级（6 引脚）"),
+    m_windings->addItem(CSM_TR("Primary + auxiliary + secondary (6 pins)"),
                         int(TransformerKind::PrimaryAuxSecondary));
-    m_form->addRow(QStringLiteral("绕组形式"), m_windings);
+    m_form->addRow(CSM_TR("Windings"), m_windings);
 
     m_meterMode = new QComboBox(page);
     m_meterMode->setObjectName(QStringLiteral("multimeterModeCombo"));
@@ -155,83 +156,84 @@ void PropertyPanel::buildUi()
     m_meterMode->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     m_meterMode->setMinimumContentsLength(7);
 
-    m_form->addRow(QStringLiteral("档位"), m_meterMode);
+    m_form->addRow(CSM_TR("Range"), m_meterMode);
 
     // 门类型不在这里改：元件库里与门 / 或门 / 非门…各占一条，
     // 要换门就删掉重放。面板只留真正需要调的参数
     m_logicHigh = makeEdit();
-    m_logicHigh->setToolTip(QStringLiteral("输出的高电平。低电平固定 0 V，"
-                                           "输入阈值取它的一半（带 5% 回差）。"));
-    m_logicHigh->setPlaceholderText(QStringLiteral("例如 3.3"));
-    m_form->addRow(QStringLiteral("高电平 (V)"), m_logicHigh);
+    m_logicHigh->setToolTip(CSM_TR("Output high level. Low level is fixed at 0 V; "
+                                   "input threshold is half of it (5% hysteresis)."));
+    m_logicHigh->setPlaceholderText(CSM_TR("e.g. 3.3"));
+    m_form->addRow(CSM_TR("High level (V)"), m_logicHigh);
 
     m_acFrequency = makeEdit();
     m_acFrequency->setToolTip(
-        QStringLiteral("交流档按一个周期算有效值：窗口 = 1 / 这个频率。\n"
-                       "被测信号不是 50 Hz 时必须跟着改，否则读数会随时间跳动。"));
-    m_acFrequency->setPlaceholderText(QStringLiteral("例如 50Hz"));
-    m_form->addRow(QStringLiteral("交流频率"), m_acFrequency);
+        CSM_TR("AC mode averages one full period: window = 1 / this frequency.\n"
+               "Follow the measured signal when it is not 50 Hz, otherwise the reading drifts."));
+    m_acFrequency->setPlaceholderText(CSM_TR("e.g. 50Hz"));
+    m_form->addRow(CSM_TR("AC frequency"), m_acFrequency);
 
     m_groundKind = new QComboBox(page);
-    m_groundKind->addItem(QStringLiteral("GND（主地）"), int(GroundKind::Gnd));
-    m_groundKind->addItem(QStringLiteral("AGND（模拟地）"), int(GroundKind::Agnd));
-    m_groundKind->addItem(QStringLiteral("DGND（数字地）"), int(GroundKind::Dgnd));
-    m_groundKind->addItem(QStringLiteral("PGND（功率地）"), int(GroundKind::Pgnd));
-    m_groundKind->addItem(QStringLiteral("EARTH（保护地）"), int(GroundKind::Earth));
-    m_form->addRow(QStringLiteral("接地种类"), m_groundKind);
+    m_groundKind->addItem(CSM_TR("GND (main)"), int(GroundKind::Gnd));
+    m_groundKind->addItem(CSM_TR("AGND (analog)"), int(GroundKind::Agnd));
+    m_groundKind->addItem(CSM_TR("DGND (digital)"), int(GroundKind::Dgnd));
+    m_groundKind->addItem(CSM_TR("PGND (power)"), int(GroundKind::Pgnd));
+    m_groundKind->addItem(CSM_TR("EARTH (protective)"), int(GroundKind::Earth));
+    m_form->addRow(CSM_TR("Ground type"), m_groundKind);
 
     m_polarity = new QComboBox(page);
-    m_polarity->addItem(QStringLiteral("同名端都在上（同相）"), 0);
-    m_polarity->addItem(QStringLiteral("次级同名端在下（反相）"), 1);
-    m_form->addRow(QStringLiteral("同名端"), m_polarity);
+    m_polarity->addItem(CSM_TR("Dots on top (in phase)"), 0);
+    m_polarity->addItem(CSM_TR("Secondary dot at bottom (inverted)"), 1);
+    m_form->addRow(CSM_TR("Dot polarity"), m_polarity);
 
     m_function = new QComboBox(page);
-    m_function->addItem(QStringLiteral("直流 (DC)"), int(SourceFunction::Constant));
-    m_function->addItem(QStringLiteral("正弦 (SIN)"), int(SourceFunction::Sine));
-    m_function->addItem(QStringLiteral("脉冲 (PULSE)"), int(SourceFunction::Pulse));
-    m_form->addRow(QStringLiteral("波形"), m_function);
+    m_function->addItem(CSM_TR("DC"), int(SourceFunction::Constant));
+    m_function->addItem(CSM_TR("Sine (SIN)"), int(SourceFunction::Sine));
+    m_function->addItem(CSM_TR("Pulse (PULSE)"), int(SourceFunction::Pulse));
+    m_form->addRow(CSM_TR("Waveform"), m_function);
 
     m_dc = makeEdit(QStringLiteral("5"));
-    m_form->addRow(QStringLiteral("直流值"), m_dc);
+    m_form->addRow(CSM_TR("DC value"), m_dc);
 
     m_amplitude = makeEdit();
-    m_amplitude->setToolTip(QStringLiteral("正弦源的**有效值**（RMS）；峰值 = 有效值 × 1.414"));
-    m_form->addRow(QStringLiteral("有效值 (RMS)"), m_amplitude);
+    m_amplitude->setToolTip(CSM_TR("**RMS** value of the sine source; peak = RMS x 1.414"));
+    m_form->addRow(CSM_TR("RMS"), m_amplitude);
     m_frequency = makeEdit();
-    m_form->addRow(QStringLiteral("频率"), m_frequency);
+    m_form->addRow(CSM_TR("Frequency"), m_frequency);
     m_phase = makeEdit();
-    m_form->addRow(QStringLiteral("相位 °"), m_phase);
+    m_form->addRow(CSM_TR("Phase °"), m_phase);
     m_offset = makeEdit();
-    m_form->addRow(QStringLiteral("偏置"), m_offset);
+    m_form->addRow(CSM_TR("Offset"), m_offset);
     m_delay = makeEdit();
-    m_form->addRow(QStringLiteral("延迟"), m_delay);
+    m_form->addRow(CSM_TR("Delay"), m_delay);
 
     m_pulseV1 = makeEdit();
-    m_form->addRow(QStringLiteral("初始值"), m_pulseV1);
+    m_form->addRow(CSM_TR("Initial value"), m_pulseV1);
     m_pulseV2 = makeEdit();
-    m_form->addRow(QStringLiteral("脉冲值"), m_pulseV2);
+    m_form->addRow(CSM_TR("Pulse value"), m_pulseV2);
     m_rise = makeEdit();
-    m_form->addRow(QStringLiteral("上升时间"), m_rise);
+    m_form->addRow(CSM_TR("Rise time"), m_rise);
     m_fall = makeEdit();
-    m_form->addRow(QStringLiteral("下降时间"), m_fall);
+    m_form->addRow(CSM_TR("Fall time"), m_fall);
     m_width = makeEdit();
-    m_form->addRow(QStringLiteral("脉宽"), m_width);
+    m_form->addRow(CSM_TR("Pulse width"), m_width);
     m_period = makeEdit();
-    m_form->addRow(QStringLiteral("周期"), m_period);
+    m_form->addRow(CSM_TR("Period"), m_period);
 
     m_netLabel = makeEdit();
     m_netLabel->setObjectName(QStringLiteral("netLabelEdit"));
-    m_netLabel->setToolTip(QStringLiteral(
-        "同名的网络标签在网表里并成一个网络 —— 不用拉线也能把两处连起来。"));
-    m_netLabel->setPlaceholderText(QStringLiteral("例如 VCC / GND_D / OUT"));
-    m_form->addRow(QStringLiteral("网络名"), m_netLabel);
+    m_netLabel->setToolTip(
+        CSM_TR("Net labels with the same name are merged into one net, so no wire is needed."));
+    m_netLabel->setPlaceholderText(CSM_TR("e.g. VCC / GND_D / OUT"));
+    m_form->addRow(CSM_TR("Net name"), m_netLabel);
 
-    m_closed = new QCheckBox(QStringLiteral("开关闭合"), page);
+    m_closed = new QCheckBox(CSM_TR("Switch closed"), page);
 
     // 按钮开关：只有「常开 / 常闭」可设。按下是瞬时的，不进属性面板
-    m_normallyClosed = new QCheckBox(QStringLiteral("常闭（松开时接通）"), page);
-    m_normallyClosed->setToolTip(QStringLiteral(
-        "不勾：常开，仿真时按住才接通。\n勾上：常闭，仿真时按住才断开。"));
+    m_normallyClosed = new QCheckBox(CSM_TR("Normally closed (conducts while released)"), page);
+    m_normallyClosed->setToolTip(
+        CSM_TR("Unchecked: normally open, conducts while held during simulation.\n"
+               "Checked: normally closed, opens while held."));
     m_form->addRow(QString(), m_normallyClosed);
     m_form->addRow(QString(), m_closed);
 
@@ -239,8 +241,8 @@ void PropertyPanel::buildUi()
     pageLayout->addStretch(1);
 
     auto* hint = new QLabel(
-        QStringLiteral("提示：数值可直接带单位（10kΩ、4.7µF、10mH、5V、1mA）；"
-                       "不写单位时按元件默认单位。"),
+        CSM_TR("Tip: values may carry units (10kΩ, 4.7µF, 10mH, 5V, 1mA); "
+               "without a unit the component default applies."),
         page);
     hint->setWordWrap(true);
     Theme::styleWidget(hint, [] { return QStringLiteral("color:%1; font-size:11px;").arg(Theme::textMuted().name()); });
@@ -433,69 +435,69 @@ void PropertyPanel::updateVisibility()
     if (m_valueLabel) {
         switch (c.type) {
         case ComponentType::Resistor:
-            m_valueLabel->setText(QStringLiteral("数值 (Ω)"));
-            m_value->setPlaceholderText(QStringLiteral("例如 10kΩ / 4.7k"));
+            m_valueLabel->setText(CSM_TR("Value (Ω)"));
+            m_value->setPlaceholderText(CSM_TR("e.g. 10kΩ / 4.7k"));
             break;
         case ComponentType::Capacitor:
-            m_valueLabel->setText(QStringLiteral("数值 (F)"));
-            m_value->setPlaceholderText(QStringLiteral("例如 100nF / 1µF"));
+            m_valueLabel->setText(CSM_TR("Value (F)"));
+            m_value->setPlaceholderText(CSM_TR("e.g. 100nF / 1µF"));
             break;
         case ComponentType::Inductor:
-            m_valueLabel->setText(QStringLiteral("数值 (H)"));
-            m_value->setPlaceholderText(QStringLiteral("例如 10mH"));
+            m_valueLabel->setText(CSM_TR("Value (H)"));
+            m_value->setPlaceholderText(CSM_TR("e.g. 10mH"));
             break;
         case ComponentType::OpAmp:
-            m_valueLabel->setText(QStringLiteral("开环增益"));
-            m_value->setPlaceholderText(QStringLiteral("例如 100k"));
+            m_valueLabel->setText(CSM_TR("Open-loop gain"));
+            m_value->setPlaceholderText(CSM_TR("e.g. 100k"));
             break;
         case ComponentType::Npn:
         case ComponentType::Pnp:
-            m_valueLabel->setText(QStringLiteral("电流放大 β"));
-            m_value->setPlaceholderText(QStringLiteral("例如 100"));
+            m_valueLabel->setText(CSM_TR("Current gain β"));
+            m_value->setPlaceholderText(CSM_TR("e.g. 100"));
             break;
         case ComponentType::Nmos:
         case ComponentType::Pmos:
         case ComponentType::Igbt:
-            m_valueLabel->setText(QStringLiteral("开启电压 Vth"));
-            m_value->setPlaceholderText(QStringLiteral("例如 2"));
+            m_valueLabel->setText(CSM_TR("Threshold Vth"));
+            m_value->setPlaceholderText(CSM_TR("e.g. 2"));
             break;
         case ComponentType::Led:
             // LED 只暴露正向压降一个参数，见下面的 applyValue
-            m_valueLabel->setText(QStringLiteral("正向压降 Vf"));
-            m_value->setPlaceholderText(QStringLiteral("例如 2"));
+            m_valueLabel->setText(CSM_TR("Forward drop Vf"));
+            m_value->setPlaceholderText(CSM_TR("e.g. 2"));
             break;
         case ComponentType::Optocoupler:
-            m_valueLabel->setText(QStringLiteral("正向压降 Vf"));
-            m_value->setPlaceholderText(QStringLiteral("例如 1.2"));
+            m_valueLabel->setText(CSM_TR("Forward drop Vf"));
+            m_value->setPlaceholderText(CSM_TR("e.g. 1.2"));
             break;
         case ComponentType::Tl431:
-            m_valueLabel->setText(QStringLiteral("基准电压 Vref"));
-            m_value->setPlaceholderText(QStringLiteral("例如 2.5"));
+            m_valueLabel->setText(CSM_TR("Reference Vref"));
+            m_value->setPlaceholderText(CSM_TR("e.g. 2.5"));
             break;
         case ComponentType::Transformer:
             m_valueLabel->setText(c.transformerKind == TransformerKind::PrimaryAuxSecondary
-                                      ? QStringLiteral("匝数比 N1:N2:N3")
-                                      : QStringLiteral("匝数比 N1:N2"));
-            m_value->setPlaceholderText(QStringLiteral("例如 2"));
+                                      ? CSM_TR("Turns ratio N1:N2:N3")
+                                      : CSM_TR("Turns ratio N1:N2"));
+            m_value->setPlaceholderText(CSM_TR("e.g. 2"));
             break;
         default:
-            m_valueLabel->setText(QStringLiteral("数值"));
+            m_valueLabel->setText(CSM_TR("Value"));
             break;
         }
     }
 
     if (isSource(c.type)) {
         const QString unit = unitSymbol(sourceUnitFor(c.type));
-        m_dc->setPlaceholderText(QStringLiteral("例如 5%1").arg(unit));
-        m_amplitude->setPlaceholderText(QStringLiteral("例如 220%1").arg(unit));
-        m_offset->setPlaceholderText(QStringLiteral("例如 0%1").arg(unit));
-        m_pulseV1->setPlaceholderText(QStringLiteral("例如 0%1").arg(unit));
-        m_pulseV2->setPlaceholderText(QStringLiteral("例如 5%1").arg(unit));
+        m_dc->setPlaceholderText(CSM_TR("e.g. 5%1").arg(unit));
+        m_amplitude->setPlaceholderText(CSM_TR("e.g. 220%1").arg(unit));
+        m_offset->setPlaceholderText(CSM_TR("e.g. 0%1").arg(unit));
+        m_pulseV1->setPlaceholderText(CSM_TR("e.g. 0%1").arg(unit));
+        m_pulseV2->setPlaceholderText(CSM_TR("e.g. 5%1").arg(unit));
     }
-    m_frequency->setPlaceholderText(QStringLiteral("例如 1kHz"));
-    m_delay->setPlaceholderText(QStringLiteral("例如 1ms"));
+    m_frequency->setPlaceholderText(CSM_TR("e.g. 1kHz"));
+    m_delay->setPlaceholderText(CSM_TR("e.g. 1ms"));
     for (QLineEdit* edit : {m_rise, m_fall, m_width, m_period})
-        edit->setPlaceholderText(QStringLiteral("例如 1ms"));
+        edit->setPlaceholderText(CSM_TR("e.g. 1ms"));
 
     // 网络标签只有「网络名」，没有编号，也不该有数值
     m_form->setRowVisible(m_refdes, c.type != ComponentType::NetLabel);
@@ -531,7 +533,7 @@ void PropertyPanel::updateSubtitle()
     const Component& c = m_item->component();
     QString text = c.displayValue();
     if (c.type == ComponentType::Diode)
-        text = QStringLiteral("小信号二极管");
+        text = CSM_TR("Small-signal diode");
     m_subtitle->setText(text);
 }
 
@@ -558,7 +560,7 @@ void PropertyPanel::applyNetLabel()
         return;
     const QString name = m_netLabel->text().trimmed();
     if (name.isEmpty()) {
-        markInvalid(m_netLabel, QStringLiteral("网络名不能为空"));
+        markInvalid(m_netLabel, CSM_TR("The net name cannot be empty"));
         return;
     }
     markValid(m_netLabel);
@@ -626,7 +628,7 @@ void PropertyPanel::applyValue()
         QString reason;
         const double high = parseQuantity(m_logicHigh->text(), UnitKind::Volt, &ok, &reason);
         if (!ok || high <= 0.0) {
-            markInvalid(m_logicHigh, ok ? QStringLiteral("高电平必须大于 0") : reason);
+            markInvalid(m_logicHigh, ok ? CSM_TR("High level must be greater than 0") : reason);
             return;
         }
         markValid(m_logicHigh);
@@ -656,14 +658,14 @@ void PropertyPanel::applyValue()
         // 第三个是次级。内部仍然只存「次级比」和「辅助比」。
         const QStringList parts = m_value->text().trimmed().split(QLatin1Char(':'));
         if (parts.size() < 2 || parts.size() > 3) {
-            markInvalid(m_value, QStringLiteral("请按 N1:N2 或 N1:N2:N3 填写"));
+            markInvalid(m_value, CSM_TR("Enter N1:N2 or N1:N2:N3"));
             return;
         }
         QVector<double> turns;
         for (const QString& part : parts) {
             const double v = parseQuantity(part, UnitKind::None, &ok, &reason);
             if (!ok || v <= 0.0) {
-                markInvalid(m_value, QStringLiteral("匝数比必须是正数"));
+                markInvalid(m_value, CSM_TR("The turns ratio must be positive"));
                 return;
             }
             turns.append(v);
@@ -869,7 +871,7 @@ void PropertyPanel::markInvalid(QLineEdit* edit, const QString& reason)
 {
     edit->setStyleSheet(QStringLiteral("border:1px solid ") + Theme::danger().name() + QStringLiteral("; border-radius:3px;"));
     edit->setToolTip(reason.isEmpty()
-                         ? QStringLiteral("无法识别该数值，示例：10kΩ、4.7µF、1meg")
+                         ? CSM_TR("Cannot read that value, e.g. 10kΩ, 4.7µF, 1meg")
                          : reason);
     edit->setFocus();
 }

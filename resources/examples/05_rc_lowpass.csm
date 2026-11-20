@@ -155,6 +155,7 @@
     ],
     "format": "circuit-master",
     "name": "RC 低通滤波器",
+    "name_en": "RC low-pass filter",
     "version": 2,
     "wires": [
         [

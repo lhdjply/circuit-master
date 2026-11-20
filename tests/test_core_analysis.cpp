@@ -1,4 +1,6 @@
 #include "core/Circuit.h"
+
+#include "core/Language.h"
 #include "core/Units.h"
 #include "core/UpdateChecker.h"
 #include "csm_version.h"
@@ -907,6 +909,12 @@ void CoreAnalysisTest::groundRequired()
     QVERIFY(!net.error.isEmpty());
 }
 
-QTEST_GUILESS_MAIN(CoreAnalysisTest)
+int main(int argc, char** argv)
+{
+    QCoreApplication app(argc, argv);
+    csm::saveLanguage(csm::Language::Chinese);   // 断言里的提示文案是中文
+    CoreAnalysisTest tc;
+    return QTest::qExec(&tc, argc, argv);
+}
 
 #include "test_core_analysis.moc"

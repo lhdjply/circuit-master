@@ -1,4 +1,5 @@
 #include "core/Netlist.h"
+#include "core/Language.h"
 
 #include "core/Circuit.h"
 
@@ -185,8 +186,7 @@ Netlist Netlist::build(const Circuit& circuit)
             const int root = dsu.find(dsu.add(toKey(groundReference->pinPosition(0), grid)));
             if (!groundRoots.contains(root))
                 groundRoots.append(root);
-            net.warnings << QStringLiteral(
-                                "电路里没有 GND，已把 %1 当作参考节点（0 V）。")
+            net.warnings << CSM_TR("No GND in the circuit; %1 is used as the reference node (0 V).")
                                 .arg(groundKindName(groundReference->groundKind));
             hasGround = true;
         }
@@ -207,15 +207,14 @@ Netlist Netlist::build(const Circuit& circuit)
             const int root = dsu.find(dsu.add(toKey(reference->pinPosition(1), grid)));
             if (!groundRoots.contains(root))
                 groundRoots.append(root);
-            net.warnings << QStringLiteral(
-                                "电路里没有 GND，已把万用表 %1 的负端当作参考节点（0 V）。")
+            net.warnings << CSM_TR("No GND in the circuit; the negative terminal of multimeter %1 is used as the reference (0 V).")
                                 .arg(reference->refdes);
         } else {
             net.valid = false;
-            net.error = QStringLiteral(
-                "电路中没有主接地符号（GND）。请放置 GND 并连接到电路，"
-                "否则无法确定参考节点（AGND/DGND/PGND/EARTH 不算参考地；"
-                "有万用表时也可以拿它的负端当参考）。");
+            net.error = CSM_TR(
+                "The circuit has no main ground symbol (GND). Place a GND and connect it, "
+                "otherwise the reference node is undefined (AGND/DGND/PGND/EARTH do not count; "
+                "a multimeter's negative terminal works as a reference too).");
             return net;
         }
     }
@@ -292,13 +291,13 @@ Netlist Netlist::build(const Circuit& circuit)
             continue;
         for (int i = 0; i < nodes.size(); ++i) {
             if (nodes.at(i) != 0 && pinCountByNode.value(nodes.at(i)) <= 1) {
-                net.warnings << QStringLiteral("%1 的引脚 %2 悬空，未与任何元件相连。")
+                net.warnings << CSM_TR("Pin %2 of %1 is floating, not connected to anything.")
                                     .arg(comp.refdes)
                                     .arg(i + 1);
             }
         }
         if (nodes.size() == 2 && nodes.at(0) == nodes.at(1)) {
-            net.warnings << QStringLiteral("%1 的两个引脚被短接在一起。").arg(comp.refdes);
+            net.warnings << CSM_TR("Both pins of %1 are shorted together.").arg(comp.refdes);
         }
     }
 

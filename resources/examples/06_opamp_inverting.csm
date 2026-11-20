@@ -251,6 +251,7 @@
     ],
     "format": "circuit-master",
     "name": "运放反相放大器",
+    "name_en": "Inverting op-amp",
     "version": 2,
     "wires": [
         [

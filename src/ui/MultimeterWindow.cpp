@@ -1,4 +1,5 @@
 #include "ui/MultimeterWindow.h"
+#include "core/Language.h"
 
 #include "ui/Theme.h"
 
@@ -387,7 +388,7 @@ MultimeterWindow::MultimeterWindow(const QString& refdes, MultimeterMode mode, Q
     , m_refdes(refdes)
     , m_mode(mode)
 {
-    setWindowTitle(QStringLiteral("%1 — 万用表").arg(refdes));
+    setWindowTitle(CSM_TR("%1 — Multimeter").arg(refdes));
     setAttribute(Qt::WA_DeleteOnClose);
     resize(330, 150);
 
@@ -410,7 +411,7 @@ MultimeterWindow::MultimeterWindow(const QString& refdes, MultimeterMode mode, Q
     header->addWidget(m_modeLabel);
     header->addStretch(1);
 
-    auto* digitsLabel = new QLabel(QStringLiteral("位数"), this);
+    auto* digitsLabel = new QLabel(CSM_TR("Digits"), this);
     Theme::styleWidget(digitsLabel, [] { return QStringLiteral("color:%1;").arg(Theme::textMuted().name()); });
     header->addWidget(digitsLabel);
     auto* digits = new QComboBox(this);

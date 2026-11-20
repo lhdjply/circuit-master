@@ -1,4 +1,5 @@
 #include "ui/MainWindow.h"
+#include "core/Language.h"
 
 #include "ui/MultimeterWindow.h"
 
@@ -172,9 +173,9 @@ AnalysisKind kindFromTag(const QString& tag)
 QString kindSuffix(AnalysisKind kind)
 {
     switch (kind) {
-    case AnalysisKind::OperatingPoint: return QStringLiteral("（工作点）");
-    case AnalysisKind::AC:             return QStringLiteral("（交流扫频）");
-    case AnalysisKind::Transient:      return QStringLiteral("（瞬态）");
+    case AnalysisKind::OperatingPoint: return CSM_TR(" (operating point)");
+    case AnalysisKind::AC:             return CSM_TR(" (AC sweep)");
+    case AnalysisKind::Transient:      return CSM_TR(" (transient)");
     }
     return QString();
 }
@@ -364,6 +365,18 @@ QIcon buildActionIcon(const IconSpec& spec)
     return icon;
 }
 
+/// 示例的显示名：英文界面下优先用清单里的 name_en，没有就退回 name
+QString exampleDisplayName(const QJsonObject& root, const QString& fallback)
+{
+    if (csm::language() == csm::Language::English) {
+        const QString english = root.value(QStringLiteral("name_en")).toString();
+        if (!english.isEmpty())
+            return english;
+    }
+    const QString name = root.value(QStringLiteral("name")).toString();
+    return name.isEmpty() ? fallback : name;
+}
+
 QIcon actionIcon(const QString& name, const QString& themeName, QStyle::StandardPixmap fallback)
 {
     return buildActionIcon(IconSpec{name, themeName, fallback});
@@ -376,7 +389,7 @@ MainWindow::MainWindow(QWidget* parent)
 {
     // 跟随系统模式下，系统深浅色一变就整体重刷（图标、元件库、图表都要跟着）
     Theme::setChangeHandler([this] { applyTheme(); });
-    setWindowTitle(QStringLiteral("电路仿真大师"));
+    setWindowTitle(CSM_TR("Circuit Master"));
     const QRect available = QGuiApplication::primaryScreen()
         ? QGuiApplication::primaryScreen()->availableGeometry()
         : QRect(0, 0, 1400, 880);
@@ -428,11 +441,11 @@ QTabBar::close-button:hover {
     }
     createStatusBar();
 
-    appendLog(QStringLiteral("电路仿真大师 %1  —  Qt6 / MNA 求解器")
+    appendLog(CSM_TR("Circuit Master %1  —  Qt6 / MNA solver")
                   .arg(QStringLiteral(CSM_VERSION_STRING)));
-    appendLog(QStringLiteral("提示：左键选择拖动，双击编辑参数，空格键旋转；按 F5 运行仿真。"));
-    appendLog(QStringLiteral("已新建空白电路：可从左侧元件库放置元件，"
-                             "或通过「仿真 → 示例电路」载入示例。"));
+    appendLog(CSM_TR("Tip: left-drag to select and move, double-click to edit, Space to rotate; F5 runs the simulation."));
+    appendLog(CSM_TR("New blank circuit: drop parts from the library on the left, "
+                     "or load an example from Simulate → Example Circuits."));
 
     if (m_actMonitor) {
         m_actMonitor->setEnabled(false);
@@ -481,10 +494,10 @@ void MainWindow::updateTabTitle(Document* document)
         return;
     m_tabs->setTabText(index, document->tabTitle());
     m_tabs->setTabToolTip(index, document->filePath.isEmpty()
-                                     ? QStringLiteral("尚未保存到文件")
+                                     ? CSM_TR("Not saved to a file yet")
                                      : document->filePath);
     if (document == doc()) {
-        setWindowTitle(QStringLiteral("%1%2 — 电路仿真大师")
+        setWindowTitle(CSM_TR("%1%2 — Circuit Master")
                            .arg(document->name,
                                 document->dirty ? QStringLiteral(" *") : QString()));
     }
@@ -509,7 +522,7 @@ Document* MainWindow::addDocument(const QString& name, const QString& path)
     m_documents.append(document);
     m_tabs->addTab(document->view, document->tabTitle());
     m_tabs->setTabToolTip(m_documents.size() - 1,
-                          path.isEmpty() ? QStringLiteral("尚未保存到文件") : path);
+                          path.isEmpty() ? CSM_TR("Not saved to a file yet") : path);
 
     // currentChanged 会触发 switchToDocument；这里再显式切一次，
     // 保证即使旧标签就是当前标签（第一次创建时 index 不变）也完成绑定
@@ -685,7 +698,7 @@ bool MainWindow::closeDocument(int index)
         closeMeterWindows();
         document->scene->clearAll();
         m_loading = false;
-        document->name = QStringLiteral("未命名");
+        document->name = CSM_TR("Untitled");
         document->filePath.clear();
         document->dirty = false;
         document->hasResult = false;
@@ -731,68 +744,68 @@ void MainWindow::createActions()
 {
     m_actNew = new QAction(
         actionIcon(QStringLiteral("new"), QStringLiteral("document-new"), QStyle::SP_FileIcon),
-        QStringLiteral("新建(&N)"), this);
+        CSM_TR("&New"), this);
     m_actNew->setShortcut(QKeySequence::New);
 
     m_actOpen = new QAction(
         actionIcon(QStringLiteral("open"), QStringLiteral("document-open"),
                    QStyle::SP_DialogOpenButton),
-        QStringLiteral("打开(&O)…"), this);
+        CSM_TR("&Open…"), this);
     m_actOpen->setShortcut(QKeySequence::Open);
 
     m_actSave = new QAction(
         actionIcon(QStringLiteral("save"), QStringLiteral("document-save"),
                    QStyle::SP_DialogSaveButton),
-        QStringLiteral("保存(&S)"), this);
+        CSM_TR("&Save"), this);
     m_actSave->setShortcut(QKeySequence::Save);
 
-    m_actSaveAs = new QAction(QStringLiteral("另存为(&A)…"), this);
+    m_actSaveAs = new QAction(CSM_TR("Save &As…"), this);
     m_actSaveAs->setShortcut(QKeySequence::SaveAs);
 
 
-    m_actCloseTab = new QAction(QStringLiteral("关闭标签页(&W)"), this);
+    m_actCloseTab = new QAction(CSM_TR("Close &Tab"), this);
     m_actCloseTab->setShortcut(QKeySequence::Close); // Ctrl+W
-    m_actCloseTab->setStatusTip(QStringLiteral("关闭当前标签页；有未保存的更改会先问一句"));
+    m_actCloseTab->setStatusTip(CSM_TR("Close the current tab; unsaved changes are confirmed first"));
 
-    m_actNextTab = new QAction(QStringLiteral("下一个标签页"), this);
+    m_actNextTab = new QAction(CSM_TR("Next Tab"), this);
     m_actNextTab->setShortcut(QKeySequence(QStringLiteral("Ctrl+Tab")));
     m_actNextTab->setShortcutContext(Qt::WindowShortcut);
 
-    m_actPrevTab = new QAction(QStringLiteral("上一个标签页"), this);
+    m_actPrevTab = new QAction(CSM_TR("Previous Tab"), this);
     m_actPrevTab->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+Tab")));
     m_actPrevTab->setShortcutContext(Qt::WindowShortcut);
 
-    m_actQuit = new QAction(QStringLiteral("退出(&Q)"), this);
+    m_actQuit = new QAction(CSM_TR("&Quit"), this);
     m_actQuit->setShortcut(QKeySequence::Quit);
 
     m_actUndo = new QAction(
         actionIcon(QStringLiteral("undo"), QStringLiteral("edit-undo"), QStyle::SP_ArrowBack),
-        QStringLiteral("撤销"), this);
+        CSM_TR("Undo"), this);
     m_actUndo->setShortcut(QKeySequence::Undo);
     m_actUndo->setEnabled(false);
 
     m_actRedo = new QAction(
         actionIcon(QStringLiteral("redo"), QStringLiteral("edit-redo"), QStyle::SP_ArrowForward),
-        QStringLiteral("重做"), this);
+        CSM_TR("Redo"), this);
     m_actRedo->setShortcut(QKeySequence::Redo);
     m_actRedo->setEnabled(false);
 
-    m_actCut = new QAction(QStringLiteral("剪切"), this);
+    m_actCut = new QAction(CSM_TR("Cut"), this);
     m_actCut->setShortcut(QKeySequence::Cut);
     m_actCut->setEnabled(false);
-    m_actCopy = new QAction(QStringLiteral("复制"), this);
+    m_actCopy = new QAction(CSM_TR("Copy"), this);
     m_actCopy->setShortcut(QKeySequence::Copy);
     m_actCopy->setEnabled(false);
-    m_actPaste = new QAction(QStringLiteral("粘贴"), this);
+    m_actPaste = new QAction(CSM_TR("Paste"), this);
     m_actPaste->setShortcut(QKeySequence::Paste);
     m_actPaste->setEnabled(false);
 
     m_actDelete = new QAction(
         actionIcon(QStringLiteral("delete"), QStringLiteral("edit-delete"), QStyle::SP_TrashIcon),
-        QStringLiteral("删除"), this);
+        CSM_TR("Delete"), this);
     m_actDelete->setShortcut(QKeySequence::Delete);
 
-    m_actRotate = new QAction(QStringLiteral("旋转 90°"), this);
+    m_actRotate = new QAction(CSM_TR("Rotate 90°"), this);
     m_actRotate->setObjectName(QStringLiteral("actRotate"));
     // 空格旋转：和 KiCad 的习惯一致，选中元件后连按空格就能连续转
     m_actRotate->setShortcut(QKeySequence(Qt::Key_Space));
@@ -800,12 +813,12 @@ void MainWindow::createActions()
 
     // 对齐与分布：按符号本体的外框算，位移仍会被网格吸附
     const QVector<QPair<QString, SchematicScene::AlignMode>> alignItems = {
-        {QStringLiteral("左对齐"), SchematicScene::AlignMode::Left},
-        {QStringLiteral("水平居中"), SchematicScene::AlignMode::CenterH},
-        {QStringLiteral("右对齐"), SchematicScene::AlignMode::Right},
-        {QStringLiteral("顶对齐"), SchematicScene::AlignMode::Top},
-        {QStringLiteral("垂直居中"), SchematicScene::AlignMode::CenterV},
-        {QStringLiteral("底对齐"), SchematicScene::AlignMode::Bottom},
+        {CSM_TR("Align left"), SchematicScene::AlignMode::Left},
+        {CSM_TR("Center horizontally"), SchematicScene::AlignMode::CenterH},
+        {CSM_TR("Right align"), SchematicScene::AlignMode::Right},
+        {CSM_TR("Align top"), SchematicScene::AlignMode::Top},
+        {CSM_TR("Center vertically"), SchematicScene::AlignMode::CenterV},
+        {CSM_TR("Align bottom"), SchematicScene::AlignMode::Bottom},
     };
     for (const auto& entry : alignItems) {
         auto* action = new QAction(entry.first, this);
@@ -819,8 +832,8 @@ void MainWindow::createActions()
     }
 
     const QVector<QPair<QString, Qt::Orientation>> distributeItems = {
-        {QStringLiteral("水平等距"), Qt::Horizontal},
-        {QStringLiteral("垂直等距"), Qt::Vertical},
+        {CSM_TR("Distribute horizontally"), Qt::Horizontal},
+        {CSM_TR("Distribute vertically"), Qt::Vertical},
     };
     for (const auto& entry : distributeItems) {
         auto* action = new QAction(entry.first, this);
@@ -833,72 +846,72 @@ void MainWindow::createActions()
         m_distributeActions.append(action);
     }
 
-    m_actSelectAll = new QAction(QStringLiteral("全选"), this);
+    m_actSelectAll = new QAction(CSM_TR("Select All"), this);
     m_actSelectAll->setShortcut(QKeySequence::SelectAll);
 
     m_actZoomIn = new QAction(
         actionIcon(QStringLiteral("zoom_in"), QStringLiteral("zoom-in"), QStyle::SP_ArrowUp),
-        QStringLiteral("放大"), this);
+        CSM_TR("Zoom In"), this);
     m_actZoomIn->setShortcut(QKeySequence::ZoomIn);
 
     m_actZoomOut = new QAction(
         actionIcon(QStringLiteral("zoom_out"), QStringLiteral("zoom-out"), QStyle::SP_ArrowDown),
-        QStringLiteral("缩小"), this);
+        CSM_TR("Zoom Out"), this);
     m_actZoomOut->setShortcut(QKeySequence::ZoomOut);
 
     m_actZoomFit = new QAction(
         actionIcon(QStringLiteral("zoom_fit"), QStringLiteral("zoom-fit-best"),
                    QStyle::SP_FileDialogContentsView),
-        QStringLiteral("适应窗口"), this);
+        CSM_TR("Fit to Window"), this);
     m_actZoomFit->setShortcut(QKeySequence(QStringLiteral("Ctrl+0")));
 
     m_actGrid = new QAction(
         actionIcon(QStringLiteral("grid"), QStringLiteral("view-grid"), QStyle::SP_FileDialogListView),
-        QStringLiteral("显示网格"), this);
+        CSM_TR("Show Grid"), this);
     m_actGrid->setCheckable(true);
     m_actGrid->setChecked(true);
 
     m_actRun = new QAction(
         actionIcon(QStringLiteral("run"), QStringLiteral("media-playback-start"), QStyle::SP_MediaPlay),
-        QStringLiteral("运行仿真"), this);
+        CSM_TR("Run Simulation"), this);
     m_actRun->setShortcut(QKeySequence(Qt::Key_F5));
     m_actRun->setObjectName(QStringLiteral("actRun"));
 
     m_actMonitor = new QAction(
         actionIcon(QStringLiteral("monitor"), QStringLiteral("utilities-system-monitor"),
                    QStyle::SP_ComputerIcon),
-        QStringLiteral("波形监控"), this);
+        CSM_TR("Waveform Monitor"), this);
     m_actMonitor->setObjectName(QStringLiteral("actMonitor"));
     m_actMonitor->setCheckable(true);
     m_actMonitor->setEnabled(false); // 只有仿真运行时才允许打开
     m_actMonitor->setToolTip(
-        QStringLiteral("波形监控面板：静态波形 / 动态示波器两个标签页（仿真运行时可用）"));
+        CSM_TR("Waveform monitor: Static Waveforms / Live Scope tabs (available while simulating)"));
 
     m_actSelectTool = new QAction(
         actionIcon(QStringLiteral("select"), QStringLiteral("edit-select"), QStyle::SP_ArrowUp),
-        QStringLiteral("选择"), this);
+        CSM_TR("Select"), this);
     m_actSelectTool->setCheckable(true);
     m_actSelectTool->setChecked(true);
     m_actSelectTool->setShortcut(QKeySequence(Qt::Key_V));
-    m_actSelectTool->setToolTip(QStringLiteral("选择/移动元件 (V)"));
+    m_actSelectTool->setToolTip(CSM_TR("Select/move parts (V)"));
 
     m_actWireTool = new QAction(
         actionIcon(QStringLiteral("wire"), QStringLiteral("draw-line"), QStyle::SP_ArrowRight),
-        QStringLiteral("连线"), this);
+        CSM_TR("Wire"), this);
     m_actWireTool->setCheckable(true);
     m_actWireTool->setShortcut(QKeySequence(Qt::Key_W));
-    m_actWireTool->setToolTip(QStringLiteral("绘制导线 (W)"));
+    m_actWireTool->setToolTip(CSM_TR("Draw wire (W)"));
 
     auto* toolGroup = new QActionGroup(this);
     toolGroup->addAction(m_actSelectTool);
     toolGroup->addAction(m_actWireTool);
 
-    m_actCheckUpdates = new QAction(QStringLiteral("检查更新…"), this);
+    m_actCheckUpdates = new QAction(CSM_TR("Check for Updates…"), this);
 
-    m_actGuide = new QAction(QStringLiteral("快速上手"), this);
+    m_actGuide = new QAction(CSM_TR("Quick Start"), this);
     m_actGuide->setShortcut(QKeySequence::HelpContents);
 
-    m_actAbout = new QAction(QStringLiteral("关于电路仿真大师"), this);
+    m_actAbout = new QAction(CSM_TR("About Circuit Master"), this);
 
     connect(m_actNew, &QAction::triggered, this, &MainWindow::newCircuit);
     connect(m_actOpen, &QAction::triggered, this, &MainWindow::openCircuit);
@@ -977,8 +990,8 @@ void MainWindow::createActions()
     connect(m_actGuide, &QAction::triggered, this, &MainWindow::showQuickGuide);
     connect(m_actAbout, &QAction::triggered, this, &MainWindow::showAbout);
 
-    m_actSnapWires = new QAction(QStringLiteral("导线对齐网格"), this);
-    m_actSnapWires->setToolTip(QStringLiteral("把导线的拐点吸到网格上，修老版本粘贴留下的歪线"));
+    m_actSnapWires = new QAction(CSM_TR("Snap Wires to Grid"), this);
+    m_actSnapWires->setToolTip(CSM_TR("Snap wire corners to the grid, fixing offsets left by older paste"));
     connect(m_actSnapWires, &QAction::triggered, this, [this] { m_scene->snapWiresToGrid(); });
 
     m_actDelete->setEnabled(false);
@@ -994,7 +1007,7 @@ void MainWindow::createActions()
 
 void MainWindow::createMenus()
 {
-    QMenu* fileMenu = menuBar()->addMenu(QStringLiteral("文件(&F)"));
+    QMenu* fileMenu = menuBar()->addMenu(CSM_TR("&File"));
     fileMenu->addAction(m_actNew);
     fileMenu->addAction(m_actOpen);
     fileMenu->addSeparator();
@@ -1005,7 +1018,7 @@ void MainWindow::createMenus()
     fileMenu->addSeparator();
     fileMenu->addAction(m_actQuit);
 
-    QMenu* editMenu = menuBar()->addMenu(QStringLiteral("编辑(&E)"));
+    QMenu* editMenu = menuBar()->addMenu(CSM_TR("&Edit"));
     editMenu->addAction(m_actUndo);
     editMenu->addAction(m_actRedo);
     editMenu->addSeparator();
@@ -1017,7 +1030,7 @@ void MainWindow::createMenus()
     editMenu->addAction(m_actRotate);
     editMenu->addSeparator();
 
-    QMenu* arrangeMenu = editMenu->addMenu(QStringLiteral("对齐与分布"));
+    QMenu* arrangeMenu = editMenu->addMenu(CSM_TR("Align and Distribute"));
     arrangeMenu->setObjectName(QStringLiteral("menuArrange"));
     for (QAction* action : m_alignActions)
         arrangeMenu->addAction(action);
@@ -1030,7 +1043,7 @@ void MainWindow::createMenus()
     editMenu->addSeparator();
     editMenu->addAction(m_actSnapWires);
 
-    QMenu* viewMenu = menuBar()->addMenu(QStringLiteral("视图(&V)"));
+    QMenu* viewMenu = menuBar()->addMenu(CSM_TR("&View"));
     viewMenu->addAction(m_actNextTab);
     viewMenu->addAction(m_actPrevTab);
     viewMenu->addSeparator();
@@ -1045,14 +1058,14 @@ void MainWindow::createMenus()
     viewMenu->addSeparator();
 
     // 主题：跟随系统 / 浅色 / 深色，选完立刻生效并存盘
-    QMenu* themeMenu = viewMenu->addMenu(QStringLiteral("主题"));
+    QMenu* themeMenu = viewMenu->addMenu(CSM_TR("Theme"));
     themeMenu->setObjectName(QStringLiteral("menuTheme"));
     auto* themeGroup = new QActionGroup(this);
     themeGroup->setExclusive(true);
     const QVector<QPair<QString, Theme::Mode>> themeItems = {
-        {QStringLiteral("跟随系统"), Theme::Mode::System},
-        {QStringLiteral("浅色"), Theme::Mode::Light},
-        {QStringLiteral("深色"), Theme::Mode::Dark},
+        {CSM_TR("Follow System"), Theme::Mode::System},
+        {CSM_TR("Light"), Theme::Mode::Light},
+        {CSM_TR("Dark"), Theme::Mode::Dark},
     };
     for (const auto& item : themeItems) {
         QAction* action = themeMenu->addAction(item.first);
@@ -1067,18 +1080,38 @@ void MainWindow::createMenus()
     }
     viewMenu->addSeparator();
 
-    QMenu* simMenu = menuBar()->addMenu(QStringLiteral("仿真(&S)"));
+    // 语言：中文 / English。文案是编译进程序的，切换后要重建界面，所以提示重启
+    QMenu* languageMenu = viewMenu->addMenu(CSM_TR("Language"));
+    auto* languageGroup = new QActionGroup(this);
+    languageGroup->setExclusive(true);
+    for (const Language value : {Language::Chinese, Language::English}) {
+        QAction* action = languageMenu->addAction(languageDisplayName(value));
+        action->setCheckable(true);
+        action->setChecked(language() == value);
+        languageGroup->addAction(action);
+        connect(action, &QAction::triggered, this, [this, value] {
+            if (language() == value)
+                return;
+            saveLanguage(value);
+            Dialogs::info(this, CSM_TR("Language"),
+                          CSM_TR("The interface language has been changed. "
+                                 "Restart the application to apply it."));
+        });
+    }
+    viewMenu->addSeparator();
+
+    QMenu* simMenu = menuBar()->addMenu(CSM_TR("&Simulate"));
     simMenu->addAction(m_actRun);
     simMenu->addAction(m_actMonitor);
     simMenu->addSeparator();
 
-    QMenu* examples = simMenu->addMenu(QStringLiteral("示例电路"));
+    QMenu* examples = simMenu->addMenu(CSM_TR("Example Circuits"));
     for (int i = 0; i < m_exampleTitles.size(); ++i) {
         QAction* action = examples->addAction(m_exampleTitles.at(i));
         connect(action, &QAction::triggered, this, [this, i] { loadExample(i); });
     }
 
-    QMenu* helpMenu = menuBar()->addMenu(QStringLiteral("帮助(&H)"));
+    QMenu* helpMenu = menuBar()->addMenu(CSM_TR("&Help"));
     helpMenu->addAction(m_actCheckUpdates);
     helpMenu->addSeparator();
     helpMenu->addAction(m_actGuide);
@@ -1087,7 +1120,7 @@ void MainWindow::createMenus()
 
 void MainWindow::createToolBar()
 {
-    QToolBar* bar = addToolBar(QStringLiteral("主工具栏"));
+    QToolBar* bar = addToolBar(CSM_TR("Main toolbar"));
     bar->setMovable(false);
     bar->setIconSize(QSize(22, 22));
     bar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
@@ -1120,53 +1153,53 @@ void MainWindow::buildLibrary()
     };
     const QVector<Entry> entries = {
         // 按分类排好，同类的挨在一起，「全部」列表也有顺序
-        {ComponentType::Resistor, QStringLiteral("电阻  R"), QStringLiteral("基础")},
-        {ComponentType::Capacitor, QStringLiteral("电容  C"), QStringLiteral("基础")},
-        {ComponentType::Inductor, QStringLiteral("电感  L"), QStringLiteral("基础")},
-        {ComponentType::Transformer, QStringLiteral("变压器  T"), QStringLiteral("基础")},
+        {ComponentType::Resistor, CSM_TR("Resistor  R"), CSM_TR("Basic")},
+        {ComponentType::Capacitor, CSM_TR("Capacitor  C"), CSM_TR("Basic")},
+        {ComponentType::Inductor, CSM_TR("Inductor  L"), CSM_TR("Basic")},
+        {ComponentType::Transformer, CSM_TR("Transformer  T"), CSM_TR("Basic")},
 
-        {ComponentType::Diode, QStringLiteral("二极管  D"), QStringLiteral("半导体")},
-        {ComponentType::Led, QStringLiteral("发光二极管  LED"), QStringLiteral("半导体")},
-        {ComponentType::Npn, QStringLiteral("NPN 三极管  Q"), QStringLiteral("半导体")},
-        {ComponentType::Pnp, QStringLiteral("PNP 三极管  Q"), QStringLiteral("半导体")},
-        {ComponentType::Nmos, QStringLiteral("N 沟道 MOS  M"), QStringLiteral("半导体")},
-        {ComponentType::Pmos, QStringLiteral("P 沟道 MOS  M"), QStringLiteral("半导体")},
-        {ComponentType::Igbt, QStringLiteral("IGBT  Z"), QStringLiteral("半导体")},
+        {ComponentType::Diode, CSM_TR("Diode  D"), CSM_TR("Semiconductors")},
+        {ComponentType::Led, CSM_TR("LED  LED"), CSM_TR("Semiconductors")},
+        {ComponentType::Npn, CSM_TR("NPN transistor  Q"), CSM_TR("Semiconductors")},
+        {ComponentType::Pnp, CSM_TR("PNP transistor  Q"), CSM_TR("Semiconductors")},
+        {ComponentType::Nmos, CSM_TR("N-MOSFET  M"), CSM_TR("Semiconductors")},
+        {ComponentType::Pmos, CSM_TR("P-MOSFET  M"), CSM_TR("Semiconductors")},
+        {ComponentType::Igbt, QStringLiteral("IGBT  Z"), CSM_TR("Semiconductors")},
 
-        {ComponentType::OpAmp, QStringLiteral("运算放大器  U"), QStringLiteral("模拟 IC")},
-        {ComponentType::Tl431, QStringLiteral("TL431 基准  VR"), QStringLiteral("模拟 IC")},
-        {ComponentType::Optocoupler, QStringLiteral("光耦  OC"), QStringLiteral("模拟 IC")},
-        {ComponentType::Ob2362, QStringLiteral("OB2362 控制器  U"), QStringLiteral("模拟 IC")},
+        {ComponentType::OpAmp, CSM_TR("Op-amp  U"), CSM_TR("Analog ICs")},
+        {ComponentType::Tl431, CSM_TR("TL431 reference  VR"), CSM_TR("Analog ICs")},
+        {ComponentType::Optocoupler, CSM_TR("Optocoupler  OC"), CSM_TR("Analog ICs")},
+        {ComponentType::Ob2362, CSM_TR("OB2362 controller  U"), CSM_TR("Analog ICs")},
 
-        {ComponentType::LogicGate, QStringLiteral("与门  AND"), QStringLiteral("数字逻辑"),
+        {ComponentType::LogicGate, CSM_TR("AND gate  AND"), CSM_TR("Digital logic"),
          GroundKind::Gnd, GateKind::And},
-        {ComponentType::LogicGate, QStringLiteral("或门  OR"), QStringLiteral("数字逻辑"),
+        {ComponentType::LogicGate, CSM_TR("OR gate  OR"), CSM_TR("Digital logic"),
          GroundKind::Gnd, GateKind::Or},
-        {ComponentType::LogicGate, QStringLiteral("非门  NOT"), QStringLiteral("数字逻辑"),
+        {ComponentType::LogicGate, CSM_TR("NOT gate  NOT"), CSM_TR("Digital logic"),
          GroundKind::Gnd, GateKind::Not},
-        {ComponentType::LogicGate, QStringLiteral("异或门  XOR"), QStringLiteral("数字逻辑"),
+        {ComponentType::LogicGate, CSM_TR("XOR gate  XOR"), CSM_TR("Digital logic"),
          GroundKind::Gnd, GateKind::Xor},
-        {ComponentType::LogicGate, QStringLiteral("同或门  XNOR"), QStringLiteral("数字逻辑"),
+        {ComponentType::LogicGate, CSM_TR("XNOR gate  XNOR"), CSM_TR("Digital logic"),
          GroundKind::Gnd, GateKind::Xnor},
 
-        {ComponentType::VoltageSource, QStringLiteral("电压源  V"), QStringLiteral("电源")},
-        {ComponentType::CurrentSource, QStringLiteral("电流源  I"), QStringLiteral("电源")},
+        {ComponentType::VoltageSource, CSM_TR("Voltage source  V"), CSM_TR("Sources")},
+        {ComponentType::CurrentSource, CSM_TR("Current source  I"), CSM_TR("Sources")},
 
-        {ComponentType::Switch, QStringLiteral("开关  S"), QStringLiteral("开关与接地")},
-        {ComponentType::PushButton, QStringLiteral("按钮开关  SB"), QStringLiteral("开关与接地")},
-        {ComponentType::Ground, QStringLiteral("接地  GND"), QStringLiteral("开关与接地"),
+        {ComponentType::Switch, CSM_TR("Switch  S"), CSM_TR("Switches and Grounds")},
+        {ComponentType::PushButton, CSM_TR("Push button  SB"), CSM_TR("Switches and Grounds")},
+        {ComponentType::Ground, CSM_TR("Ground  GND"), CSM_TR("Switches and Grounds"),
          GroundKind::Gnd},
-        {ComponentType::NetLabel, QStringLiteral("网络标签  NET"), QStringLiteral("开关与接地")},
+        {ComponentType::NetLabel, CSM_TR("Net label  NET"), CSM_TR("Switches and Grounds")},
 
-        {ComponentType::Probe, QStringLiteral("电压测试点  TP"), QStringLiteral("测量")},
-        {ComponentType::CurrentProbe, QStringLiteral("电流测试点  IP"), QStringLiteral("测量")},
-        {ComponentType::Multimeter, QStringLiteral("万用表  XMM"), QStringLiteral("测量")},
+        {ComponentType::Probe, CSM_TR("Voltage probe  TP"), CSM_TR("Measurement")},
+        {ComponentType::CurrentProbe, CSM_TR("Current probe  IP"), CSM_TR("Measurement")},
+        {ComponentType::Multimeter, CSM_TR("Multimeter  XMM"), CSM_TR("Measurement")},
     };
 
     const QString category = m_libraryCategory ? m_libraryCategory->currentText() : QString();
     // 注意用 QStringLiteral：QLatin1String 会把 UTF-8 字节按 Latin-1 解释，
     // 与下拉框里的 QString 永远不相等，列表会变成空的
-    const bool showAll = category.isEmpty() || category == QStringLiteral("全部");
+    const bool showAll = category.isEmpty() || category == CSM_TR("All");
 
     for (const Entry& entry : entries) {
         if (!showAll && entry.category != category)
@@ -1187,7 +1220,7 @@ void MainWindow::buildLibrary()
 
 void MainWindow::createDocks()
 {
-    auto* libraryDock = new QDockWidget(QStringLiteral("元件库"), this);
+    auto* libraryDock = new QDockWidget(CSM_TR("Library"), this);
     libraryDock->setObjectName(QStringLiteral("libraryDock"));
     libraryDock->setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
 
@@ -1197,18 +1230,18 @@ void MainWindow::createDocks()
     libraryLayout->setSpacing(6);
 
     m_libraryCategory = new QComboBox(libraryContainer);
-    m_libraryCategory->addItem(QStringLiteral("全部"));
+    m_libraryCategory->addItem(CSM_TR("All"));
     // 按「器件性质」分，别把 11 个东西都堆在「半导体」里
-    for (const QString& name : {QStringLiteral("基础"), QStringLiteral("半导体"),
-                                QStringLiteral("模拟 IC"), QStringLiteral("数字逻辑"),
-                                QStringLiteral("电源"), QStringLiteral("开关与接地"),
-                                QStringLiteral("测量")}) {
+    for (const QString& name : {CSM_TR("Basic"), CSM_TR("Semiconductors"),
+                                CSM_TR("Analog ICs"), CSM_TR("Digital logic"),
+                                CSM_TR("Sources"), CSM_TR("Switches and Grounds"),
+                                CSM_TR("Measurement")}) {
         m_libraryCategory->addItem(name);
     }
-    m_libraryCategory->setToolTip(QStringLiteral("按类别筛选元件"));
+    m_libraryCategory->setToolTip(CSM_TR("Filter parts by category"));
     libraryLayout->addWidget(m_libraryCategory);
 
-    auto* hint = new QLabel(QStringLiteral("把元件拖到画布上放置"), libraryContainer);
+    auto* hint = new QLabel(CSM_TR("Drag parts onto the canvas"), libraryContainer);
     hint->setWordWrap(true);
     Theme::styleWidget(hint, [] { return QStringLiteral("color:%1; font-size:11px;").arg(Theme::textMuted().name()); });
     libraryLayout->addWidget(hint);
@@ -1228,7 +1261,7 @@ void MainWindow::createDocks()
                 buildLibrary();
             });
 
-    auto* propsDock = new QDockWidget(QStringLiteral("属性"), this);
+    auto* propsDock = new QDockWidget(CSM_TR("Properties"), this);
     propsDock->setObjectName(QStringLiteral("propsDock"));
     m_props = new PropertyPanel(propsDock);
     auto* propsScroll = new QScrollArea(propsDock);
@@ -1243,7 +1276,7 @@ void MainWindow::createDocks()
         pushHistory();
     });
 
-    auto* logDock = new QDockWidget(QStringLiteral("消息"), this);
+    auto* logDock = new QDockWidget(CSM_TR("Messages"), this);
     logDock->setObjectName(QStringLiteral("logDock"));
     m_logDock = logDock;
     m_log = new QPlainTextEdit(logDock);
@@ -1304,7 +1337,7 @@ void MainWindow::applyTheme()
 void MainWindow::createStatusBar()
 {
     m_hintLabel = new QLabel(
-        QStringLiteral("选择模式：拖动元件移动，双击元件编辑参数，空格键旋转"), this);
+        CSM_TR("Select mode: drag to move, double-click to edit, Space to rotate"), this);
     m_coordLabel = new QLabel(QStringLiteral("x: 0   y: 0"), this);
     m_coordLabel->setMinimumWidth(120);
     m_analysisLabel = new QLabel(this);
@@ -1321,15 +1354,15 @@ void MainWindow::updateAnalysisLabel()
     QString text;
     switch (doc()->options.kind) {
     case AnalysisKind::OperatingPoint:
-        text = QStringLiteral("分析：直流工作点");
+        text = CSM_TR("Analysis: DC operating point");
         break;
     case AnalysisKind::Transient:
-        text = QStringLiteral("分析：瞬态 %1 / 步长 %2")
+        text = CSM_TR("Analysis: transient %1 / step %2")
                    .arg(formatEng(doc()->options.tStop, QStringLiteral("s"), 3),
                         formatEng(doc()->options.tStep, QStringLiteral("s"), 3));
         break;
     case AnalysisKind::AC:
-        text = QStringLiteral("分析：交流 %1 ~ %2")
+        text = CSM_TR("Analysis: AC %1 ~ %2")
                    .arg(formatEng(doc()->options.fStart, QStringLiteral("Hz"), 3),
                         formatEng(doc()->options.fStop, QStringLiteral("Hz"), 3));
         break;
@@ -1402,7 +1435,7 @@ void MainWindow::restoreSnapshot(const QJsonObject& snapshot)
     QString error;
     const Circuit circuit = Circuit::fromJson(snapshot, &error);
     if (!error.isEmpty()) {
-        appendLog(QStringLiteral("⚠ 无法恢复历史状态：%1").arg(error));
+        appendLog(CSM_TR("⚠ Could not restore the previous state: %1").arg(error));
         return;
     }
 
@@ -1422,7 +1455,7 @@ void MainWindow::undo()
     --doc()->historyIndex;
     restoreSnapshot(doc()->history.at(doc()->historyIndex));
     updateHistoryActions();
-    appendLog(QStringLiteral("已撤销（%1/%2）")
+    appendLog(CSM_TR("Undone (%1/%2)")
                   .arg(doc()->historyIndex + 1)
                   .arg(doc()->history.size()));
 }
@@ -1434,7 +1467,7 @@ void MainWindow::redo()
     ++doc()->historyIndex;
     restoreSnapshot(doc()->history.at(doc()->historyIndex));
     updateHistoryActions();
-    appendLog(QStringLiteral("已重做（%1/%2）")
+    appendLog(CSM_TR("Redone (%1/%2)")
                   .arg(doc()->historyIndex + 1)
                   .arg(doc()->history.size()));
 }
@@ -1464,8 +1497,8 @@ void MainWindow::onSelectionChanged()
         } else if (!m_meterHintShown) {
             // 只说一次：读数窗口在没跑仿真时全是横杠，开了也没用
             m_meterHintShown = true;
-            appendLog(QStringLiteral(
-                "提示：万用表读数窗口只在实时仿真运行时打开。按 F5 运行仿真后再点它。"));
+            appendLog(CSM_TR("Tip: the multimeter window opens only while the live simulation runs. "
+                             "Press F5, then click it."));
         }
     }
     const int selectedCount = m_scene->selectedComponents().size();
@@ -1505,9 +1538,9 @@ void MainWindow::pressPushButton(ComponentItem* item)
     // 按下 = 与静止状态相反：常开的接通，常闭的断开
     const Component comp = item->component();
     item->setClosed(!comp.normallyClosed);
-    appendLog(QStringLiteral("按钮 %1 按下（%2）")
-                  .arg(comp.refdes, comp.normallyClosed ? QStringLiteral("断开")
-                                                        : QStringLiteral("接通")));
+    appendLog(CSM_TR("Button %1 pressed (%2)")
+                  .arg(comp.refdes, comp.normallyClosed ? CSM_TR("Open")
+                                                        : CSM_TR("Closed")));
 }
 
 void MainWindow::releasePushButton(ComponentItem* item)
@@ -1536,9 +1569,9 @@ void MainWindow::toggleSwitch(ComponentItem* item)
     comp.closed = !comp.closed;
     item->setClosed(comp.closed); // 符号与模型一起改，画布立刻看到通/断
     m_scene->commitEdit();        // 记进撤销历史；circuitChanged 会带着它推给实时引擎
-    appendLog(QStringLiteral("开关 %1 %2")
-                  .arg(comp.refdes, comp.closed ? QStringLiteral("闭合")
-                                                : QStringLiteral("断开")));
+    appendLog(CSM_TR("Switch %1 %2")
+                  .arg(comp.refdes, comp.closed ? CSM_TR("Closed")
+                                                : CSM_TR("Open")));
 }
 
 void MainWindow::openMeterWindow(ComponentItem* item)
@@ -1637,7 +1670,7 @@ void MainWindow::updateTitle()
     Document* document = doc();
     if (!document)
         return;
-    setWindowTitle(QStringLiteral("%1%2 — 电路仿真大师")
+    setWindowTitle(CSM_TR("%1%2 — Circuit Master")
                        .arg(document->name,
                             document->dirty ? QStringLiteral(" *") : QString()));
     // 标签页上的文字也要跟着变（名字改了、或者多出 / 去掉星号）
@@ -1660,7 +1693,7 @@ Document* MainWindow::loadCircuitData(const Circuit& circuit, const QString& tit
     // 当前标签如果还是「干净的空文档」，就直接用它 —— 不要在它旁边再开一个空标签，
     // 那样用户每次打开文件都会多出一个什么都不含的页
     Document* target = doc();
-    const bool reuse = target && target->name == QStringLiteral("未命名")
+    const bool reuse = target && target->name == CSM_TR("Untitled")
         && target->filePath.isEmpty() && !target->dirty
         && target->scene->toCircuit().components.isEmpty();
     if (!reuse)
@@ -1707,7 +1740,7 @@ void MainWindow::newCircuit()
 {
     // 新建就是新开一个标签，不碰当前文档，所以不用问「是否保存」
     addDocument();
-    appendLog(QStringLiteral("已新建空白电路（新标签页）。"));
+    appendLog(CSM_TR("New blank circuit (new tab)."));
 }
 
 bool MainWindow::saveCircuit()
@@ -1718,7 +1751,7 @@ bool MainWindow::saveCircuit()
     const Circuit circuit = m_scene->toCircuit();
     QFile file(doc()->filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        Dialogs::warn(this, QStringLiteral("保存失败"), file.errorString());
+        Dialogs::warn(this, CSM_TR("Save failed"), file.errorString());
         return false;
     }
     QJsonObject root = circuit.toJson();
@@ -1729,15 +1762,15 @@ bool MainWindow::saveCircuit()
 
     doc()->dirty = false;
     updateTitle();
-    appendLog(QStringLiteral("已保存：%1").arg(doc()->filePath));
+    appendLog(CSM_TR("Saved: %1").arg(doc()->filePath));
     return true;
 }
 
 bool MainWindow::saveCircuitAs()
 {
     QString path = QFileDialog::getSaveFileName(
-        this, QStringLiteral("保存电路"), doc()->name + QStringLiteral(".csm"),
-        QStringLiteral("电路仿真大师电路 (*.csm);;所有文件 (*)"));
+        this, CSM_TR("Save Circuit"), doc()->name + QStringLiteral(".csm"),
+        CSM_TR("Circuit Master circuit (*.csm);;All files (*)"));
     if (path.isEmpty())
         return false;
     if (!path.endsWith(QLatin1String(".csm"), Qt::CaseInsensitive))
@@ -1751,8 +1784,8 @@ bool MainWindow::saveCircuitAs()
 void MainWindow::openCircuit()
 {
     const QString path = QFileDialog::getOpenFileName(
-        this, QStringLiteral("打开电路"), QString(),
-        QStringLiteral("电路仿真大师电路 (*.csm);;所有文件 (*)"));
+        this, CSM_TR("Open Circuit"), QString(),
+        CSM_TR("Circuit Master circuit (*.csm);;All files (*)"));
     if (path.isEmpty())
         return;
 
@@ -1765,13 +1798,13 @@ bool MainWindow::openPath(const QString& path)
     const int existing = indexOfPath(path);
     if (existing >= 0) {
         m_tabs->setCurrentIndex(existing);
-        appendLog(QStringLiteral("该文件已经在标签页里：%1").arg(path));
+        appendLog(CSM_TR("That file is already open in a tab: %1").arg(path));
         return true;
     }
 
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        Dialogs::warn(this, QStringLiteral("打开失败"), file.errorString());
+        Dialogs::warn(this, CSM_TR("Open failed"), file.errorString());
         return false;
     }
     const QByteArray data = file.readAll();
@@ -1780,8 +1813,8 @@ bool MainWindow::openPath(const QString& path)
     QJsonParseError parseError;
     const QJsonDocument json = QJsonDocument::fromJson(data, &parseError);
     if (json.isNull()) {
-        Dialogs::warn(this, QStringLiteral("打开失败"),
-                      QStringLiteral("JSON 解析错误：%1").arg(parseError.errorString()));
+        Dialogs::warn(this, CSM_TR("Open failed"),
+                      CSM_TR("JSON parse error: %1").arg(parseError.errorString()));
         return false;
     }
 
@@ -1789,11 +1822,11 @@ bool MainWindow::openPath(const QString& path)
     const QJsonObject root = json.object();
     const Circuit circuit = Circuit::fromJson(root, &error);
     if (!error.isEmpty()) {
-        Dialogs::warn(this, QStringLiteral("打开失败"), error);
+        Dialogs::warn(this, CSM_TR("Open failed"), error);
         return false;
     }
     if (circuit.components.isEmpty()) {
-        Dialogs::warn(this, QStringLiteral("打开失败"), QStringLiteral("文件中没有元件。"));
+        Dialogs::warn(this, CSM_TR("Open failed"), CSM_TR("The file has no components."));
         return false;
     }
 
@@ -1803,7 +1836,7 @@ bool MainWindow::openPath(const QString& path)
         options = optionsFromJson(analysis);
 
     loadCircuitData(circuit, QFileInfo(path).fileName(), path, options);
-    appendLog(QStringLiteral("已打开：%1（%2 个元件）")
+    appendLog(CSM_TR("Opened: %1 (%2 components)")
                   .arg(path)
                   .arg(circuit.components.size()));
     return true;
@@ -1813,14 +1846,14 @@ void MainWindow::runSimulation()
 {
     const Circuit circuit = m_scene->toCircuit();
     if (circuit.components.isEmpty()) {
-        Dialogs::info(this, QStringLiteral("无法仿真"),
-                                 QStringLiteral("请先放置元件并连接电路。"));
+        Dialogs::info(this, CSM_TR("Cannot simulate"),
+                                 CSM_TR("Place some parts and wire them up first."));
         return;
     }
 
     const Netlist net = circuit.buildNetlist();
     if (!net.valid) {
-        Dialogs::warn(this, QStringLiteral("电路检查未通过"), net.error);
+        Dialogs::warn(this, CSM_TR("Circuit check failed"), net.error);
         return;
     }
     for (const QString& warning : net.warnings)
@@ -1831,17 +1864,17 @@ void MainWindow::runSimulation()
     SimulationResult result = Simulator::run(circuit, doc()->options);
     QApplication::restoreOverrideCursor();
 
-    appendLog(QStringLiteral("──────── 仿真 ────────"));
+    appendLog(CSM_TR("──────── Simulation ────────"));
     for (const QString& line : result.log)
         appendLog(line);
 
     if (!result.ok) {
-        appendLog(QStringLiteral("✘ 仿真失败：") + result.error);
-        Dialogs::error(this, QStringLiteral("仿真失败"), result.error);
+        appendLog(CSM_TR("✘ Simulation failed: ") + result.error);
+        Dialogs::error(this, CSM_TR("Simulation failed"), result.error);
         return;
     }
 
-    appendLog(QStringLiteral("✔ 完成，用时 %1 ms").arg(QString::number(result.elapsedMs, 'f', 1)));
+    appendLog(CSM_TR("✔ Done in %1 ms").arg(QString::number(result.elapsedMs, 'f', 1)));
 
     // 先点亮 LED / 播放爆炸：工作点分支会直接弹对话框返回，放在后面就轮不到它了
     applyLedStates(result);
@@ -1856,7 +1889,7 @@ void MainWindow::runSimulation()
             hasMeter = true;
     }
     if (!hasProbes && !hasMeter && result.kind != AnalysisKind::OperatingPoint)
-        appendLog(QStringLiteral("⚠ 电路中没有测试点，波形为空。请放置电压测试点（TP）或电流测试点（IP）。"));
+        appendLog(CSM_TR("⚠ No test points in the circuit, the waveform is empty. Place a voltage (TP) or current (IP) test point."));
 
     // 结果留着，由用户打开「波形监控」再看；面板开着就顺手刷新
     doc()->lastResult = result;
@@ -1880,8 +1913,8 @@ void MainWindow::runSimulation()
             if (!line.trimmed().isEmpty())
                 appendLog(line);
         }
-        appendLog(QStringLiteral("直流工作点已算出：报告显示在「波形监控 → 静态波形」；"
-                                 "要看连续波形请切到「动态示波器」。"));
+        appendLog(CSM_TR("DC operating point computed; the report is in Waveform Monitor → Static Waveforms; "
+                         "switch to Live Scope to see continuous waveforms."));
         return;
     }
 
@@ -1890,10 +1923,10 @@ void MainWindow::runSimulation()
     if (m_waveLive && !m_waveLive->isLive())
         startLiveScope();
     if (hasProbes) {
-        appendLog(QStringLiteral("仿真运行中：点「波形监控」查看波形，点「停止仿真」结束。"));
+        appendLog(CSM_TR("Simulation running: click Waveform Monitor to see the traces, Stop Simulation to end."));
     } else {
-        appendLog(QStringLiteral("仿真运行中，但电路没有测试点，波形为空。"
-                                 "放置 TP / IP 后可看到曲线。"));
+        appendLog(CSM_TR("Simulation is running, but the circuit has no test points so the waveform is empty. "
+                         "Place a TP / IP to see curves."));
     }
 }
 
@@ -1933,17 +1966,17 @@ void MainWindow::updateRunAction()
     }
 
     if (running) {
-        m_actRun->setText(QStringLiteral("停止仿真"));
+        m_actRun->setText(CSM_TR("Stop Simulation"));
         m_actRun->setIcon(actionIcon(QStringLiteral("stop"),
                                      QStringLiteral("media-playback-stop"),
                                      QStyle::SP_MediaStop));
-        m_actRun->setToolTip(QStringLiteral("停止正在运行的动态示波器"));
+        m_actRun->setToolTip(CSM_TR("Stop the running live scope"));
     } else {
-        m_actRun->setText(QStringLiteral("运行仿真"));
+        m_actRun->setText(CSM_TR("Run Simulation"));
         m_actRun->setIcon(actionIcon(QStringLiteral("run"),
                                      QStringLiteral("media-playback-start"),
                                      QStyle::SP_MediaPlay));
-        m_actRun->setToolTip(QStringLiteral("运行仿真（F5）"));
+        m_actRun->setToolTip(CSM_TR("Run Simulation (F5)"));
     }
 }
 
@@ -1952,14 +1985,14 @@ void MainWindow::createMonitorWindow()
     // 独立窗口：不占用主界面，多屏时可以拖到另一块屏上
     m_waveWindow = new QWidget(this, Qt::Window);
     m_waveWindow->setObjectName(QStringLiteral("waveMonitorWindow"));
-    m_waveWindow->setWindowTitle(QStringLiteral("波形监控 — 电路仿真大师"));
+    m_waveWindow->setWindowTitle(CSM_TR("Waveform Monitor — Circuit Master"));
     m_waveWindow->resize(1040, 620);
     auto* windowLayout = new QVBoxLayout(m_waveWindow);
     windowLayout->setContentsMargins(0, 0, 0, 0);
 
     m_waveTabs = new QTabWidget(m_waveWindow);
     m_wavePlot = new WaveformWindow(m_waveTabs);
-    m_waveTabs->addTab(m_wavePlot, QStringLiteral("静态波形"));
+    m_waveTabs->addTab(m_wavePlot, CSM_TR("Static Waveforms"));
     bindLiveScope(doc());   // 「动态示波器」页用当前图纸自己的那一份
     m_waveTabs->setCurrentIndex(0);
     windowLayout->addWidget(m_waveTabs);
@@ -1991,7 +2024,7 @@ void MainWindow::createMonitorWindow()
         const Circuit circuit = liveScene->toCircuit();
         const Netlist net = circuit.buildNetlist();
         if (!net.valid) {
-            appendLog(QStringLiteral("⚠ 电路无法求解：%1").arg(net.error));
+            appendLog(CSM_TR("⚠ The circuit cannot be solved: %1").arg(net.error));
             return;
         }
         const QVector<QPair<QString, QString>> probes = probeSpecs(circuit, net);
@@ -2001,7 +2034,7 @@ void MainWindow::createMonitorWindow()
             if (m_liveDoc && m_liveDoc == doc()) {
                 startLiveScope();
             } else {
-                appendLog(QStringLiteral("⚠ 电路结构变化较大，切回该图纸后仿真会重新开始"));
+                appendLog(CSM_TR("⚠ The circuit changed a lot; the simulation restarts when you switch back"));
             }
         }
     });
@@ -2043,8 +2076,7 @@ void MainWindow::showMonitor(int tab)
     if (!monitorAvailable()) {
         // 没有 GND：参考点由万用表负端顶替，节点电压之间没有统一基准，
         // 波形画出来也没有意义。万用表读数窗口照常可用。
-        appendLog(QStringLiteral(
-            "波形监控需要有接地符号（GND）。当前电路没有 GND，只能看万用表读数。"));
+        appendLog(CSM_TR("The waveform monitor needs a GND symbol. This circuit has none, so only multimeter readings are available."));
         if (m_actMonitor) {
             const QSignalBlocker blocker(m_actMonitor);
             m_actMonitor->setChecked(false);
@@ -2105,8 +2137,7 @@ WaveformWindow* MainWindow::liveScopeFor(Document* document)
         }
         if (document == doc() && running && m_actMonitor && !monitorAvailable()) {
             m_actMonitor->setEnabled(false);
-            m_actMonitor->setToolTip(QStringLiteral(
-                "波形监控需要有接地符号（GND）。当前电路没有 GND，只能看万用表读数。"));
+            m_actMonitor->setToolTip(CSM_TR("The waveform monitor needs a GND symbol. This circuit has none, so only multimeter readings are available."));
             if (m_actMonitor->isChecked()) {
                 const QSignalBlocker blocker(m_actMonitor);
                 m_actMonitor->setChecked(false);
@@ -2146,7 +2177,7 @@ void MainWindow::bindLiveScope(Document* document)
             m_waveTabs->removeTab(i);
     }
     if (m_waveTabs->indexOf(scope) < 0)
-        m_waveTabs->insertTab(1, scope, QStringLiteral("动态示波器"));
+        m_waveTabs->insertTab(1, scope, CSM_TR("Live Scope"));
 
     m_waveLive = scope;
     m_liveDoc = document;
@@ -2185,7 +2216,7 @@ bool MainWindow::startLiveScope()
     const Circuit circuit = m_scene->toCircuit();
     const Netlist net = circuit.buildNetlist();
     if (!net.valid) {
-        Dialogs::warn(this, QStringLiteral("无法运行示波器"), net.error);
+        Dialogs::warn(this, CSM_TR("Cannot start the live scope"), net.error);
         return false;
     }
 
@@ -2196,7 +2227,7 @@ bool MainWindow::startLiveScope()
                                         doc()->options.scopeAmpDiv);
     m_waveLive->startLive(circuit, probes);
     m_liveDoc = doc();   // 这条仿真属于当前文档
-    appendLog(QStringLiteral("动态示波器已启动：连续仿真，切回静态波形或关闭面板即停止。"));
+    appendLog(CSM_TR("Live scope started: it keeps simulating; switch back to Static Waveforms or close the panel to stop."));
     return true;
 }
 
@@ -2221,7 +2252,7 @@ void MainWindow::scanExamples()
         if (root.isEmpty())
             continue;
 
-        const QString name = root.value(QStringLiteral("name")).toString(file);
+        const QString name = exampleDisplayName(root, file);
         const AnalysisKind kind =
             kindFromTag(root.value(QStringLiteral("analysis")).toObject()
                             .value(QStringLiteral("kind"))
@@ -2238,7 +2269,7 @@ void MainWindow::loadExample(int index)
 
     QFile file(m_examplePaths.at(index));
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        Dialogs::warn(this, QStringLiteral("无法打开示例"), file.errorString());
+        Dialogs::warn(this, CSM_TR("Cannot open the example"), file.errorString());
         return;
     }
     const QByteArray data = file.readAll();
@@ -2247,8 +2278,8 @@ void MainWindow::loadExample(int index)
     QJsonParseError parseError;
     const QJsonDocument json = QJsonDocument::fromJson(data, &parseError);
     if (json.isNull()) {
-        Dialogs::warn(this, QStringLiteral("示例损坏"),
-                             QStringLiteral("JSON 解析错误：%1").arg(parseError.errorString()));
+        Dialogs::warn(this, CSM_TR("Example is damaged"),
+                             CSM_TR("JSON parse error: %1").arg(parseError.errorString()));
         return;
     }
 
@@ -2256,21 +2287,19 @@ void MainWindow::loadExample(int index)
     const QJsonObject root = json.object();
     const Circuit circuit = Circuit::fromJson(root, &circuitError);
     if (!circuitError.isEmpty() || circuit.components.isEmpty()) {
-        Dialogs::warn(this, QStringLiteral("示例损坏"),
-                             circuitError.isEmpty() ? QStringLiteral("示例中没有元件。")
+        Dialogs::warn(this, CSM_TR("Example is damaged"),
+                             circuitError.isEmpty() ? CSM_TR("The example has no components.")
                                                     : circuitError);
         return;
     }
 
-    QString name = root.value(QStringLiteral("name")).toString();
-    if (name.isEmpty())
-        name = QFileInfo(m_examplePaths.at(index)).baseName();
+    QString name = exampleDisplayName(root, QFileInfo(m_examplePaths.at(index)).baseName());
 
     // 示例不带路径（另存时才问），分析参数跟着示例走
     const SimulationOptions options =
         optionsFromJson(root.value(QStringLiteral("analysis")).toObject());
     loadCircuitData(circuit, name, QString(), options);
-    appendLog(QStringLiteral("已载入示例「%1」。按 F5 运行仿真。").arg(name));
+    appendLog(CSM_TR("Example \"%1\" loaded. Press F5 to run the simulation.").arg(name));
 }
 
 void MainWindow::applyLedStates(const SimulationResult& result)
@@ -2315,10 +2344,10 @@ void MainWindow::applyBlownCapacitors(const QHash<int, double>& blown)
             item->setBlown(true);
             item->setBlastProgress(0.0);
         }
-        appendLog(QStringLiteral("💥 %1 电解电容反接击穿：反向电压 %2")
+        appendLog(CSM_TR("💥 %1 electrolytic capacitor broke down: reverse voltage %2")
                       .arg(refdes, formatEng(reverse, QStringLiteral("V"), 3)));
     }
-    appendLog(QStringLiteral("提示：电解电容的正极在引脚 1 一侧，反接会击穿。选中电容可勾选/取消极性。"));
+    appendLog(CSM_TR("Tip: the positive terminal of an electrolytic capacitor is on pin 1; reversing it will break it down. Select the capacitor to toggle polarity."));
 
     // 600ms 的爆炸动画
     if (!m_blastTimer) {
@@ -2383,51 +2412,54 @@ void MainWindow::checkForUpdates(bool manual)
                 checker->deleteLater();
                 if (!manual && !isVisible())
                     return;
-                appendLog(QStringLiteral("发现新版本 %1（%2 个安装包）")
+                appendLog(CSM_TR("Version %1 available (%2 packages)")
                               .arg(release.tagName)
                               .arg(release.assets.size()));
                 UpdateDialog dialog(release, this);
                 dialog.exec();
                 if (!dialog.savedPath().isEmpty())
-                    appendLog(QStringLiteral("安装包已下载：%1").arg(dialog.savedPath()));
+                    appendLog(CSM_TR("Installer downloaded: %1").arg(dialog.savedPath()));
             });
     connect(checker, &UpdateChecker::failed, this,
             [this, checker, manual](const QString& reason) {
                 checker->deleteLater();
-                appendLog(QStringLiteral("检查更新失败：%1").arg(reason));
+                appendLog(CSM_TR("Update check failed: %1").arg(reason));
                 // 自动检查失败是后台的一次尝试，不打扰；手动检查必须给出可读原因
                 if (manual) {
-                    Dialogs::warn(this, QStringLiteral("检查更新"),
-                                         QStringLiteral("无法检查更新：\n%1").arg(reason));
+                    Dialogs::warn(this, CSM_TR("Check for Updates"),
+                                         CSM_TR("Cannot check for updates:\n%1").arg(reason));
                 }
             });
     connect(checker, &UpdateChecker::upToDate, this,
             [this, checker, manual](const QString& current) {
                 checker->deleteLater();
                 if (manual) {
-                    Dialogs::info(this, QStringLiteral("检查更新"),
-                        QStringLiteral("已是最新版本（v%1）。").arg(current));
+                    Dialogs::info(this, CSM_TR("Check for Updates"),
+                        CSM_TR("Already up to date (v%1).").arg(current));
                 }
             });
 
     if (manual)
-        appendLog(QStringLiteral("正在检查更新…"));
+        appendLog(CSM_TR("Checking for updates…"));
     checker->check();
 }
 
 void MainWindow::showQuickGuide()
 {
-    Dialogs::guide(this, QStringLiteral("快速上手"), QStringLiteral(
-        "<b>三步完成一次仿真</b>"
+    Dialogs::guide(this, CSM_TR("Quick Start"), CSM_TR(
+        "<b>Three steps to a simulation</b>"
         "<ol>"
-        "<li>从左侧<b>元件库</b>把元件拖到画布上；选中后按 <b>空格</b> 旋转。</li>"
-        "<li>点击工具栏<b>连线</b>（W），在引脚处单击并拖出折线，双击结束。<br>"
-        "导线端点吸附到引脚后会自动出现连接点。</li>"
-        "<li>双击元件修改数值（可直接写 10kΩ、4.7µF、1mH，不写单位按默认单位），"
-        "按 <b>F5</b> 运行仿真，波形显示在查看器中。</li>"
+        "<li>Drag parts from the <b>library</b> on the left onto the canvas; "
+        "select one and press <b>Space</b> to rotate.</li>"
+        "<li>Click <b>Wire</b> (W) in the toolbar, click on a pin and drag out the polyline, "
+        "double-click to finish.<br>"
+        "Wire ends snap to pins and a junction dot appears automatically.</li>"
+        "<li>Double-click a part to change its value (you can type 10kΩ, 4.7µF or 1mH; "
+        "the default unit applies if omitted), then press <b>F5</b> to run and see the waveforms.</li>"
         "</ol>"
-        "<b>注意</b>：电路必须包含接地符号（GND），否则无法确定参考电位。<br><br>"
-        "<span style='color:%1'>提示：菜单「仿真 → 示例电路」内置多个可直接运行的例子。</span>")
+        "<b>Note</b>: the circuit must contain a GND symbol, otherwise the reference potential "
+        "is undefined.<br><br>"
+        "<span style='color:%1'>Tip: Simulate → Example Circuits has several runnable examples.</span>")
                       .arg(Theme::textMuted().name()));
 }
 
@@ -2442,8 +2474,8 @@ bool MainWindow::maybeSave()
         return true;
 
     const QMessageBox::StandardButton button = Dialogs::askSaveDiscardCancel(
-        this, QStringLiteral("保存更改"),
-        QStringLiteral("「%1」有未保存的更改，是否保存？").arg(doc()->name));
+        this, CSM_TR("Save Changes"),
+        CSM_TR("\"%1\" has unsaved changes. Save them?").arg(doc()->name));
 
     if (button == QMessageBox::Save)
         return saveCircuit();

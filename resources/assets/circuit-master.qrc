@@ -23,5 +23,6 @@
   <!-- 更新日志：编进程序，「关于 → 更新日志」能直接看 -->
   <qresource prefix="/docs">
     <file alias="CHANGELOG.md">../../CHANGELOG.md</file>
+    <file alias="CHANGELOG.en.md">../../CHANGELOG.en.md</file>
   </qresource>
 </RCC>

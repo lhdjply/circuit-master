@@ -1,4 +1,5 @@
 #include "core/UpdateChecker.h"
+#include "core/Language.h"
 
 #include "csm_version.h"
 
@@ -498,8 +499,8 @@ void UpdateChecker::finish(QNetworkReply* reply)
         return;
     }
 
-    const QString reason = timedOut ? QStringLiteral("请求超时")
-        : status == 404                ? QStringLiteral("该 Release 没有更新清单")
+    const QString reason = timedOut ? CSM_TR("Request timed out")
+        : status == 404                ? CSM_TR("This release has no manifest")
         : status >= 400                ? QStringLiteral("HTTP %1").arg(status)
                                        : reply->errorString();
     noteError(reason);
@@ -559,7 +560,7 @@ int UpdateChecker::remainingBudgetMs() const
 QString UpdateChecker::failureMessage() const
 {
     if (m_errors.isEmpty())
-        return QStringLiteral("没有可用的更新清单地址");
+        return CSM_TR("No update manifest URL available");
     // 三个镜像的失败原因可能不同，一并列出，方便判断是网络不通还是文件没发
     return m_errors.join(QStringLiteral("；"));
 }
@@ -570,14 +571,14 @@ bool UpdateChecker::parseManifest(const QByteArray& payload)
     const QJsonDocument document = QJsonDocument::fromJson(payload, &parseError);
     if (!document.isObject()) {
         // 转发服务出错时常常回一页 HTML，这里必须当作失败，否则会被当成「没有更新」
-        noteError(QStringLiteral("无法解析更新清单：%1").arg(parseError.errorString()));
+        noteError(CSM_TR("Cannot parse the update manifest: %1").arg(parseError.errorString()));
         return false;
     }
 
     const QJsonObject object = document.object();
     const QString version = normalizeVersion(object.value(QStringLiteral("version")).toString());
     if (version.isEmpty()) {
-        noteError(QStringLiteral("更新清单里没有可用的 version 字段"));
+        noteError(CSM_TR("The manifest has no usable version field"));
         return false;
     }
 
@@ -588,6 +589,7 @@ bool UpdateChecker::parseManifest(const QByteArray& payload)
         info.tagName = QStringLiteral("v%1").arg(version);
     info.title = object.value(QStringLiteral("name")).toString();
     info.notes = object.value(QStringLiteral("notes")).toString();
+    info.notesEn = object.value(QStringLiteral("notes_en")).toString();
     info.publishedAt = object.value(QStringLiteral("published_at")).toString();
 
     // 安装包清单；旧清单没有这一项时留空，界面回退到「打开发布页」

@@ -155,6 +155,7 @@
     ],
     "format": "circuit-master",
     "name": "二极管半波整流",
+    "name_en": "Half-wave rectifier",
     "version": 2,
     "wires": [
         [

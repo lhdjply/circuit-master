@@ -895,6 +895,20 @@ jobs:
                 for (i = first; i <= n; ++i) print lines[i]
               }
             ' CHANGELOG.md > "$NOTES_FILE"
+
+            # 英文版：同一个版本节，从 CHANGELOG.en.md 取。取不到就留空，
+            # 客户端会退回去显示中文那份。
+            awk -v ver="$VERSION" '
+              $0 ~ "^## \\[v?" ver "\\]" { inside = 1; next }
+              inside && /^## \\[/ { exit }
+              inside { lines[++n] = $0 }
+              END {
+                first = 1
+                while (first <= n && lines[first] ~ /^[[:space:]]*$/) first++
+                while (n >= first && lines[n] ~ /^[[:space:]]*$/) n--
+                for (i = first; i <= n; ++i) print lines[i]
+              }
+            ' CHANGELOG.en.md > "$RUNNER_TEMP/release-notes.en.md" || true
           else
             echo "PRERELEASE=-p" >> $GITHUB_ENV
             echo "RELEASE_NAME=Continuous build" >> $GITHUB_ENV
@@ -941,6 +955,15 @@ jobs:
           with open(notes_path, encoding="utf-8") as handle:
               notes = handle.read()
 
+          # 英文更新日志（与 notes 同一个版本节）。只放正文，不复制版本号与
+          # 资产清单 —— 那些与语言无关，另起一个 latest.en.json 只会多一份
+          # 需要同步的副本。
+          notes_en_path = notes_path.replace("release-notes.md", "release-notes.en.md")
+          notes_en = ""
+          if os.path.exists(notes_en_path):
+              with open(notes_en_path, encoding="utf-8") as handle:
+                  notes_en = handle.read().strip()
+
           # 资产清单：客户端据此挑出当前平台该下的包，直接下载而不必打开网页。
           # 名字与 Release 资产一致，URL 用 /releases/download/<tag>/<file> 拼出来。
           assets = []
@@ -963,6 +986,7 @@ jobs:
               "name": f"{app} {tag}",
               "page": f"https://github.com/{repo}/releases/tag/{tag}",
               "notes": notes,
+              "notes_en": notes_en,
               "published_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
               "assets": assets,
           }

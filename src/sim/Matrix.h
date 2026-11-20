@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QString>
+#include "core/Language.h"
 
 #include <algorithm>
 #include <cmath>
@@ -54,7 +55,7 @@ public:
             }
             if (!(best > 1e-13)) {
                 if (error)
-                    *error = QStringLiteral("线性方程组奇异（第 %1 行主元过小）").arg(k + 1);
+                    *error = CSM_TR("Singular linear system (tiny pivot at row %1)").arg(k + 1);
                 return false;
             }
             if (pivot != k) {

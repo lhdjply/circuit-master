@@ -1,4 +1,5 @@
 #include "core/Component.h"
+#include "core/Language.h"
 
 #include "core/Units.h"
 
@@ -100,13 +101,13 @@ int pinCount(ComponentType type)
 QString gateKindName(GateKind kind)
 {
     switch (kind) {
-    case GateKind::And:  return QStringLiteral("与门");
-    case GateKind::Or:   return QStringLiteral("或门");
-    case GateKind::Not:  return QStringLiteral("非门");
-    case GateKind::Xor:  return QStringLiteral("异或门");
-    case GateKind::Xnor: return QStringLiteral("同或门");
+    case GateKind::And:  return CSM_TR("AND gate");
+    case GateKind::Or:   return CSM_TR("OR gate");
+    case GateKind::Not:  return CSM_TR("NOT gate");
+    case GateKind::Xor:  return CSM_TR("XOR gate");
+    case GateKind::Xnor: return CSM_TR("XNOR gate");
     }
-    return QStringLiteral("与门");
+    return CSM_TR("AND gate");
 }
 
 int gateInputCount(GateKind kind)
@@ -129,32 +130,32 @@ QString groundKindName(GroundKind kind)
 QString typeName(ComponentType type)
 {
     switch (type) {
-    case ComponentType::Resistor:      return QStringLiteral("电阻");
-    case ComponentType::Capacitor:     return QStringLiteral("电容");
-    case ComponentType::Inductor:      return QStringLiteral("电感");
-    case ComponentType::Diode:         return QStringLiteral("二极管");
-    case ComponentType::OpAmp:         return QStringLiteral("运算放大器");
-    case ComponentType::Led:           return QStringLiteral("发光二极管");
-    case ComponentType::Npn:           return QStringLiteral("NPN 三极管");
-    case ComponentType::Pnp:           return QStringLiteral("PNP 三极管");
-    case ComponentType::Nmos:          return QStringLiteral("N 沟道 MOS");
-    case ComponentType::Pmos:          return QStringLiteral("P 沟道 MOS");
+    case ComponentType::Resistor:      return CSM_TR("Resistor");
+    case ComponentType::Capacitor:     return CSM_TR("Capacitor");
+    case ComponentType::Inductor:      return CSM_TR("Inductor");
+    case ComponentType::Diode:         return CSM_TR("Diode");
+    case ComponentType::OpAmp:         return CSM_TR("Op-amp");
+    case ComponentType::Led:           return CSM_TR("LED");
+    case ComponentType::Npn:           return CSM_TR("NPN transistor");
+    case ComponentType::Pnp:           return CSM_TR("PNP transistor");
+    case ComponentType::Nmos:          return CSM_TR("N-channel MOSFET");
+    case ComponentType::Pmos:          return CSM_TR("P-channel MOSFET");
     case ComponentType::Igbt:          return QStringLiteral("IGBT");
-    case ComponentType::Optocoupler:   return QStringLiteral("光耦");
-    case ComponentType::Tl431:         return QStringLiteral("TL431 基准");
-    case ComponentType::Transformer:   return QStringLiteral("变压器");
-    case ComponentType::Ob2362:        return QStringLiteral("OB2362 控制器");
+    case ComponentType::Optocoupler:   return CSM_TR("Optocoupler");
+    case ComponentType::Tl431:         return CSM_TR("TL431 reference");
+    case ComponentType::Transformer:   return CSM_TR("Transformer");
+    case ComponentType::Ob2362:        return CSM_TR("OB2362 controller");
 
-    case ComponentType::Switch:        return QStringLiteral("开关");
-    case ComponentType::PushButton:    return QStringLiteral("按钮开关");
-    case ComponentType::VoltageSource: return QStringLiteral("电压源");
-    case ComponentType::CurrentSource: return QStringLiteral("电流源");
-    case ComponentType::Probe:         return QStringLiteral("电压测试点");
-    case ComponentType::CurrentProbe:  return QStringLiteral("电流测试点");
-    case ComponentType::Multimeter:    return QStringLiteral("万用表");
-    case ComponentType::NetLabel:      return QStringLiteral("网络标签");
-    case ComponentType::LogicGate:     return QStringLiteral("逻辑门");
-    case ComponentType::Ground:        return QStringLiteral("接地");
+    case ComponentType::Switch:        return CSM_TR("Switch");
+    case ComponentType::PushButton:    return CSM_TR("Push button");
+    case ComponentType::VoltageSource: return CSM_TR("Voltage source");
+    case ComponentType::CurrentSource: return CSM_TR("Current source");
+    case ComponentType::Probe:         return CSM_TR("Voltage probe");
+    case ComponentType::CurrentProbe:  return CSM_TR("Current probe");
+    case ComponentType::Multimeter:    return CSM_TR("Multimeter");
+    case ComponentType::NetLabel:      return CSM_TR("Net label");
+    case ComponentType::LogicGate:     return CSM_TR("Logic gate");
+    case ComponentType::Ground:        return CSM_TR("Ground");
     }
     return QString();
 }
@@ -431,11 +432,11 @@ QString Component::displayValue() const
         return QStringLiteral("1:") + QString::number(value, 'g', 3);
 
     case ComponentType::Switch:
-        return closed ? QStringLiteral("闭合") : QStringLiteral("断开");
+        return closed ? CSM_TR("Closed") : CSM_TR("Open");
 
     case ComponentType::PushButton:
         // 按钮的静止状态才是它的「身份」，按下只是瞬时的
-        return normallyClosed ? QStringLiteral("常闭") : QStringLiteral("常开");
+        return normallyClosed ? CSM_TR("Normally closed") : CSM_TR("Normally open");
 
     case ComponentType::Probe:
     case ComponentType::CurrentProbe:
@@ -464,11 +465,11 @@ QString Component::displayName() const
 QString multimeterModeName(MultimeterMode mode)
 {
     switch (mode) {
-    case MultimeterMode::Voltage:    return QStringLiteral("直流电压档");
-    case MultimeterMode::Current:    return QStringLiteral("直流电流档");
-    case MultimeterMode::Resistance: return QStringLiteral("电阻档");
-    case MultimeterMode::AcVoltage:  return QStringLiteral("交流电压档");
-    case MultimeterMode::AcCurrent:  return QStringLiteral("交流电流档");
+    case MultimeterMode::Voltage:    return CSM_TR("DC volts");
+    case MultimeterMode::Current:    return CSM_TR("DC amps");
+    case MultimeterMode::Resistance: return CSM_TR("Resistance");
+    case MultimeterMode::AcVoltage:  return CSM_TR("AC volts");
+    case MultimeterMode::AcCurrent:  return CSM_TR("AC amps");
     }
     return QString();
 }

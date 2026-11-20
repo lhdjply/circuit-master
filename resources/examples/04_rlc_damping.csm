@@ -179,6 +179,7 @@
     ],
     "format": "circuit-master",
     "name": "RLC 阻尼振荡",
+    "name_en": "RLC damped oscillation",
     "version": 2,
     "wires": [
         [

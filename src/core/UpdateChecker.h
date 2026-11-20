@@ -68,7 +68,8 @@ struct ReleaseInfo {
     QString version;     // 规范化后的版本号（去掉 tag 的 v 前缀与预发布后缀）
     QString tagName;     // 原始 tag，展示时保留作者的写法（如 v0.1.0）
     QString title;       // Release 标题，可能为空
-    QString notes;       // 更新日志正文（清单里是 Markdown）
+    QString notes;       // 更新日志正文（清单里是 Markdown，中文）
+    QString notesEn;     // 同一节的英文正文；清单里没有就为空
     QUrl pageUrl;        // 发布页：浏览器打开后可看到安装包
     QString publishedAt; // ISO 8601 时间
     QVector<ReleaseAsset> assets; // 清单里列出的安装包
