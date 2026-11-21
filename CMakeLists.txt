@@ -122,6 +122,7 @@ add_library(csm_core OBJECT
     src/core/Component.cpp
     src/core/Netlist.cpp
     src/core/Circuit.cpp
+    src/core/Shortcuts.cpp
     src/core/UpdateChecker.cpp
     src/sim/Simulator.cpp
 )

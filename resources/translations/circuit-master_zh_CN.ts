@@ -39,6 +39,10 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</source>
         <translation>「%1」有未保存的更改，是否保存？</translation>
     </message>
     <message>
+        <source>%1 is already used by %2; pick another shortcut.</source>
+        <translation>%1 已经被「%2」占用，请换一个组合。</translation>
+    </message>
+    <message>
         <source>%1 s left</source>
         <translation>剩余 %1 s</translation>
     </message>
@@ -97,6 +101,10 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</source>
         <translation>视图(&amp;V)</translation>
     </message>
     <message>
+        <source>(unbound)</source>
+        <translation>（未绑定）</translation>
+    </message>
+    <message>
         <source>**Peak** amplitude, measured from the DC offset</source>
         <translation>**峰值**幅值，从直流偏置算起</translation>
     </message>
@@ -109,8 +117,8 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</source>
         <translation>。请检查是否存在电压源短路回路、理想电压源并联，或未连接的悬空节点。</translation>
     </message>
     <message>
-        <source>&lt;b&gt;Three steps to a simulation&lt;/b&gt;&lt;ol&gt;&lt;li&gt;Drag parts from the &lt;b&gt;library&lt;/b&gt; on the left onto the canvas; select one and press &lt;b&gt;Space&lt;/b&gt; to rotate.&lt;/li&gt;&lt;li&gt;Click &lt;b&gt;Wire&lt;/b&gt; (W) in the toolbar, click on a pin and drag out the polyline, double-click to finish.&lt;br&gt;Wire ends snap to pins and a junction dot appears automatically.&lt;/li&gt;&lt;li&gt;Double-click a part to change its value (you can type 10kΩ, 4.7µF or 1mH; the default unit applies if omitted), then press &lt;b&gt;F5&lt;/b&gt; to run and see the waveforms.&lt;/li&gt;&lt;/ol&gt;&lt;b&gt;Note&lt;/b&gt;: the circuit must contain a GND symbol, otherwise the reference potential is undefined.&lt;br&gt;&lt;br&gt;&lt;span style='color:%1'&gt;Tip: Simulate → Example Circuits has several runnable examples.&lt;/span&gt;</source>
-        <translation>&lt;b&gt;三步完成一次仿真&lt;/b&gt;&lt;ol&gt;&lt;li&gt;从左侧&lt;b&gt;元件库&lt;/b&gt;把元件拖到画布上；选中后按 &lt;b&gt;空格&lt;/b&gt; 旋转。&lt;/li&gt;&lt;li&gt;点击工具栏&lt;b&gt;连线&lt;/b&gt;（W），在引脚处单击并拖出折线，双击结束。&lt;br&gt;导线端点吸附到引脚后会自动出现连接点。&lt;/li&gt;&lt;li&gt;双击元件修改数值（可直接写 10kΩ、4.7µF、1mH，不写单位按默认单位），按 &lt;b&gt;F5&lt;/b&gt; 运行仿真，波形显示在查看器中。&lt;/li&gt;&lt;/ol&gt;&lt;b&gt;注意&lt;/b&gt;：电路必须包含接地符号（GND），否则无法确定参考电位。&lt;br&gt;&lt;br&gt;&lt;span style='color:%1'&gt;提示：菜单「仿真 → 示例电路」内置多个可直接运行的例子。&lt;/span&gt;</translation>
+        <source>&lt;b&gt;Three steps to a simulation&lt;/b&gt;&lt;ol&gt;&lt;li&gt;Drag parts from the &lt;b&gt;library&lt;/b&gt; on the left onto the canvas; select one and press &lt;b&gt;%1&lt;/b&gt; to rotate.&lt;/li&gt;&lt;li&gt;Click &lt;b&gt;Wire&lt;/b&gt; (%2) in the toolbar, click on a pin and drag out the polyline, double-click to finish.&lt;br&gt;Wire ends snap to pins and a junction dot appears automatically.&lt;/li&gt;&lt;li&gt;Double-click a part to change its value (you can type 10kΩ, 4.7µF or 1mH; the default unit applies if omitted), then press &lt;b&gt;%3&lt;/b&gt; to run and see the waveforms.&lt;/li&gt;&lt;/ol&gt;&lt;b&gt;Note&lt;/b&gt;: the circuit must contain a GND symbol, otherwise the reference potential is undefined.&lt;br&gt;&lt;br&gt;&lt;span style='color:%4'&gt;Tip: Simulate → Example Circuits has several runnable examples.&lt;/span&gt;</source>
+        <translation>&lt;b&gt;三步完成一次仿真&lt;/b&gt;&lt;ol&gt;&lt;li&gt;从左侧&lt;b&gt;元件库&lt;/b&gt;把元件拖到画布上；选中后按 &lt;b&gt;%1&lt;/b&gt; 旋转。&lt;/li&gt;&lt;li&gt;点击工具栏&lt;b&gt;连线&lt;/b&gt;（%2），在引脚处单击并拖出折线，双击结束。&lt;br&gt;导线端点吸附到引脚后会自动出现连接点。&lt;/li&gt;&lt;li&gt;双击元件修改数值（可直接写 10kΩ、4.7µF、1mH，不写单位按默认单位），按 &lt;b&gt;%3&lt;/b&gt; 运行仿真，波形显示在查看器中。&lt;/li&gt;&lt;/ol&gt;&lt;b&gt;注意&lt;/b&gt;：电路必须包含接地符号（GND），否则无法确定参考电位。&lt;br&gt;&lt;br&gt;&lt;span style='color:%4'&gt;提示：菜单「仿真 → 示例电路」内置多个可直接运行的例子。&lt;/span&gt;</translation>
     </message>
     <message>
         <source>&lt;p style='color:%1'&gt;This build has no bundled changelog.&lt;/p&gt;</source>
@@ -225,6 +233,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>分析：瞬态 %1 / 步长 %2</translation>
     </message>
     <message>
+        <source>Appearance</source>
+        <translation>外观</translation>
+    </message>
+    <message>
         <source>Auto</source>
         <translation>自动</translation>
     </message>
@@ -259,6 +271,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Cancel</source>
         <translation>取消</translation>
+    </message>
+    <message>
+        <source>Cancel / Clear Selection</source>
+        <translation>取消 / 取消选择</translation>
     </message>
     <message>
         <source>Cannot check for updates:
@@ -355,6 +371,14 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>清除</translation>
     </message>
     <message>
+        <source>Clear this shortcut, leaving the command unbound</source>
+        <translation>清空这一行的快捷键（改为不绑定）</translation>
+    </message>
+    <message>
+        <source>Click a shortcut and press the new keys. The × at the end of a row clears it, leaving that command without a shortcut.</source>
+        <translation>点一下快捷键再按下新的按键。点行尾的「×」可清空这一行，该命令就不再绑定按键。</translation>
+    </message>
+    <message>
         <source>Close</source>
         <translation>关闭</translation>
     </message>
@@ -369,6 +393,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Closed</source>
         <translation>闭合</translation>
+    </message>
+    <message>
+        <source>Command</source>
+        <translation>命令</translation>
     </message>
     <message>
         <source>Copy</source>
@@ -567,8 +595,8 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>请输入数值</translation>
     </message>
     <message>
-        <source>Example "%1" loaded. Press F5 to run the simulation.</source>
-        <translation>已载入示例「%1」。按 F5 运行仿真。</translation>
+        <source>Example "%1" loaded. Press %2 to run the simulation.</source>
+        <translation>已载入示例「%1」。按 %2 运行仿真。</translation>
     </message>
     <message>
         <source>Example Circuits</source>
@@ -1155,6 +1183,10 @@ Place a voltage (TP) or current (IP) test point and run again</source>
         <translation>电阻</translation>
     </message>
     <message>
+        <source>Restore Defaults</source>
+        <translation>恢复默认</translation>
+    </message>
+    <message>
         <source>Resume</source>
         <translation>继续</translation>
     </message>
@@ -1185,6 +1217,10 @@ Place a voltage (TP) or current (IP) test point and run again</source>
     <message>
         <source>Run Simulation</source>
         <translation>运行仿真</translation>
+    </message>
+    <message>
+        <source>Run Simulation (%1)</source>
+        <translation>运行仿真（%1）</translation>
     </message>
     <message>
         <source>Run Simulation (F5)</source>
@@ -1245,6 +1281,10 @@ to edit its parameters</source>
 以编辑其参数</translation>
     </message>
     <message>
+        <source>Select mode: drag to move, double-click to edit, %1 to rotate</source>
+        <translation>选择模式：拖动元件移动，双击元件编辑参数，%1 旋转</translation>
+    </message>
+    <message>
         <source>Select mode: drag to move, double-click to edit, Space to rotate</source>
         <translation>选择模式：拖动元件移动，双击元件编辑参数，空格键旋转</translation>
     </message>
@@ -1263,6 +1303,14 @@ to edit its parameters</source>
     <message>
         <source>Settings…</source>
         <translation>设置…</translation>
+    </message>
+    <message>
+        <source>Shortcut</source>
+        <translation>快捷键</translation>
+    </message>
+    <message>
+        <source>Shortcuts</source>
+        <translation>快捷键</translation>
     </message>
     <message>
         <source>Show Grid</source>
@@ -1319,6 +1367,10 @@ to edit its parameters</source>
     <message>
         <source>Sources</source>
         <translation>电源</translation>
+    </message>
+    <message>
+        <source>Space</source>
+        <translation>空格</translation>
     </message>
     <message>
         <source>Square</source>
@@ -1465,16 +1517,16 @@ to edit its parameters</source>
         <translation>提示：%1 是交流档，需要一个完整周期（%2 Hz → %3）才有读数；当前停止时间 %4 不够，读数会显示横杠。</translation>
     </message>
     <message>
-        <source>Tip: left-drag to select and move, double-click to edit, Space to rotate; F5 runs the simulation.</source>
-        <translation>提示：左键选择拖动，双击编辑参数，空格键旋转；按 F5 运行仿真。</translation>
+        <source>Tip: left-drag to select and move, double-click to edit, %1 to rotate; %2 runs the simulation.</source>
+        <translation>提示：左键选择拖动，双击编辑参数，%1 旋转；按 %2 运行仿真。</translation>
     </message>
     <message>
         <source>Tip: the max step %1 is coarser than the switching dynamics (suggest ≤ %2), the waveforms will be distorted and the output may not resolve.</source>
         <translation>提示：最大步长 %1 比电路的开关动态粗（建议 ≤ %2），开关波形会失真，输出可能算不出来。</translation>
     </message>
     <message>
-        <source>Tip: the multimeter window opens only while the live simulation runs. Press F5, then click it.</source>
-        <translation>提示：万用表读数窗口只在实时仿真运行时打开。按 F5 运行仿真后再点它。</translation>
+        <source>Tip: the multimeter window opens only while the live simulation runs. Press %1, then click it.</source>
+        <translation>提示：万用表读数窗口只在实时仿真运行时打开。按 %1 运行仿真后再点它。</translation>
     </message>
     <message>
         <source>Tip: the positive terminal of an electrolytic capacitor is on pin 1; reversing it will break it down. Select the capacitor to toggle polarity.</source>
@@ -1619,8 +1671,8 @@ Checked: normally closed, opens while held.</source>
         <translation>波形查看器 — %1 — 电路仿真大师</translation>
     </message>
     <message>
-        <source>Waveform monitor: Static Waveforms / Live Scope tabs (available while simulating)</source>
-        <translation>波形监控面板：静态波形 / 动态示波器两个标签页（仿真运行时可用）</translation>
+        <source>Waveform monitor (%1): Static Waveforms / Live Scope tabs (available while simulating)</source>
+        <translation>波形监控（%1）：静态波形 / 动态示波器两页（仿真运行时可用）</translation>
     </message>
     <message>
         <source>Windings</source>

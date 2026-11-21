@@ -819,6 +819,9 @@ void UiWorkflowTest::runStartsAndStopEndsSimulation()
     QCOMPARE(run->text(), QStringLiteral("停止仿真"));
     QVERIFY2(monitor->isEnabled(), "运行时波形监控应可用");
 
+    // F6 是「波形监控」的默认快捷键
+    QCOMPARE(monitor->shortcut(), QKeySequence(Qt::Key_F6));
+
     // 点「波形监控」才打开窗口
     auto* monitorWindow = window.findChild<QWidget*>(QStringLiteral("waveMonitorWindow"));
     QVERIFY(monitorWindow);

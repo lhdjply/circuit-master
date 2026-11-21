@@ -57,12 +57,21 @@ void SchematicView::setTool(Tool tool)
     emit toolChanged();
 }
 
+void SchematicView::setKeyHints(const QString& rotate, const QString& run)
+{
+    // 没设置过时退回默认键名，避免提示里出现空白
+    m_rotateKey = rotate.isEmpty() ? CSM_TR("Space") : rotate;
+    m_runKey = run.isEmpty() ? QStringLiteral("F5") : run;
+    updateCursorAndHint();
+}
+
 void SchematicView::updateCursorAndHint()
 {
     switch (m_tool) {
     case Tool::Select:
         viewport()->setCursor(Qt::ArrowCursor);
-        emit hintChanged(CSM_TR("Select mode: drag to move, double-click to edit, Space to rotate"));
+        emit hintChanged(CSM_TR("Select mode: drag to move, double-click to edit, %1 to rotate")
+                             .arg(m_rotateKey));
         break;
     case Tool::Wire:
         viewport()->setCursor(Qt::CrossCursor);
@@ -398,16 +407,7 @@ void SchematicView::keyPressEvent(QKeyEvent* event)
         return;
     }
 
-    if (event->key() == Qt::Key_Escape) {
-        if (m_tool == Tool::Wire) {
-            cancelWire();
-            setTool(Tool::Select);
-        } else {
-            m_scene->clearSelection();
-        }
-        event->accept();
-        return;
-    }
+    // Esc 由 MainWindow 的「取消」动作处理（可在设置里改键），这里不再拦
     if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
         if (m_tool == Tool::Wire && !m_wirePoints.isEmpty()) {
             finishWire();

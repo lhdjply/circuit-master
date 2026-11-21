@@ -6,6 +6,7 @@
 #include "core/Language.h"
 #include "ui/I18n.h"
 #include "ui/MainWindow.h"
+#include "ui/SettingsDialog.h"
 #include "ui/Theme.h"
 #include "ui/MultimeterWindow.h"
 #include "ui/PropertyPanel.h"
@@ -26,7 +27,13 @@
 #include <QImage>
 #include <QComboBox>
 #include <QDialog>
+#include <QKeyEvent>
+#include <QToolButton>
+#include <QTableWidget>
+#include <QKeySequenceEdit>
 #include <QDir>
+#include "core/Shortcuts.h"
+#include <QSettings>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QElapsedTimer>
@@ -88,6 +95,10 @@ private slots:
     void logicGateIconsDiffer();
     void libraryDragPixmapHasNoSelectionBackground();
     void signalGeneratorRowsFollowWaveform();
+    void settingsDialogEditsShortcuts();
+    void savedShortcutsApplyAtStartup();
+    void keyHintsFollowShortcuts();
+    void holdingAKeyRecordsOneShortcut();
 
 private:
 
@@ -917,6 +928,189 @@ void UiPanelTest::signalGeneratorRowsFollowWaveform()
     settle();
     QCOMPARE(item->component().waveform, Waveform::Triangle);
     QVERIFY2(!duty->isVisible(), "三角波时不该显示占空比");
+}
+
+
+void UiPanelTest::settingsDialogEditsShortcuts()
+{
+    // 设置里的快捷键页：表格里改完点确定，要把结果交给主窗口
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    QVector<SettingsDialog::ShortcutRow> rows = {
+        {QStringLiteral("file.new"), QStringLiteral("New"),
+         QKeySequence(QStringLiteral("Ctrl+N")), QKeySequence(QStringLiteral("Ctrl+N"))},
+        {QStringLiteral("edit.rotate"), QStringLiteral("Rotate"),
+         QKeySequence(QStringLiteral("Space")), QKeySequence(QStringLiteral("Space"))},
+    };
+    SettingsDialog dialog(&window, [] {}, [] {}, rows);
+    dialog.show();
+    settle();
+
+    QVERIFY(dialog.findChild<QTabWidget*>(QStringLiteral("settingsTabs")));
+    auto* table = dialog.findChild<QTableWidget*>(QStringLiteral("shortcutTable"));
+    QVERIFY(table);
+    QCOMPARE(table->rowCount(), rows.size());
+
+    auto* edit = dialog.findChild<QKeySequenceEdit*>(QStringLiteral("shortcut_edit.rotate"));
+    QVERIFY(edit);
+    QCOMPARE(edit->keySequence(), QKeySequence(QStringLiteral("Space")));
+
+    // 改成 Ctrl+R 再点确定
+    edit->setKeySequence(QKeySequence(QStringLiteral("Ctrl+R")));
+    settle();
+    for (QPushButton* button : dialog.findChildren<QPushButton*>()) {
+        if (button->text() == QStringLiteral("确定")) {
+            button->click();
+            break;
+        }
+    }
+    settle();
+
+    const QHash<QString, QKeySequence> edited = dialog.shortcuts();
+    QCOMPARE(edited.size(), rows.size());
+    QCOMPARE(edited.value(QStringLiteral("edit.rotate")), QKeySequence(QStringLiteral("Ctrl+R")));
+    QCOMPARE(edited.value(QStringLiteral("file.new")), QKeySequence(QStringLiteral("Ctrl+N")));
+
+    // 行尾的「×」：清空这一行的快捷键（= 不绑定）
+    auto* clear = dialog.findChild<QToolButton*>(QStringLiteral("clear_edit.rotate"));
+    QVERIFY2(clear, "每行都该有一个清空按钮");
+    clear->click();
+    settle();
+    QVERIFY(edit->keySequence().isEmpty());
+    for (QPushButton* button : dialog.findChildren<QPushButton*>()) {
+        if (button->text() == QStringLiteral("确定")) {
+            button->click();
+            break;
+        }
+    }
+    settle();
+    QVERIFY(dialog.shortcuts().value(QStringLiteral("edit.rotate")).isEmpty());
+
+    // 「恢复默认」把改动撤回默认值
+    SettingsDialog second(&window, [] {}, [] {}, rows);
+    second.show();
+    settle();
+    auto* edit2 = second.findChild<QKeySequenceEdit*>(QStringLiteral("shortcut_edit.rotate"));
+    QVERIFY(edit2);
+    edit2->setKeySequence(QKeySequence(QStringLiteral("Ctrl+Shift+R")));
+    settle();
+    auto* reset = second.findChild<QPushButton*>(QStringLiteral("resetShortcuts"));
+    QVERIFY(reset);
+    reset->click();
+    settle();
+    QCOMPARE(edit2->keySequence(), QKeySequence(QStringLiteral("Space")));
+}
+
+
+void UiPanelTest::savedShortcutsApplyAtStartup()
+{
+    // 存过覆盖之后，新建的窗口应当直接按新键绑定 —— 这是「改完能生效」的关键一环
+    QCoreApplication::setOrganizationName(QStringLiteral("CircuitMasterTest"));
+    QCoreApplication::setApplicationName(QStringLiteral("CircuitMasterTest"));
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, QDir::tempPath());
+    Shortcuts::clearAll();
+
+    Shortcuts::save(QStringLiteral("file.new"), QStringLiteral("Ctrl+Shift+N"),
+                    QStringLiteral("Ctrl+N"));
+
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    QAction* newAction = nullptr;
+    for (QAction* action : window.findChildren<QAction*>()) {
+        if (action->text().startsWith(QStringLiteral("新建")))
+            newAction = action;
+    }
+    QVERIFY(newAction);
+    QCOMPARE(newAction->shortcut(), QKeySequence(QStringLiteral("Ctrl+Shift+N")));
+
+    // 清掉覆盖后回到默认
+    Shortcuts::clearAll();
+    MainWindow plain;
+    plain.show();
+    waitShown(plain);
+    for (QAction* action : plain.findChildren<QAction*>()) {
+        if (action->text().startsWith(QStringLiteral("新建")))
+            newAction = action;
+    }
+    QCOMPARE(newAction->shortcut(), QKeySequence(QStringLiteral("Ctrl+N")));
+    QFile::remove(QSettings().fileName());
+}
+
+
+void UiPanelTest::keyHintsFollowShortcuts()
+{
+    // 提示文字里的按键取自真实快捷键：改过设置后不能再写死「空格」「F5」
+    QCoreApplication::setOrganizationName(QStringLiteral("CircuitMasterTest"));
+    QCoreApplication::setApplicationName(QStringLiteral("CircuitMasterTest"));
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, QDir::tempPath());
+    Shortcuts::clearAll();
+    Shortcuts::save(QStringLiteral("edit.rotate"), QStringLiteral("Ctrl+R"),
+                    QStringLiteral("Space"));
+
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    // 状态栏（选择模式）里的旋转提示应当是新的键
+    bool found = false;
+    for (QLabel* label : window.findChildren<QLabel*>()) {
+        if (!label->text().contains(QStringLiteral("旋转"))
+            || !label->text().contains(QStringLiteral("选择模式"))) {
+            continue;
+        }
+        found = true;
+        QVERIFY2(label->text().contains(QStringLiteral("Ctrl+R")), qPrintable(label->text()));
+        QVERIFY2(!label->text().contains(QStringLiteral("空格")), qPrintable(label->text()));
+    }
+    QVERIFY2(found, "没找到状态栏的选择模式提示");
+
+    Shortcuts::clearAll();
+    QFile::remove(QSettings().fileName());
+}
+
+
+void UiPanelTest::holdingAKeyRecordsOneShortcut()
+{
+    // 按住一个键不放时，平台会不停送自动重复的 keyPress；
+    // 默认的 QKeySequenceEdit 会把它记成 "Ctrl+R, Ctrl+R, …"，看起来像一直在录。
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    SettingsDialog dialog(&window, [] {}, [] {},
+                          {{QStringLiteral("edit.rotate"), QStringLiteral("Rotate"),
+                            QKeySequence(QStringLiteral("Space")),
+                            QKeySequence(QStringLiteral("Space"))}});
+    dialog.show();
+    settle();
+    auto* edit = dialog.findChild<QKeySequenceEdit*>(QStringLiteral("shortcut_edit.rotate"));
+    QVERIFY(edit);
+    edit->setFocus();
+    settle();
+
+    const auto send = [edit](bool autoRepeat) {
+        auto* event = new QKeyEvent(QEvent::KeyPress, Qt::Key_R, Qt::ControlModifier,
+                                    QStringLiteral("R"), autoRepeat);
+        QCoreApplication::sendEvent(edit, event);
+        delete event;
+    };
+    send(false);                    // 真正按下的一次
+    for (int i = 0; i < 5; ++i)     // 之后的自动重复
+        send(true);
+    settle();
+
+    QCOMPARE(edit->keySequence(), QKeySequence(QStringLiteral("Ctrl+R")));
+    QCOMPARE(edit->keySequence().count(), 1);
 }
 
 #include "test_ui_panel.moc"

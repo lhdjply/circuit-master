@@ -93,6 +93,7 @@ private slots:
     void wireCanBeSelectedAndDeleted();
     void dragWireEndpointKeepsOtherEnd();
     void drawWireWithMouse();
+    void escCancelsWireThroughTheAction();
     void measureProbeReadsTheWire();
     void measureProbeUsesTheNearerWireEnd();
     void measureProbeSumsTheSegmentCurrent();
@@ -2065,6 +2066,45 @@ void UiEditorTest::draggingAComponentDoesNotPullUnrelatedWires()
         QVERIFY2(QLineF(before.at(i), after.at(i)).length() <= 0.5,
                  qPrintable(QStringLiteral("导线第 %1 个点被拖动了").arg(i)));
     }
+}
+
+
+void UiEditorTest::escCancelsWireThroughTheAction()
+{
+    // Esc 现在是可改键的动作（「取消 / 取消选择」），不再是画布里写死的按键
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    QAction* cancel = window.findChild<QAction*>(QStringLiteral("actCancel"));
+    QVERIFY(cancel);
+    QCOMPARE(cancel->shortcut(), QKeySequence(Qt::Key_Escape));
+
+    auto* view = currentView(window);
+    QVERIFY(view);
+    view->setTool(SchematicView::Tool::Wire);
+    settle();
+    QCOMPARE(view->tool(), SchematicView::Tool::Wire);
+
+    // 连线模式下按 Esc：取消连线并回到选择工具
+    view->setFocus();
+    settle();
+    QTest::keyClick(view, Qt::Key_Escape);
+    settle();
+    QCOMPARE(view->tool(), SchematicView::Tool::Select);
+
+    // 选择模式下按 Esc：取消选择
+    auto* scene = currentScene(window);
+    QVERIFY(scene);
+    ComponentItem* item = scene->placeComponent(ComponentType::Resistor, QPointF(300.0, 300.0));
+    QVERIFY(item);
+    item->setSelected(true);
+    settle();
+    QVERIFY(!scene->selectedItems().isEmpty());
+    QTest::keyClick(view, Qt::Key_Escape);
+    settle();
+    QVERIFY2(scene->selectedItems().isEmpty(), "Esc 应当取消选择");
 }
 
 #include "test_ui_editor.moc"

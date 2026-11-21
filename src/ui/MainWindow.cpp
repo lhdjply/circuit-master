@@ -8,6 +8,7 @@
 
 #include "core/Circuit.h"
 #include "core/Netlist.h"
+#include "core/Shortcuts.h"
 #include "core/Units.h"
 #include "ui/ComponentItem.h"
 #include "ui/PropertyPanel.h"
@@ -23,6 +24,7 @@
 
 #include <QAbstractItemView>
 #include <QAction>
+#include <QRegularExpression>
 #include <QComboBox>
 #include <QActionGroup>
 #include <QApplication>
@@ -435,9 +437,12 @@ QTabBar::close-button:hover {
 
     appendLog(CSM_TR("Circuit Master %1  —  Qt6 / MNA solver")
                   .arg(QStringLiteral(CSM_VERSION_STRING)));
-    appendLog(CSM_TR("Tip: left-drag to select and move, double-click to edit, Space to rotate; F5 runs the simulation."));
+    appendLog(CSM_TR("Tip: left-drag to select and move, double-click to edit, %1 to rotate; "
+                     "%2 runs the simulation.")
+                  .arg(keyLabel(m_actRotate), keyLabel(m_actRun)));
     appendLog(CSM_TR("New blank circuit: drop parts from the library on the left, "
                      "or load an example from Simulate → Example Circuits."));
+    refreshKeyHints();   // 状态栏提示里的按键要与真实快捷键一致
 
     if (m_actMonitor) {
         m_actMonitor->setEnabled(false);
@@ -878,10 +883,13 @@ void MainWindow::createActions()
                    QStyle::SP_ComputerIcon),
         CSM_TR("Waveform Monitor"), this);
     m_actMonitor->setObjectName(QStringLiteral("actMonitor"));
+    // F6 打开 / 收起波形监控（F5 运行是它的前一步）
+    m_actMonitor->setShortcut(QKeySequence(Qt::Key_F6));
     m_actMonitor->setCheckable(true);
     m_actMonitor->setEnabled(false); // 只有仿真运行时才允许打开
     m_actMonitor->setToolTip(
-        CSM_TR("Waveform monitor: Static Waveforms / Live Scope tabs (available while simulating)"));
+        CSM_TR("Waveform monitor (%1): Static Waveforms / Live Scope tabs (available while simulating)")
+            .arg(keyLabel(m_actMonitor)));
 
     m_actSelectTool = new QAction(
         actionIcon(QStringLiteral("select"), QStringLiteral("edit-select"), QStyle::SP_ArrowUp),
@@ -990,11 +998,109 @@ void MainWindow::createActions()
     m_actSnapWires->setToolTip(CSM_TR("Snap wire corners to the grid, fixing offsets left by older paste"));
     connect(m_actSnapWires, &QAction::triggered, this, [this] { m_scene->snapWiresToGrid(); });
 
+    // Esc：连线中取消连线并回到选择工具，否则取消选择。
+    // 做成动作（而不是画布里写死按键）是为了让它在「设置 → 快捷键」里也能改。
+    m_actCancel = new QAction(CSM_TR("Cancel / Clear Selection"), this);
+    m_actCancel->setObjectName(QStringLiteral("actCancel"));
+    m_actCancel->setShortcut(QKeySequence(Qt::Key_Escape));
+    connect(m_actCancel, &QAction::triggered, this, [this] {
+        if (!m_view)
+            return;
+        if (m_view->tool() == SchematicView::Tool::Wire) {
+            m_view->cancelWire();
+            m_view->setTool(SchematicView::Tool::Select);
+            return;
+        }
+        m_scene->clearSelection();
+    });
+
     m_actDelete->setEnabled(false);
     m_actRotate->setEnabled(false);
 
     // 这些快捷键只在画布获得焦点时生效，避免与属性面板输入冲突
     attachCanvasActions(m_view);
+
+    registerShortcutBindings();   // 把用户在设置里改过的快捷键套上去
+}
+
+QString MainWindow::keyLabel(const QAction* action) const
+{
+    if (!action)
+        return QStringLiteral("—");
+    const QKeySequence sequence = action->shortcut();
+    if (sequence.isEmpty())
+        return CSM_TR("(unbound)");
+    return sequence.toString(QKeySequence::NativeText);
+}
+
+void MainWindow::refreshKeyHints()
+{
+    for (Document* document : m_documents) {
+        if (document && document->view)
+            document->view->setKeyHints(keyLabel(m_actRotate), keyLabel(m_actRun));
+    }
+    if (m_actRun)
+        m_actRun->setToolTip(CSM_TR("Run Simulation (%1)").arg(keyLabel(m_actRun)));
+    if (m_actMonitor)
+        m_actMonitor->setToolTip(
+            CSM_TR("Waveform monitor (%1): Static Waveforms / Live Scope tabs (available while simulating)")
+                .arg(keyLabel(m_actMonitor)));
+}
+
+void MainWindow::registerShortcutBindings()
+{
+    m_shortcutBindings.clear();
+    // id 是稳定标识（存进配置），顺序就是设置对话框里的顺序
+    const QVector<QPair<QString, QAction*>> entries = {
+        {QStringLiteral("file.new"), m_actNew},
+        {QStringLiteral("file.open"), m_actOpen},
+        {QStringLiteral("file.save"), m_actSave},
+        {QStringLiteral("file.saveAs"), m_actSaveAs},
+        {QStringLiteral("file.closeTab"), m_actCloseTab},
+        {QStringLiteral("file.nextTab"), m_actNextTab},
+        {QStringLiteral("file.prevTab"), m_actPrevTab},
+        {QStringLiteral("edit.undo"), m_actUndo},
+        {QStringLiteral("edit.redo"), m_actRedo},
+        {QStringLiteral("edit.cut"), m_actCut},
+        {QStringLiteral("edit.copy"), m_actCopy},
+        {QStringLiteral("edit.paste"), m_actPaste},
+        {QStringLiteral("edit.delete"), m_actDelete},
+        {QStringLiteral("edit.rotate"), m_actRotate},
+        {QStringLiteral("edit.selectAll"), m_actSelectAll},
+        {QStringLiteral("view.zoomIn"), m_actZoomIn},
+        {QStringLiteral("view.zoomOut"), m_actZoomOut},
+        {QStringLiteral("view.zoomFit"), m_actZoomFit},
+        {QStringLiteral("tool.select"), m_actSelectTool},
+        {QStringLiteral("tool.wire"), m_actWireTool},
+        {QStringLiteral("tool.cancel"), m_actCancel},
+        {QStringLiteral("sim.run"), m_actRun},
+        {QStringLiteral("sim.monitor"), m_actMonitor},
+    };
+    for (const auto& entry : entries) {
+        if (!entry.second)
+            continue;
+        m_shortcutBindings.append({entry.first, entry.second, entry.second->shortcut()});
+    }
+    // 套用用户改过的值；空字符串表示「不绑定」
+    for (const ShortcutBinding& binding : m_shortcutBindings) {
+        const QString fallback = binding.defaultKey.toString(QKeySequence::PortableText);
+        const QString saved = Shortcuts::load(binding.id, fallback);
+        binding.action->setShortcut(saved.isEmpty()
+                                        ? QKeySequence()
+                                        : QKeySequence(saved, QKeySequence::PortableText));
+    }
+    refreshKeyHints();
+}
+
+void MainWindow::applyShortcutEdits(const QHash<QString, QKeySequence>& edited)
+{
+    for (const ShortcutBinding& binding : m_shortcutBindings) {
+        const QString fallback = binding.defaultKey.toString(QKeySequence::PortableText);
+        const QKeySequence sequence = edited.value(binding.id, binding.action->shortcut());
+        binding.action->setShortcut(sequence);
+        Shortcuts::save(binding.id, sequence.toString(QKeySequence::PortableText), fallback);
+    }
+    refreshKeyHints();
 }
 
 void MainWindow::attachCanvasActions(SchematicView* view)
@@ -1002,7 +1108,8 @@ void MainWindow::attachCanvasActions(SchematicView* view)
     if (!view)
         return;
     for (QAction* action : {m_actUndo, m_actRedo, m_actCut, m_actCopy, m_actPaste, m_actDelete,
-                            m_actRotate, m_actSelectAll, m_actSelectTool, m_actWireTool}) {
+                            m_actRotate, m_actSelectAll, m_actSelectTool, m_actWireTool,
+                            m_actCancel}) {
         if (!action)
             continue;   // 构造期间可能还没建出来
         action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
@@ -1466,7 +1573,8 @@ void MainWindow::onSelectionChanged()
             // 只说一次：读数窗口在没跑仿真时全是横杠，开了也没用
             m_meterHintShown = true;
             appendLog(CSM_TR("Tip: the multimeter window opens only while the live simulation runs. "
-                             "Press F5, then click it."));
+                             "Press %1, then click it.")
+                          .arg(keyLabel(m_actRun)));
         }
     }
     const int selectedCount = m_scene->selectedComponents().size();
@@ -2271,7 +2379,8 @@ void MainWindow::loadExample(int index)
     const SimulationOptions options =
         optionsFromJson(root.value(QStringLiteral("analysis")).toObject());
     loadCircuitData(circuit, name, QString(), options);
-    appendLog(CSM_TR("Example \"%1\" loaded. Press F5 to run the simulation.").arg(name));
+    appendLog(CSM_TR("Example \"%1\" loaded. Press %2 to run the simulation.")
+                  .arg(name, keyLabel(m_actRun)));
 }
 
 void MainWindow::applyProbeReadouts(const SimulationResult& result)
@@ -2712,6 +2821,19 @@ void MainWindow::checkForUpdates(bool manual)
 
 void MainWindow::showSettings()
 {
+    // 菜单文字去掉 & 与省略号，快捷键表里读起来更干净
+    QVector<SettingsDialog::ShortcutRow> rows;
+    for (const ShortcutBinding& binding : m_shortcutBindings) {
+        QString label = binding.action->text();
+        if (label.endsWith(QStringLiteral("…")))
+            label.chop(1);
+        // 菜单文字里的加速键「(&N)」对快捷键表没意义，去掉
+        label.remove(QRegularExpression(QStringLiteral("\\(&?.{1,3}\\)$")));
+        label.remove(QLatin1Char('&'));
+        label = label.trimmed();
+        rows.append({binding.id, label, binding.action->shortcut(), binding.defaultKey});
+    }
+
     SettingsDialog dialog(this,
                           [this] { applyTheme(); },
                           [this] {
@@ -2720,8 +2842,10 @@ void MainWindow::showSettings()
                                   if (document && document->scene)
                                       document->scene->update();
                               }
-                          });
-    dialog.exec();
+                          },
+                          rows);
+    if (dialog.exec() == QDialog::Accepted)
+        applyShortcutEdits(dialog.shortcuts());
 }
 
 void MainWindow::showQuickGuide()
@@ -2730,17 +2854,18 @@ void MainWindow::showQuickGuide()
         "<b>Three steps to a simulation</b>"
         "<ol>"
         "<li>Drag parts from the <b>library</b> on the left onto the canvas; "
-        "select one and press <b>Space</b> to rotate.</li>"
-        "<li>Click <b>Wire</b> (W) in the toolbar, click on a pin and drag out the polyline, "
+        "select one and press <b>%1</b> to rotate.</li>"
+        "<li>Click <b>Wire</b> (%2) in the toolbar, click on a pin and drag out the polyline, "
         "double-click to finish.<br>"
         "Wire ends snap to pins and a junction dot appears automatically.</li>"
         "<li>Double-click a part to change its value (you can type 10kΩ, 4.7µF or 1mH; "
-        "the default unit applies if omitted), then press <b>F5</b> to run and see the waveforms.</li>"
+        "the default unit applies if omitted), then press <b>%3</b> to run and see the waveforms.</li>"
         "</ol>"
         "<b>Note</b>: the circuit must contain a GND symbol, otherwise the reference potential "
         "is undefined.<br><br>"
-        "<span style='color:%1'>Tip: Simulate → Example Circuits has several runnable examples.</span>")
-                      .arg(Theme::textMuted().name()));
+        "<span style='color:%4'>Tip: Simulate → Example Circuits has several runnable examples.</span>")
+                      .arg(keyLabel(m_actRotate), keyLabel(m_actWireTool), keyLabel(m_actRun),
+                           Theme::textMuted().name()));
 }
 
 void MainWindow::showAbout()

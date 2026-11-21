@@ -22,6 +22,8 @@ public:
     explicit SchematicView(SchematicScene* scene, QWidget* parent = nullptr);
 
     void setTool(Tool tool);
+    /// 提示文字里的按键取自真实快捷键 —— 用户改过设置后要跟着变
+    void setKeyHints(const QString& rotate, const QString& run);
     /// 由主窗口在实时仿真启停时同步：决定点击开关是「拨动」还是「选中」
     void setLiveRunning(bool running) { m_liveRunning = running; }
     bool liveRunning() const { return m_liveRunning; }
@@ -67,6 +69,8 @@ private:
 
     SchematicScene* m_scene = nullptr;
     Tool m_tool = Tool::Select;
+    QString m_rotateKey;   // 旋转的按键文本，如「空格」
+    QString m_runKey;      // 运行仿真的按键文本，如「F5」
     /// 实时仿真是否在跑。跑的时候左键点开关就是拨动它，不进入拖动
     bool m_liveRunning = false;
     /// 当前被按住的那个按钮开关（松开时用来还原）；同时只会有一个

@@ -140,6 +140,22 @@ private:
     /// 每个新文档都有一张自己的视图，必须逐个挂 —— 早先只挂了第一个，
     /// 于是「新建」之后空格旋转、Delete 全都不响应。
     void attachCanvasActions(SchematicView* view);
+
+    /// 可在「设置 → 快捷键」里改命令的动作表；默认值就是代码里 setShortcut 给的那个
+    struct ShortcutBinding {
+        QString id;
+        QAction* action = nullptr;
+        QKeySequence defaultKey;
+    };
+    /// 建好所有动作后调用：填表并把用户改过的快捷键套上去
+    /// 某个动作当前快捷键的显示文本（改过设置后提示文字要跟着变）
+    QString keyLabel(const QAction* action) const;
+    /// 把快捷键文本同步到状态栏提示、画布提示与运行按钮的 tooltip
+    void refreshKeyHints();
+    void registerShortcutBindings();
+    /// 设置对话框点确定后调用：存盘并重新套用
+    void applyShortcutEdits(const QHash<QString, QKeySequence>& edited);
+    QVector<ShortcutBinding> m_shortcutBindings;
     /// 关闭第 index 个标签（脏的先问保存）
     bool closeDocument(int index);
     /// 关闭当前标签
@@ -233,6 +249,7 @@ private:
 
     QAction* m_actSelectTool = nullptr;
     QAction* m_actWireTool = nullptr;
+    QAction* m_actCancel = nullptr;   // Esc：取消连线 / 取消选择
 };
 
 } // namespace csm

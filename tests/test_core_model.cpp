@@ -1,11 +1,14 @@
 #include "core/Circuit.h"
 #include "core/Units.h"
+#include "core/Shortcuts.h"
 #include "core/UpdateChecker.h"
 #include "csm_version.h"
 #include "sim/Simulator.h"
 
 #include <QDebug>
+#include <QDir>
 #include <QJsonArray>
+#include <QSettings>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSignalSpy>
@@ -82,6 +85,7 @@ private slots:
     void wireEndpointOnSegmentConnects();
     void mirrorChangesPinGeometry();
     void jsonRoundTrip();
+    void shortcutOverridesRoundTrip();
     void acDcSupplyExampleRuns();
     void tl431ExampleLoads();
 };
@@ -398,5 +402,38 @@ void CoreModelTest::tl431ExampleLoads()
 }
 
 QTEST_GUILESS_MAIN(CoreModelTest)
+
+
+void CoreModelTest::shortcutOverridesRoundTrip()
+{
+    // QSettings 需要组织名 / 程序名才落到文件上，而 QTEST_GUILESS_MAIN 不设这两个；
+    // 这里临时指到系统临时目录下的 ini，既不污染真实配置，也能验证读写
+    QCoreApplication::setOrganizationName(QStringLiteral("CircuitMasterTest"));
+    QCoreApplication::setApplicationName(QStringLiteral("CircuitMasterTest"));
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, QDir::tempPath());
+
+    // 没有记录时用默认值；存过之后用存的值；与默认相同则不落记录
+    Shortcuts::clearAll();
+    QCOMPARE(Shortcuts::load(QStringLiteral("test.cmd"), QStringLiteral("Ctrl+T")),
+             QStringLiteral("Ctrl+T"));
+
+    Shortcuts::save(QStringLiteral("test.cmd"), QStringLiteral("Ctrl+Shift+T"),
+                    QStringLiteral("Ctrl+T"));
+    QCOMPARE(Shortcuts::load(QStringLiteral("test.cmd"), QStringLiteral("Ctrl+T")),
+             QStringLiteral("Ctrl+Shift+T"));
+
+    // 空串表示「不绑定」，要能存住（不能被当成"没有记录"）
+    Shortcuts::save(QStringLiteral("test.cmd"), QString(), QStringLiteral("Ctrl+T"));
+    QVERIFY(Shortcuts::load(QStringLiteral("test.cmd"), QStringLiteral("Ctrl+T")).isEmpty());
+
+    // 改回与默认一致时把记录删掉
+    Shortcuts::save(QStringLiteral("test.cmd"), QStringLiteral("Ctrl+T"), QStringLiteral("Ctrl+T"));
+    QCOMPARE(Shortcuts::load(QStringLiteral("test.cmd"), QStringLiteral("Ctrl+T")),
+             QStringLiteral("Ctrl+T"));
+
+    Shortcuts::clearAll();
+    QFile::remove(QSettings().fileName());
+}
 
 #include "test_core_model.moc"

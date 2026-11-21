@@ -36,6 +36,10 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</translat
         <translation>"%1" has unsaved changes. Save them?</translation>
     </message>
     <message>
+        <source>%1 is already used by %2; pick another shortcut.</source>
+        <translation>%1 is already used by %2; pick another shortcut.</translation>
+    </message>
+    <message>
         <source>%1 s left</source>
         <translation>%1 s left</translation>
     </message>
@@ -94,6 +98,10 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</translat
         <translation>&amp;View</translation>
     </message>
     <message>
+        <source>(unbound)</source>
+        <translation>(unbound)</translation>
+    </message>
+    <message>
         <source>**Peak** amplitude, measured from the DC offset</source>
         <translation>**Peak** amplitude, measured from the DC offset</translation>
     </message>
@@ -106,8 +114,8 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</translat
         <translation>. Check for shorted voltage sources or parallel ideal sources, or for floating nodes that are not connected.</translation>
     </message>
     <message>
-        <source>&lt;b&gt;Three steps to a simulation&lt;/b&gt;&lt;ol&gt;&lt;li&gt;Drag parts from the &lt;b&gt;library&lt;/b&gt; on the left onto the canvas; select one and press &lt;b&gt;Space&lt;/b&gt; to rotate.&lt;/li&gt;&lt;li&gt;Click &lt;b&gt;Wire&lt;/b&gt; (W) in the toolbar, click on a pin and drag out the polyline, double-click to finish.&lt;br&gt;Wire ends snap to pins and a junction dot appears automatically.&lt;/li&gt;&lt;li&gt;Double-click a part to change its value (you can type 10kΩ, 4.7µF or 1mH; the default unit applies if omitted), then press &lt;b&gt;F5&lt;/b&gt; to run and see the waveforms.&lt;/li&gt;&lt;/ol&gt;&lt;b&gt;Note&lt;/b&gt;: the circuit must contain a GND symbol, otherwise the reference potential is undefined.&lt;br&gt;&lt;br&gt;&lt;span style='color:%1'&gt;Tip: Simulate → Example Circuits has several runnable examples.&lt;/span&gt;</source>
-        <translation>&lt;b&gt;Three steps to a simulation&lt;/b&gt;&lt;ol&gt;&lt;li&gt;Drag parts from the &lt;b&gt;library&lt;/b&gt; on the left onto the canvas; select one and press &lt;b&gt;Space&lt;/b&gt; to rotate.&lt;/li&gt;&lt;li&gt;Click &lt;b&gt;Wire&lt;/b&gt; (W) in the toolbar, click on a pin and drag out the polyline, double-click to finish.&lt;br&gt;Wire ends snap to pins and a junction dot appears automatically.&lt;/li&gt;&lt;li&gt;Double-click a part to change its value (you can type 10kΩ, 4.7µF or 1mH; the default unit applies if omitted), then press &lt;b&gt;F5&lt;/b&gt; to run and see the waveforms.&lt;/li&gt;&lt;/ol&gt;&lt;b&gt;Note&lt;/b&gt;: the circuit must contain a GND symbol, otherwise the reference potential is undefined.&lt;br&gt;&lt;br&gt;&lt;span style='color:%1'&gt;Tip: Simulate → Example Circuits has several runnable examples.&lt;/span&gt;</translation>
+        <source>&lt;b&gt;Three steps to a simulation&lt;/b&gt;&lt;ol&gt;&lt;li&gt;Drag parts from the &lt;b&gt;library&lt;/b&gt; on the left onto the canvas; select one and press &lt;b&gt;%1&lt;/b&gt; to rotate.&lt;/li&gt;&lt;li&gt;Click &lt;b&gt;Wire&lt;/b&gt; (%2) in the toolbar, click on a pin and drag out the polyline, double-click to finish.&lt;br&gt;Wire ends snap to pins and a junction dot appears automatically.&lt;/li&gt;&lt;li&gt;Double-click a part to change its value (you can type 10kΩ, 4.7µF or 1mH; the default unit applies if omitted), then press &lt;b&gt;%3&lt;/b&gt; to run and see the waveforms.&lt;/li&gt;&lt;/ol&gt;&lt;b&gt;Note&lt;/b&gt;: the circuit must contain a GND symbol, otherwise the reference potential is undefined.&lt;br&gt;&lt;br&gt;&lt;span style='color:%4'&gt;Tip: Simulate → Example Circuits has several runnable examples.&lt;/span&gt;</source>
+        <translation>&lt;b&gt;Three steps to a simulation&lt;/b&gt;&lt;ol&gt;&lt;li&gt;Drag parts from the &lt;b&gt;library&lt;/b&gt; on the left onto the canvas; select one and press &lt;b&gt;%1&lt;/b&gt; to rotate.&lt;/li&gt;&lt;li&gt;Click &lt;b&gt;Wire&lt;/b&gt; (%2) in the toolbar, click on a pin and drag out the polyline, double-click to finish.&lt;br&gt;Wire ends snap to pins and a junction dot appears automatically.&lt;/li&gt;&lt;li&gt;Double-click a part to change its value (you can type 10kΩ, 4.7µF or 1mH; the default unit applies if omitted), then press &lt;b&gt;%3&lt;/b&gt; to run and see the waveforms.&lt;/li&gt;&lt;/ol&gt;&lt;b&gt;Note&lt;/b&gt;: the circuit must contain a GND symbol, otherwise the reference potential is undefined.&lt;br&gt;&lt;br&gt;&lt;span style='color:%4'&gt;Tip: Simulate → Example Circuits has several runnable examples.&lt;/span&gt;</translation>
     </message>
     <message>
         <source>&lt;p style='color:%1'&gt;This build has no bundled changelog.&lt;/p&gt;</source>
@@ -222,6 +230,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Analysis: transient %1 / step %2</translation>
     </message>
     <message>
+        <source>Appearance</source>
+        <translation>Appearance</translation>
+    </message>
+    <message>
         <source>Auto</source>
         <translation>Auto</translation>
     </message>
@@ -256,6 +268,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Cancel</source>
         <translation>Cancel</translation>
+    </message>
+    <message>
+        <source>Cancel / Clear Selection</source>
+        <translation>Cancel / Clear Selection</translation>
     </message>
     <message>
         <source>Cannot check for updates:
@@ -352,6 +368,14 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Clear</translation>
     </message>
     <message>
+        <source>Clear this shortcut, leaving the command unbound</source>
+        <translation>Clear this shortcut, leaving the command unbound</translation>
+    </message>
+    <message>
+        <source>Click a shortcut and press the new keys. The × at the end of a row clears it, leaving that command without a shortcut.</source>
+        <translation>Click a shortcut and press the new keys. The × at the end of a row clears it, leaving that command without a shortcut.</translation>
+    </message>
+    <message>
         <source>Close</source>
         <translation>Close</translation>
     </message>
@@ -366,6 +390,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Closed</source>
         <translation>Closed</translation>
+    </message>
+    <message>
+        <source>Command</source>
+        <translation>Command</translation>
     </message>
     <message>
         <source>Copy</source>
@@ -564,8 +592,8 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Enter a value</translation>
     </message>
     <message>
-        <source>Example "%1" loaded. Press F5 to run the simulation.</source>
-        <translation>Example "%1" loaded. Press F5 to run the simulation.</translation>
+        <source>Example "%1" loaded. Press %2 to run the simulation.</source>
+        <translation>Example "%1" loaded. Press %2 to run the simulation.</translation>
     </message>
     <message>
         <source>Example Circuits</source>
@@ -1152,6 +1180,10 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
         <translation>Resistor</translation>
     </message>
     <message>
+        <source>Restore Defaults</source>
+        <translation>Restore Defaults</translation>
+    </message>
+    <message>
         <source>Resume</source>
         <translation>Resume</translation>
     </message>
@@ -1182,6 +1214,10 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
     <message>
         <source>Run Simulation</source>
         <translation>Run Simulation</translation>
+    </message>
+    <message>
+        <source>Run Simulation (%1)</source>
+        <translation>Run Simulation (%1)</translation>
     </message>
     <message>
         <source>Run Simulation (F5)</source>
@@ -1242,6 +1278,10 @@ to edit its parameters</source>
 to edit its parameters</translation>
     </message>
     <message>
+        <source>Select mode: drag to move, double-click to edit, %1 to rotate</source>
+        <translation>Select mode: drag to move, double-click to edit, %1 to rotate</translation>
+    </message>
+    <message>
         <source>Select mode: drag to move, double-click to edit, Space to rotate</source>
         <translation>Select mode: drag to move, double-click to edit, Space to rotate</translation>
     </message>
@@ -1260,6 +1300,14 @@ to edit its parameters</translation>
     <message>
         <source>Settings…</source>
         <translation>Settings…</translation>
+    </message>
+    <message>
+        <source>Shortcut</source>
+        <translation>Shortcut</translation>
+    </message>
+    <message>
+        <source>Shortcuts</source>
+        <translation>Shortcuts</translation>
     </message>
     <message>
         <source>Show Grid</source>
@@ -1316,6 +1364,10 @@ to edit its parameters</translation>
     <message>
         <source>Sources</source>
         <translation>Sources</translation>
+    </message>
+    <message>
+        <source>Space</source>
+        <translation>Space</translation>
     </message>
     <message>
         <source>Square</source>
@@ -1462,16 +1514,16 @@ to edit its parameters</translation>
         <translation>Tip: %1 is an AC range and needs one full period (%2 Hz → %3) before it reads; the current stop time %4 is too short, readings will show dashes.</translation>
     </message>
     <message>
-        <source>Tip: left-drag to select and move, double-click to edit, Space to rotate; F5 runs the simulation.</source>
-        <translation>Tip: left-drag to select and move, double-click to edit, Space to rotate; F5 runs the simulation.</translation>
+        <source>Tip: left-drag to select and move, double-click to edit, %1 to rotate; %2 runs the simulation.</source>
+        <translation>Tip: left-drag to select and move, double-click to edit, %1 to rotate; %2 runs the simulation.</translation>
     </message>
     <message>
         <source>Tip: the max step %1 is coarser than the switching dynamics (suggest ≤ %2), the waveforms will be distorted and the output may not resolve.</source>
         <translation>Tip: the max step %1 is coarser than the switching dynamics (suggest ≤ %2), the waveforms will be distorted and the output may not resolve.</translation>
     </message>
     <message>
-        <source>Tip: the multimeter window opens only while the live simulation runs. Press F5, then click it.</source>
-        <translation>Tip: the multimeter window opens only while the live simulation runs. Press F5, then click it.</translation>
+        <source>Tip: the multimeter window opens only while the live simulation runs. Press %1, then click it.</source>
+        <translation>Tip: the multimeter window opens only while the live simulation runs. Press %1, then click it.</translation>
     </message>
     <message>
         <source>Tip: the positive terminal of an electrolytic capacitor is on pin 1; reversing it will break it down. Select the capacitor to toggle polarity.</source>
@@ -1616,8 +1668,8 @@ Checked: normally closed, opens while held.</translation>
         <translation>Waveform Viewer — %1 — Circuit Master</translation>
     </message>
     <message>
-        <source>Waveform monitor: Static Waveforms / Live Scope tabs (available while simulating)</source>
-        <translation>Waveform monitor: Static Waveforms / Live Scope tabs (available while simulating)</translation>
+        <source>Waveform monitor (%1): Static Waveforms / Live Scope tabs (available while simulating)</source>
+        <translation>Waveform monitor (%1): Static Waveforms / Live Scope tabs (available while simulating)</translation>
     </message>
     <message>
         <source>Windings</source>
