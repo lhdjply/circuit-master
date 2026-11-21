@@ -228,17 +228,35 @@ void UiWorkflowTest::updateDialogDownloadsPackage()
     release.version = QStringLiteral("0.2.0");
     release.tagName = QStringLiteral("v0.2.0");
     release.pageUrl = QUrl(QStringLiteral("https://github.com/lhdjply/circuit-master/releases/tag/v0.2.0"));
-    // 各平台的包都摆上（都指向同一个本地文件），挑包逻辑与宿主机无关
+    // 各平台的包都摆上（都指向同一个本地文件），挑包逻辑与宿主机无关。
+    // 名字一律由 suffixFor() 生成，而不是手写 —— 这样 Debian 的 amd64 / arm64 /
+    // loong64 / riscv64 四种架构都覆盖得到，换架构打包时不必再补夹具。
     const QString localUrl = QUrl::fromLocalFile(source).toString();
-    // 三平台都要有：这个用例要验证「挑到当前平台对应的包」，
-    // 只放 Linux/Windows 的资产时，在 macOS 上跑就会一个都挑不到
-    for (const QString& name : {QStringLiteral("circuit-master_0.2.0_amd64.deb"),
-                                QStringLiteral("circuit-master-0.2.0-linux-amd64.tar.gz"),
-                                QStringLiteral("circuit-master-0.2.0-windows-x64-setup.exe"),
-                                QStringLiteral("circuit-master-0.2.0-windows-arm64-setup.exe"),
-                                QStringLiteral("circuit-master-0.2.0-windows-x64.zip"),
-                                QStringLiteral("circuit-master-0.2.0-macos-arm64.dmg"),
-                                QStringLiteral("circuit-master-0.2.0-macos-x64.dmg")}) {
+    struct Fixture {
+        HostPlatform platform;
+        HostArch arch;
+        PackageFormat format;
+    };
+    QVector<Fixture> fixtures;
+    for (HostArch arch : {HostArch::Amd64, HostArch::Arm64, HostArch::Loong64, HostArch::Riscv64}) {
+        for (PackageFormat format : {PackageFormat::Deb, PackageFormat::PortableTarGz})
+            fixtures.append({HostPlatform::Linux, arch, format});
+    }
+    for (HostArch arch : {HostArch::Amd64, HostArch::Arm64}) {
+        for (PackageFormat format : {PackageFormat::SetupExe, PackageFormat::PortableZip})
+            fixtures.append({HostPlatform::Windows, arch, format});
+        fixtures.append({HostPlatform::MacOS, arch, PackageFormat::MacDmg});
+    }
+    for (const Fixture& entry : fixtures) {
+        const QString suffix =
+            UpdateChecker::suffixFor(entry.platform, entry.arch, entry.format);
+        if (suffix.isEmpty())
+            continue;
+        // deb 的命名是 circuit-master_<版本>_<架构>.deb，其余是连字符分隔
+        const QString name = (entry.format == PackageFormat::Deb
+                                  ? QStringLiteral("circuit-master_0.2.0%1")
+                                  : QStringLiteral("circuit-master-0.2.0%1"))
+                                 .arg(suffix);
         ReleaseAsset item;
         item.name = name;
         item.url = localUrl;
@@ -253,6 +271,11 @@ void UiWorkflowTest::updateDialogDownloadsPackage()
     const InstallKind kind = UpdateChecker::detectInstallKind();
     const QVector<PackageFormat> formats = UpdateChecker::formatsFor(csm::kHostPlatform, kind);
     QVERIFY2(!formats.isEmpty(), "当前平台应当有可下载的包形态");
+    // 夹具必须先覆盖「本机平台 + 架构 + 安装方式」：少一个资产就会走到
+    // 「架构对不上」的退路，报出来的却是后缀不匹配，很难看出真正原因
+    QVERIFY2(!UpdateChecker::hostPackagesFor(release, csm::kHostPlatform, csm::kHostArch, kind).isEmpty(),
+             qPrintable(QStringLiteral("夹具里缺少本机可用的包（架构 %1），请补上对应资产")
+                            .arg(int(csm::kHostArch))));
     const QString expectedSuffix =
         UpdateChecker::suffixFor(csm::kHostPlatform, csm::kHostArch, formats.first());
     QVERIFY2(dialog.asset().name.endsWith(expectedSuffix),

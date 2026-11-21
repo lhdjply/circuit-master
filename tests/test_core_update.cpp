@@ -120,62 +120,100 @@ void CoreUpdateTest::updatePickerChoosesPlatformAsset()
 {
     ReleaseInfo release;
     release.version = QStringLiteral("0.2.0");
-    const auto add = [&release](const QString& name) {
+
+    // 一个平台一张表，一行一个架构，列出它该有的两种包。
+    // 夹具和断言都读同一张表：少列一个资产，断言也跟着少一条，
+    // 不会出现「夹具缺包、恰好没断言」那种静默通过（arm64 的 tar.gz 就是这么漏的）。
+    struct Row {
+        HostArch arch;
+        const char* installed;   // 安装版：deb / setup / dmg
+        const char* portable;    // 便携版：tar.gz / zip（macOS 与安装版相同）
+    };
+    const Row linuxRows[] = {
+        {HostArch::Amd64,   "circuit-master_0.2.0_amd64.deb",
+         "circuit-master-0.2.0-linux-amd64.tar.gz"},
+        {HostArch::Arm64,   "circuit-master_0.2.0_arm64.deb",
+         "circuit-master-0.2.0-linux-arm64.tar.gz"},
+        {HostArch::Loong64, "circuit-master_0.2.0_loong64.deb",
+         "circuit-master-0.2.0-linux-loong64.tar.gz"},
+        {HostArch::Riscv64, "circuit-master_0.2.0_riscv64.deb",
+         "circuit-master-0.2.0-linux-riscv64.tar.gz"},
+    };
+    const Row windowsRows[] = {
+        {HostArch::Amd64, "circuit-master-0.2.0-windows-x64-setup.exe",
+         "circuit-master-0.2.0-windows-x64.zip"},
+        {HostArch::Arm64, "circuit-master-0.2.0-windows-arm64-setup.exe",
+         "circuit-master-0.2.0-windows-arm64.zip"},
+    };
+    const Row macRows[] = {
+        {HostArch::Amd64, "circuit-master-0.2.0-macos-x64.dmg",
+         "circuit-master-0.2.0-macos-x64.dmg"},
+        {HostArch::Arm64, "circuit-master-0.2.0-macos-arm64.dmg",
+         "circuit-master-0.2.0-macos-arm64.dmg"},
+    };
+
+    // 把表里列的资产都摆进 Release（与 release.yaml 实际发布的一致）
+    const auto add = [&release](const char* name) {
         ReleaseAsset asset;
-        asset.name = name;
-        asset.url = QStringLiteral("https://example.invalid/") + name;
+        asset.name = QString::fromLatin1(name);
+        asset.url = QStringLiteral("https://example.invalid/") + asset.name;
         asset.size = 1024;
         release.assets.append(asset);
     };
-    add(QStringLiteral("circuit-master_0.2.0_amd64.deb"));
-    add(QStringLiteral("circuit-master_0.2.0_arm64.deb"));
-    add(QStringLiteral("circuit-master_0.2.0_loong64.deb"));
-    add(QStringLiteral("circuit-master-0.2.0-linux-amd64.tar.gz"));
-    add(QStringLiteral("circuit-master-0.2.0-windows-x64.zip"));
-    add(QStringLiteral("circuit-master-0.2.0-windows-x64-setup.exe"));
-    add(QStringLiteral("circuit-master-0.2.0-windows-arm64-setup.exe"));
-    add(QStringLiteral("circuit-master-0.2.0-macos-arm64.dmg"));
-    add(QStringLiteral("circuit-master-0.2.0-macos-x64.dmg"));
+    for (const Row& row : linuxRows) {
+        add(row.installed);
+        add(row.portable);
+    }
+    for (const Row& row : windowsRows) {
+        add(row.installed);
+        add(row.portable);
+    }
+    for (const Row& row : macRows)
+        add(row.installed);
 
-    // Linux：按架构挑 deb，优先 deb 而不是 tar.gz
-    const auto pick = [&release](HostPlatform os, HostArch arch,
-                                 InstallKind kind = InstallKind::System) {
+    const auto pick = [&release](HostPlatform os, HostArch arch, InstallKind kind) {
         return UpdateChecker::pickAsset(release, os, arch, kind).name;
     };
-    QCOMPARE(pick(HostPlatform::Linux, HostArch::Amd64),
-             QStringLiteral("circuit-master_0.2.0_amd64.deb"));
-    QCOMPARE(pick(HostPlatform::Linux, HostArch::Arm64),
-             QStringLiteral("circuit-master_0.2.0_arm64.deb"));
-    QCOMPARE(pick(HostPlatform::Linux, HostArch::Loong64),
-             QStringLiteral("circuit-master_0.2.0_loong64.deb"));
+    const auto text = [](const char* value) { return QString::fromLatin1(value); };
 
-    // Windows：优先安装包
-    QCOMPARE(pick(HostPlatform::Windows, HostArch::Amd64),
-             QStringLiteral("circuit-master-0.2.0-windows-x64-setup.exe"));
-    QCOMPARE(pick(HostPlatform::Windows, HostArch::Arm64),
-             QStringLiteral("circuit-master-0.2.0-windows-arm64-setup.exe"));
+    // 每种架构 × 两种安装方式，都挑到自己的包
+    for (const Row& row : linuxRows) {
+        QCOMPARE(pick(HostPlatform::Linux, row.arch, InstallKind::System), text(row.installed));
+        QCOMPARE(pick(HostPlatform::Linux, row.arch, InstallKind::Portable), text(row.portable));
+    }
+    for (const Row& row : windowsRows) {
+        QCOMPARE(pick(HostPlatform::Windows, row.arch, InstallKind::System), text(row.installed));
+        QCOMPARE(pick(HostPlatform::Windows, row.arch, InstallKind::Portable), text(row.portable));
+    }
+    for (const Row& row : macRows) {
+        QCOMPARE(pick(HostPlatform::MacOS, row.arch, InstallKind::System), text(row.installed));
+        QCOMPARE(pick(HostPlatform::MacOS, row.arch, InstallKind::Portable), text(row.portable));
+    }
 
-    // macOS 架构对不上时也有一条退路（随便给个 dmg，系统会拒绝运行错的架构）
-    QCOMPARE(UpdateChecker::pickAsset(release, HostPlatform::MacOS, HostArch::Riscv64,
-                                      InstallKind::System).name,
-             QStringLiteral("circuit-master-0.2.0-macos-arm64.dmg"));
+    // 架构对不上时退回同平台的包（安装程序 / 系统自己会拒绝错架构），
+    // 只要求「是这一类包」，不绑定具体是哪个架构
+    const auto looseSuffix = [](HostPlatform os) {
+        return os == HostPlatform::Linux   ? QStringLiteral(".deb")
+            : os == HostPlatform::Windows  ? QStringLiteral("-setup.exe")
+                                           : QStringLiteral(".dmg");
+    };
+    for (HostArch odd : {HostArch::Loong64, HostArch::Riscv64}) {
+        for (HostPlatform os : {HostPlatform::Linux, HostPlatform::Windows, HostPlatform::MacOS}) {
+            const QString picked = pick(os, odd, InstallKind::System);
+            QVERIFY2(picked.endsWith(looseSuffix(os)), qPrintable(picked));
+        }
+    }
 
-    // macOS：只有一种形态，按架构挑 dmg
-    QCOMPARE(pick(HostPlatform::MacOS, HostArch::Arm64),
-             QStringLiteral("circuit-master-0.2.0-macos-arm64.dmg"));
-    QCOMPARE(pick(HostPlatform::MacOS, HostArch::Amd64),
-             QStringLiteral("circuit-master-0.2.0-macos-x64.dmg"));
-
-    // 某架构没出包时退回 portable
+    // 某架构没出包时退回同平台的另一种形态
     ReleaseInfo only = release;
     only.assets.clear();
     ReleaseAsset zip;
-    zip.name = QStringLiteral("circuit-master-0.2.0-windows-x64.zip");
+    zip.name = text(windowsRows[0].portable);
     zip.url = QStringLiteral("https://example.invalid/x.zip");
     only.assets.append(zip);
     QCOMPARE(UpdateChecker::pickAsset(only, HostPlatform::Windows, HostArch::Amd64,
                                       InstallKind::System).name,
-             QStringLiteral("circuit-master-0.2.0-windows-x64.zip"));
+             text(windowsRows[0].portable));
 
     // 包形态枚举：Linux 出 deb + 便携 tar.gz，Windows 出 setup + 便携 zip
     const auto formats = [](HostPlatform os, InstallKind kind) {
@@ -195,12 +233,6 @@ void CoreUpdateTest::updatePickerChoosesPlatformAsset()
              PackageFormat::SetupExe);
     QCOMPARE(formats(HostPlatform::Windows, InstallKind::Portable).first(),
              PackageFormat::PortableZip);
-
-    // 挑包跟着安装方式走
-    QCOMPARE(pick(HostPlatform::Linux, HostArch::Amd64, InstallKind::Portable),
-             QStringLiteral("circuit-master-0.2.0-linux-amd64.tar.gz"));
-    QCOMPARE(pick(HostPlatform::Linux, HostArch::Amd64, InstallKind::System),
-             QStringLiteral("circuit-master_0.2.0_amd64.deb"));
 
     QCOMPARE(UpdateChecker::suffixFor(HostPlatform::Linux, HostArch::Amd64, PackageFormat::Deb),
              QStringLiteral("_amd64.deb"));
@@ -257,7 +289,6 @@ void CoreUpdateTest::updatePickerChoosesPlatformAsset()
              qPrintable(QStringLiteral("平台 %1 没挑到包")
                             .arg(int(csm::kHostPlatform))));
 }
-
 void CoreUpdateTest::downloadUrlsPreferWorkingMirror()
 {
     const QString asset = QStringLiteral(
