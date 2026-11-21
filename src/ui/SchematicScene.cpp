@@ -379,6 +379,15 @@ ComponentItem* SchematicScene::placeComponent(ComponentType type, const QPointF&
         comp.function = SourceFunction::Constant;
         comp.dcValue = 1e-3;
         break;
+    case ComponentType::SignalGenerator:
+        // 新放一个信号发生器：1 kHz、1 V 峰值正弦，占空比取半
+        comp.waveform = Waveform::Sine;
+        comp.amplitude = 1.0;
+        comp.frequency = 1000.0;
+        comp.offset = 0.0;
+        comp.phaseDeg = 0.0;
+        comp.duty = 0.5;
+        break;
     case ComponentType::OpAmp:
         comp.value = 1e5;
         break;

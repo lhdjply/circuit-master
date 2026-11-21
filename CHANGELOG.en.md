@@ -6,61 +6,38 @@ numbering follows [Semantic Versioning](https://semver.org/).
 The single source of truth for the version is the `VERSION` file at the
 repository root (same form as the tag, e.g. `v0.4.0`).
 
-## [Unreleased]
+## [v0.5.0] - 2026-11-21
+
+This release adds a measurement probe and a signal generator, and gives the
+sources and probes consistent + / − polarity marks.
 
 ### Added
 
-- **Measurement probe**: a new part under Measurement, modelled on Multisim's
-  probe. Drop it on a wire and a pale-yellow readout box appears — that box is
-  what the part looks like, in the library too:
-  - voltage peak-to-peak / RMS / DC, plus the same three for the current in that
-    segment
-  - the current comes from cutting the wire at the probe and applying KCL to one
-    side: a wire often carries T-branches, and the current genuinely differs on
-    either side of them, so the reading is that segment's real current. When only
-    one element contributes it is tagged after the reading (e.g. `[V1]`)
-  - the arrow runs along the wire and current is positive along it; rotate the
-    probe 180° to flip the sign. Peak-to-peak and RMS are always non-negative —
-    only the DC line is signed
-  - rotating moves the box to the top / right / bottom / left, while the box, its
-    text and the label all stay upright and out of each other's way
-  - while the live simulation runs the readings keep updating: peak-to-peak and
-    RMS over the last ~120 samples, DC from the instantaneous value — flipping a
-    switch in a resistive circuit shows the new value at once
-  - dashes until there is data; the box itself is always present. Frequency is
-    estimated by autocorrelation and omitted for non-periodic waveforms
-  - for an exact branch current use the **current probe (IP)**, a real 0 V branch
-    the solver measures directly
-- **Signal generator**: a new two-terminal part under Sources that takes part in
-  the simulation directly. Four waveforms — sine / square (adjustable duty cycle) /
-  triangle / sawtooth — plus peak amplitude, frequency, phase and DC offset. It is drawn
-  as a rounded "instrument body", so it is easy to tell apart from the voltage
-  source, which is also a circle with a sine; pick the waveform and set peak and
-  duty in the property panel.
+- **Measurement probe**: drop it on a wire and a pale-yellow readout box appears
+  (like Multisim's probe) — voltage and current peak-to-peak / RMS / DC for that
+  segment, plus the frequency when a period can be estimated. The arrow runs
+  along the wire, current is positive along it and rotating 180° flips the sign;
+  the readings refresh while the live simulation runs.
+- **Signal generator**: a new two-terminal part under Sources with **sine /
+  square (adjustable duty) / triangle / sawtooth** waveforms, plus peak amplitude,
+  frequency, phase and DC offset. It is drawn as a rounded instrument body, easy
+  to tell apart from the round voltage source.
 
 ### Changed
 
 - **Voltage source symbols**: DC is now drawn as a battery (long plate positive,
-  short plate negative) while sine and pulse sources keep their waveform inside
-  the circle; all three show + / − polarity. The polarity marks share the
-  multimeter's position and size, so the two line up side by side. The waveform
-  and the polarity text never rotate with the part — they stay upright at 90°,
-  only the battery plates turn, matching the usual textbook and Multisim look.
-- **Current probe (IP)**: now shows + / − polarity (pin 0 is +), in the same place
-  and size as the multimeter and voltage sources.
+  short plate negative) while sine and pulse keep their waveform inside the
+  circle; all three show + / −, in the same place and size as the multimeter.
 - **Current source symbol**: the arrow inside the circle now runs along the wire
-  and points in the reference direction of the current (pin 0 → pin 1), turning
-  with the part. The old vertical arrow gave no indication of direction.
+  and points in the reference direction of the current.
+- **Current probe**: now shows + / − polarity, in the multimeter's position.
 
 ### Fixed
 
-- **Editing shortcuts did nothing on a new tab**: after **New**, Space would not
-  rotate and Delete would not delete on the fresh schematic. The editing
-  shortcuts are attached to the canvas view, and a new document's view never got
-  them — only the first tab worked.
-- **Dragging a part dragged unrelated wires along**: passing a part over another
-  wire made that wire's vertices follow it, as if pulled in. Now only wires that
-  were attached to a pin at the moment you pressed the mouse come along.
+- **Editing shortcuts did nothing on a new tab**: they were only attached to the
+  first tab's view.
+- **Dragging a part dragged unrelated wires along**: only wires attached at the
+  moment of the press follow now.
 
 ## [v0.4.1] - 2026-11-20
 
