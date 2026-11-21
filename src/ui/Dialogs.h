@@ -33,6 +33,9 @@ public:
     /// 错误（对应 QMessageBox::Critical）
     static void error(QWidget* parent, const QString& title, const QString& text);
 
+    /// 是 / 否。返回 true 表示用户选了「是」。
+    static bool confirm(QWidget* parent, const QString& title, const QString& text);
+
     /// 保存 / 丢弃 / 取消。返回用户选的按钮（三者之一）。
     static QMessageBox::StandardButton askSaveDiscardCancel(QWidget* parent, const QString& title,
                                                             const QString& text);

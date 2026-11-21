@@ -32,6 +32,10 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</translat
         <translation> is formatted as </translation>
     </message>
     <message>
+        <source> minutes</source>
+        <translation> minutes</translation>
+    </message>
+    <message>
         <source>"%1" has unsaved changes. Save them?</source>
         <translation>"%1" has unsaved changes. Save them?</translation>
     </message>
@@ -242,6 +246,18 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Auto Scale</translation>
     </message>
     <message>
+        <source>Auto save failed: %1</source>
+        <translation>Auto save failed: %1</translation>
+    </message>
+    <message>
+        <source>Auto saved %1 circuit(s).</source>
+        <translation>Auto saved %1 circuit(s).</translation>
+    </message>
+    <message>
+        <source>Autosave</source>
+        <translation>Autosave</translation>
+    </message>
+    <message>
         <source>Basic</source>
         <translation>Basic</translation>
     </message>
@@ -398,6 +414,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Copy</source>
         <translation>Copy</translation>
+    </message>
+    <message>
+        <source>Crash recovery</source>
+        <translation>Crash recovery</translation>
     </message>
     <message>
         <source>Cross-platform schematic capture and circuit simulation.&lt;br&gt;&lt;br&gt;&lt;b&gt;Solver&lt;/b&gt;　modified nodal analysis (MNA) with Newton-Raphson iteration,&lt;br&gt;　　　　　supporting DC operating point, transient and AC small-signal sweep.&lt;br&gt;&lt;b&gt;Parts&lt;/b&gt;　resistors, capacitors, inductors, transformers, diodes, transistors,&lt;br&gt;　　　　　MOSFETs, op-amps, logic gates, switches, sources, multimeters, probes, grounds.</source>
@@ -590,6 +610,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Enter a value</source>
         <translation>Enter a value</translation>
+    </message>
+    <message>
+        <source>Every</source>
+        <translation>Every</translation>
     </message>
     <message>
         <source>Example "%1" loaded. Press %2 to run the simulation.</source>
@@ -1152,6 +1176,22 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
         <translation>Re-pick the scale from the current waveform (use after setting Volt/div manually)</translation>
     </message>
     <message>
+        <source>Recover unsaved work?</source>
+        <translation>Recover unsaved work?</translation>
+    </message>
+    <message>
+        <source>Recovered %1 circuit(s).</source>
+        <translation>Recovered %1 circuit(s).</translation>
+    </message>
+    <message>
+        <source>Recovered circuit</source>
+        <translation>Recovered circuit</translation>
+    </message>
+    <message>
+        <source>Recovered files discarded.</source>
+        <translation>Recovered files discarded.</translation>
+    </message>
+    <message>
         <source>Redo</source>
         <translation>Redo</translation>
     </message>
@@ -1254,6 +1294,10 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
     <message>
         <source>Saved: %1</source>
         <translation>Saved: %1</translation>
+    </message>
+    <message>
+        <source>Saving</source>
+        <translation>Saving</translation>
     </message>
     <message>
         <source>Sawtooth</source>
@@ -1420,6 +1464,18 @@ to edit its parameters</translation>
     <message>
         <source>That file is already open in a tab: %1</source>
         <translation>That file is already open in a tab: %1</translation>
+    </message>
+    <message>
+        <source>The application did not exit cleanly last time; %1 unsaved circuit(s) were recovered.
+
+%2
+
+Restore them?</source>
+        <translation>The application did not exit cleanly last time; %1 unsaved circuit(s) were recovered.
+
+%2
+
+Restore them?</translation>
     </message>
     <message>
         <source>The circuit has no main ground symbol (GND). Place a GND and connect it, otherwise the reference node is undefined (AGND/DGND/PGND/EARTH do not count; a multimeter's negative terminal works as a reference too).</source>

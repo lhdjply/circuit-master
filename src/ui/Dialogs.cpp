@@ -218,6 +218,15 @@ void Dialogs::guide(QWidget* parent, const QString& title, const QString& richTe
                460, 560);
 }
 
+bool Dialogs::confirm(QWidget* parent, const QString& title, const QString& text)
+{
+    const auto answer = runMessage(parent, badge(QStringLiteral("?"), kAccent), title, text,
+                                   {{QMessageBox::Yes, CSM_TR("OK"), true},
+                                    {QMessageBox::No, CSM_TR("Cancel"), false}},
+                                   QMessageBox::Yes);
+    return answer == QMessageBox::Yes;
+}
+
 QMessageBox::StandardButton Dialogs::askSaveDiscardCancel(QWidget* parent, const QString& title,
                                                           const QString& text)
 {

@@ -35,6 +35,10 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</source>
         <translation> 被格式化成 </translation>
     </message>
     <message>
+        <source> minutes</source>
+        <translation> 分钟</translation>
+    </message>
+    <message>
         <source>"%1" has unsaved changes. Save them?</source>
         <translation>「%1」有未保存的更改，是否保存？</translation>
     </message>
@@ -245,6 +249,18 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>自动缩放</translation>
     </message>
     <message>
+        <source>Auto save failed: %1</source>
+        <translation>自动保存失败：%1</translation>
+    </message>
+    <message>
+        <source>Auto saved %1 circuit(s).</source>
+        <translation>已自动保存 %1 份电路。</translation>
+    </message>
+    <message>
+        <source>Autosave</source>
+        <translation>自动保存</translation>
+    </message>
+    <message>
         <source>Basic</source>
         <translation>基础</translation>
     </message>
@@ -401,6 +417,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Copy</source>
         <translation>复制</translation>
+    </message>
+    <message>
+        <source>Crash recovery</source>
+        <translation>崩溃恢复</translation>
     </message>
     <message>
         <source>Cross-platform schematic capture and circuit simulation.&lt;br&gt;&lt;br&gt;&lt;b&gt;Solver&lt;/b&gt;　modified nodal analysis (MNA) with Newton-Raphson iteration,&lt;br&gt;　　　　　supporting DC operating point, transient and AC small-signal sweep.&lt;br&gt;&lt;b&gt;Parts&lt;/b&gt;　resistors, capacitors, inductors, transformers, diodes, transistors,&lt;br&gt;　　　　　MOSFETs, op-amps, logic gates, switches, sources, multimeters, probes, grounds.</source>
@@ -593,6 +613,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Enter a value</source>
         <translation>请输入数值</translation>
+    </message>
+    <message>
+        <source>Every</source>
+        <translation>每隔</translation>
     </message>
     <message>
         <source>Example "%1" loaded. Press %2 to run the simulation.</source>
@@ -1155,6 +1179,22 @@ Place a voltage (TP) or current (IP) test point and run again</source>
         <translation>按当前波形重新自动选量程（手动改过「电压/格」之后用它恢复自动）</translation>
     </message>
     <message>
+        <source>Recover unsaved work?</source>
+        <translation>恢复上次未保存的电路？</translation>
+    </message>
+    <message>
+        <source>Recovered %1 circuit(s).</source>
+        <translation>已恢复 %1 份电路。</translation>
+    </message>
+    <message>
+        <source>Recovered circuit</source>
+        <translation>恢复的电路</translation>
+    </message>
+    <message>
+        <source>Recovered files discarded.</source>
+        <translation>已丢弃恢复的文件。</translation>
+    </message>
+    <message>
         <source>Redo</source>
         <translation>重做</translation>
     </message>
@@ -1257,6 +1297,10 @@ Place a voltage (TP) or current (IP) test point and run again</source>
     <message>
         <source>Saved: %1</source>
         <translation>已保存：%1</translation>
+    </message>
+    <message>
+        <source>Saving</source>
+        <translation>保存</translation>
     </message>
     <message>
         <source>Sawtooth</source>
@@ -1423,6 +1467,18 @@ to edit its parameters</source>
     <message>
         <source>That file is already open in a tab: %1</source>
         <translation>该文件已经在标签页里：%1</translation>
+    </message>
+    <message>
+        <source>The application did not exit cleanly last time; %1 unsaved circuit(s) were recovered.
+
+%2
+
+Restore them?</source>
+        <translation>上次程序没有正常退出，恢复了 %1 份未保存的电路。
+
+%2
+
+要恢复吗？</translation>
     </message>
     <message>
         <source>The circuit has no main ground symbol (GND). Place a GND and connect it, otherwise the reference node is undefined (AGND/DGND/PGND/EARTH do not count; a multimeter's negative terminal works as a reference too).</source>

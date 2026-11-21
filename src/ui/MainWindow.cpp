@@ -7,6 +7,7 @@
 
 
 #include "core/Circuit.h"
+#include "core/Autosave.h"
 #include "core/Netlist.h"
 #include "core/Shortcuts.h"
 #include "core/Units.h"
@@ -23,6 +24,8 @@
 #include "ui/Dialogs.h"
 
 #include <QAbstractItemView>
+#include <QUuid>
+#include <QDateTime>
 #include <QAction>
 #include <QRegularExpression>
 #include <QComboBox>
@@ -512,6 +515,7 @@ Document* MainWindow::addDocument(const QString& name, const QString& path)
     document->options.fStop = 1e6;
     document->options.acPoints = 160;
 
+    document->recoveryId = QUuid::createUuid().toString(QUuid::WithoutBraces);
     document->scene = new SchematicScene(this);
     document->view = new SchematicView(document->scene, this);
     wireDocument(document);
@@ -1101,6 +1105,116 @@ void MainWindow::refreshKeyHints()
         m_actMonitor->setToolTip(
             CSM_TR("Waveform monitor (%1): Static Waveforms / Live Scope tabs (available while simulating)")
                 .arg(keyLabel(m_actMonitor)));
+}
+
+void MainWindow::applyAutosaveSettings()
+{
+    if (m_autosaveTimer) {
+        if (Autosave::enabled())
+            m_autosaveTimer->start(Autosave::intervalMinutes() * 60 * 1000);
+        else
+            m_autosaveTimer->stop();
+    }
+    // 崩溃恢复有自己的间隔：自动保存可以设得很疏，崩溃保护仍保持勤快
+    if (m_recoveryTimer) {
+        if (Autosave::recoveryEnabled())
+            m_recoveryTimer->start(Autosave::recoveryIntervalMinutes() * 60 * 1000);
+        else
+            m_recoveryTimer->stop();
+    }
+}
+
+void MainWindow::autosaveNow()
+{
+    if (!Autosave::enabled())
+        return;
+
+    int saved = 0;
+    for (Document* document : m_documents) {
+        if (!document || !document->scene || !document->dirty)
+            continue;
+        if (document->filePath.isEmpty())
+            continue;   // 未命名的图纸没有文件可写，交给崩溃恢复的副本
+
+        QString error;
+        if (writeDocumentToDisk(document, &error))
+            ++saved;
+        else
+            appendLog(CSM_TR("Auto save failed: %1").arg(error));
+    }
+    if (saved > 0)
+        appendLog(CSM_TR("Auto saved %1 circuit(s).").arg(saved));
+}
+
+void MainWindow::writeRecoveryCopies()
+{
+    if (!Autosave::recoveryEnabled())
+        return;
+    for (Document* document : m_documents) {
+        if (!document || !document->scene || !document->dirty)
+            continue;
+        Autosave::Record record;
+        record.id = document->recoveryId;
+        record.originalPath = document->filePath;
+        record.savedAt = QDateTime::currentDateTime();
+        QJsonObject root = document->scene->toCircuit().toJson();
+        root.insert(QStringLiteral("analysis"), analysisToJson(document->options));
+        record.circuit = root;
+        Autosave::write(record);
+    }
+}
+
+bool MainWindow::hasRecoverableWork() const
+{
+    return !Autosave::pending().isEmpty();
+}
+
+void MainWindow::offerRecovery()
+{
+    const QVector<Autosave::Record> records = Autosave::pending();
+    if (records.isEmpty())
+        return;
+    if (!Autosave::recoveryEnabled()) {
+        // 用户关掉了「崩溃恢复」：不问，直接清掉残留副本
+        Autosave::clearAll();
+        return;
+    }
+
+    QStringList lines;
+    for (const Autosave::Record& record : records) {
+        const QString name = record.originalPath.isEmpty()
+            ? CSM_TR("Untitled")
+            : QFileInfo(record.originalPath).fileName();
+        lines << QStringLiteral("%1  ·  %2")
+                     .arg(name, record.savedAt.toString(QStringLiteral("yyyy-MM-dd HH:mm")));
+    }
+    const auto answer = Dialogs::confirm(
+        this, CSM_TR("Recover unsaved work?"),
+        CSM_TR("The application did not exit cleanly last time; %1 unsaved circuit(s) were "
+               "recovered.\n\n%2\n\nRestore them?")
+            .arg(QString::number(records.size()), lines.join(QLatin1Char('\n'))));
+    if (!answer) {
+        Autosave::clearAll();
+        appendLog(CSM_TR("Recovered files discarded."));
+        return;
+    }
+
+    for (const Autosave::Record& record : records) {
+        const QString title = record.originalPath.isEmpty()
+            ? CSM_TR("Recovered circuit")
+            : QFileInfo(record.originalPath).completeBaseName();
+        // 原文件还在就用原路径打开（用户接着存回去），否则当成未命名的新标签
+        Document* target = addDocument(title, record.originalPath);
+        m_loading = true;
+        target->scene->load(Circuit::fromJson(record.circuit));
+        m_loading = false;
+        target->dirty = true;
+        updateTabTitle(target);
+        // 恢复出来的内容已经在新标签里了，别再让它触发一次恢复提示
+        Autosave::remove(record.id);
+    }
+    appendLog(CSM_TR("Recovered %1 circuit(s).").arg(QString::number(records.size())));
+    resetHistory();
 }
 
 void MainWindow::registerShortcutBindings()
@@ -1898,25 +2012,41 @@ void MainWindow::newCircuit()
     appendLog(CSM_TR("New blank circuit (new tab)."));
 }
 
+bool MainWindow::writeDocumentToDisk(Document* document, QString* error)
+{
+    if (!document || document->filePath.isEmpty())
+        return false;
+
+    QFile file(document->filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        if (error)
+            *error = file.errorString();
+        return false;
+    }
+    QJsonObject root = document->scene->toCircuit().toJson();
+    root.insert(QStringLiteral("analysis"), analysisToJson(document->options));
+    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    file.close();
+
+    document->dirty = false;
+    Autosave::remove(document->recoveryId);   // 已经存回文件，恢复副本可以删了
+    if (document == doc())
+        updateTitle();
+    else
+        updateTabTitle(document);
+    return true;
+}
+
 bool MainWindow::saveCircuit()
 {
     if (doc()->filePath.isEmpty())
         return saveCircuitAs();
 
-    const Circuit circuit = m_scene->toCircuit();
-    QFile file(doc()->filePath);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        Dialogs::warn(this, CSM_TR("Save failed"), file.errorString());
+    QString error;
+    if (!writeDocumentToDisk(doc(), &error)) {
+        Dialogs::warn(this, CSM_TR("Save failed"), error);
         return false;
     }
-    QJsonObject root = circuit.toJson();
-    root.insert(QStringLiteral("analysis"), analysisToJson(doc()->options));
-    const QJsonDocument json(root);
-    file.write(json.toJson(QJsonDocument::Indented));
-    file.close();
-
-    doc()->dirty = false;
-    updateTitle();
     appendLog(CSM_TR("Saved: %1").arg(doc()->filePath));
     return true;
 }
@@ -2167,6 +2297,16 @@ void MainWindow::createMonitorWindow()
             });
 
     // 电路改动（比如拨动开关）后重建实时引擎，让仿真跟着新拓扑走
+    m_autosaveTimer = new QTimer(this);
+    m_autosaveTimer->setObjectName(QStringLiteral("autosaveTimer"));
+    connect(m_autosaveTimer, &QTimer::timeout, this, &MainWindow::autosaveNow);
+
+    m_recoveryTimer = new QTimer(this);
+    m_recoveryTimer->setObjectName(QStringLiteral("recoveryTimer"));
+    connect(m_recoveryTimer, &QTimer::timeout, this, &MainWindow::writeRecoveryCopies);
+
+    applyAutosaveSettings();
+
     m_liveRestartTimer = new QTimer(this);
     m_liveRestartTimer->setSingleShot(true);
     m_liveRestartTimer->setInterval(200);
@@ -2922,7 +3062,8 @@ void MainWindow::showSettings()
                                       document->scene->update();
                               }
                           },
-                          rows);
+                          rows,
+                          [this] { applyAutosaveSettings(); });
     if (dialog.exec() == QDialog::Accepted)
         applyShortcutEdits(dialog.shortcuts());
 }
@@ -2983,6 +3124,7 @@ void MainWindow::closeEvent(QCloseEvent* event)
             return;
         }
     }
+    Autosave::clearAll();   // 正常退出，恢复副本没必要留着
     event->accept();
 }
 

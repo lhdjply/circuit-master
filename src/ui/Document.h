@@ -34,6 +34,8 @@ struct Document {
     QString name = CSM_TR("Untitled");
     QString filePath;
     bool dirty = false;
+    /// 自动保存用的稳定标识（每个文档一个，与文件名无关）
+    QString recoveryId;
 
     // 撤销 / 重做：整份电路的 JSON 快照 + 内容签名（用来判重）
     QVector<QJsonObject> history;

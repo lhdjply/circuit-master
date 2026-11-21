@@ -38,6 +38,15 @@ public:
     void runSimulation();
     void openScope();
 
+    /// 立即把「有文件路径」的图纸存回原文件（等价于 Ctrl+S）
+    void autosaveNow();
+    /// 立即给「改过但还没保存」的图纸写一份恢复副本（崩溃恢复定时器用它）
+    void writeRecoveryCopies();
+    /// 恢复目录里是否还有上次没退干净留下的记录
+    bool hasRecoverableWork() const;
+    /// 问用户要不要恢复（由 main 在建好窗口后调用，测试里不会触发）
+    void offerRecovery();
+
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -152,7 +161,15 @@ private:
     QString keyLabel(const QAction* action) const;
     /// 把快捷键文本同步到状态栏提示、画布提示与运行按钮的 tooltip
     void refreshKeyHints();
+
+    /// 按设置启停自动保存 / 崩溃恢复两个定时器
+    void applyAutosaveSettings();
+    /// 把某份图纸静默写回它的文件（自动保存与 Ctrl+S 共用）；
+    /// 失败时把原因写进 error，由调用方决定提示还是记日志
+    bool writeDocumentToDisk(Document* document, QString* error);
+    /// 建好所有动作后填快捷键表，并套上用户改过的值
     void registerShortcutBindings();
+    /// 按设置启停自动保存定时器
     /// 设置对话框点确定后调用：存盘并重新套用
     void applyShortcutEdits(const QHash<QString, QKeySequence>& edited);
     QVector<ShortcutBinding> m_shortcutBindings;
@@ -207,6 +224,8 @@ private:
     bool m_loading = false;
     bool m_updateCheckScheduled = false;
     QTimer* m_liveRestartTimer = nullptr; // 电路改动后重建实时引擎（防抖）
+    QTimer* m_autosaveTimer = nullptr;    // 自动保存（写回原文件）
+    QTimer* m_recoveryTimer = nullptr;    // 崩溃恢复（写恢复副本）
     QTimer* m_blastTimer = nullptr;       // 爆炸动画驱动
     double m_blastProgress = 0.0;
     QSet<int> m_blownIds;

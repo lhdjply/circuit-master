@@ -1,5 +1,6 @@
 #include "core/Circuit.h"
 #include "core/Units.h"
+#include "core/Autosave.h"
 #include "core/Shortcuts.h"
 #include "core/UpdateChecker.h"
 #include "csm_version.h"
@@ -86,6 +87,7 @@ private slots:
     void mirrorChangesPinGeometry();
     void jsonRoundTrip();
     void shortcutOverridesRoundTrip();
+    void autosaveWritesAndClearsRecovery();
     void acDcSupplyExampleRuns();
     void tl431ExampleLoads();
 };
@@ -433,6 +435,77 @@ void CoreModelTest::shortcutOverridesRoundTrip()
              QStringLiteral("Ctrl+T"));
 
     Shortcuts::clearAll();
+    QFile::remove(QSettings().fileName());
+}
+
+
+void CoreModelTest::autosaveWritesAndClearsRecovery()
+{
+    // QSettings 要落到能写的地方：单独跑这个用例时没有别的用例替它设过路径
+    QCoreApplication::setOrganizationName(QStringLiteral("CircuitMasterTest"));
+    QCoreApplication::setApplicationName(QStringLiteral("CircuitMasterTest"));
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, QDir::tempPath());
+    QFile::remove(QSettings().fileName());   // 上一轮跑剩的配置会污染「默认值」断言
+
+    // 恢复文件放在应用数据目录下；测试时改到临时目录，别碰用户真实数据
+    const QString dataHome = QDir::tempPath() + QStringLiteral("/csm-autosave-test");
+    QDir(dataHome).removeRecursively();
+    qputenv("XDG_DATA_HOME", dataHome.toUtf8());
+    Autosave::clearAll();
+
+    QCOMPARE(Autosave::enabled(), true);          // 默认开
+    QCOMPARE(Autosave::intervalMinutes(), 10);    // 默认 10 分钟
+
+    Autosave::setIntervalMinutes(0);              // 小于下限被夹到 1
+    QCOMPARE(Autosave::intervalMinutes(), 1);
+    Autosave::setIntervalMinutes(999);            // 大于上限被夹到 120
+    QCOMPARE(Autosave::intervalMinutes(), 120);
+    Autosave::setIntervalMinutes(10);
+
+    Autosave::Record record;
+    record.id = QStringLiteral("doc-1");
+    record.originalPath = QStringLiteral("/tmp/foo.csm");
+    record.savedAt = QDateTime::currentDateTime();
+    record.circuit = QJsonObject{{QStringLiteral("components"), QJsonArray{1, 2}}};
+    QVERIFY(Autosave::write(record));
+
+    const QVector<Autosave::Record> pending = Autosave::pending();
+    QCOMPARE(pending.size(), 1);
+    QCOMPARE(pending.first().id, QStringLiteral("doc-1"));
+    QCOMPARE(pending.first().originalPath, QStringLiteral("/tmp/foo.csm"));
+    QCOMPARE(pending.first().circuit.value(QStringLiteral("components")).toArray().size(), 2);
+
+    Autosave::Record back;
+    QVERIFY(Autosave::read(QStringLiteral("doc-1"), &back));
+    QCOMPARE(back.id, QStringLiteral("doc-1"));
+
+    Autosave::remove(QStringLiteral("doc-1"));
+    QVERIFY(Autosave::pending().isEmpty());
+
+    // 关掉开关要存得住
+    Autosave::write(record);
+    QCOMPARE(Autosave::pending().size(), 1);
+    Autosave::clearAll();
+    QVERIFY(Autosave::pending().isEmpty());
+
+    Autosave::setEnabled(false);
+    QCOMPARE(Autosave::enabled(), false);
+    Autosave::setEnabled(true);
+
+    // 「崩溃恢复」是另一个独立开关，默认开；它有自己的间隔（默认 2 分钟）
+    QCOMPARE(Autosave::recoveryEnabled(), true);
+    QCOMPARE(Autosave::recoveryIntervalMinutes(), 2);
+    Autosave::setRecoveryIntervalMinutes(0);       // 夹到下限 1
+    QCOMPARE(Autosave::recoveryIntervalMinutes(), 1);
+    Autosave::setRecoveryIntervalMinutes(999);     // 夹到上限
+    QCOMPARE(Autosave::recoveryIntervalMinutes(), 60);
+    Autosave::setRecoveryIntervalMinutes(2);
+    Autosave::setRecoveryEnabled(false);
+    QCOMPARE(Autosave::recoveryEnabled(), false);
+    Autosave::setRecoveryEnabled(true);
+    QCOMPARE(Autosave::recoveryEnabled(), true);
+    QDir(dataHome).removeRecursively();
     QFile::remove(QSettings().fileName());
 }
 

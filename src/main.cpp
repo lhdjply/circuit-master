@@ -106,6 +106,8 @@ int main(int argc, char* argv[])
         return 0;
 
     csm::MainWindow window;
+
+    window.offerRecovery();   // 上次没退干净时问一句
     window.show();
 
     // 运行中收到另一个实例的请求（用户又双击了一个文件）

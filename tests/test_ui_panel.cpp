@@ -32,6 +32,9 @@
 #include <QTableWidget>
 #include <QKeySequenceEdit>
 #include <QDir>
+#include "core/Autosave.h"
+#include <QJsonObject>
+#include <QJsonArray>
 #include "core/Shortcuts.h"
 #include <QSettings>
 #include <QDragEnterEvent>
@@ -100,6 +103,8 @@ private slots:
     void keyHintsFollowShortcuts();
     void holdingAKeyRecordsOneShortcut();
     void conflictingShortcutWarnsAndRestores();
+    void autosaveWritesRecoveryForDirtyDocuments();
+    void autosaveSavesNamedDocumentsBackToDisk();
 
 private:
 
@@ -1138,7 +1143,8 @@ void UiPanelTest::conflictingShortcutWarnsAndRestores()
     settle();
     auto* tabs = dialog.findChild<QTabWidget*>(QStringLiteral("settingsTabs"));
     QVERIFY(tabs);
-    tabs->setCurrentIndex(1);   // 切到快捷键页，否则控件不算「可见」
+    // 切到快捷键页（按名字找，别按序号 —— 页签顺序会变）
+    tabs->setCurrentWidget(dialog.findChild<QWidget*>(QStringLiteral("shortcutsTab")));
     settle();
 
     auto* rotate = dialog.findChild<QKeySequenceEdit*>(QStringLiteral("shortcut_edit.rotate"));
@@ -1167,6 +1173,101 @@ void UiPanelTest::conflictingShortcutWarnsAndRestores()
     settle();
     QCOMPARE(rotate->keySequence(), QKeySequence(QStringLiteral("Ctrl+R")));
     QVERIFY2(!warning->isVisible(), "冲突解除后提示应当收起");
+}
+
+
+void UiPanelTest::autosaveWritesRecoveryForDirtyDocuments()
+{
+    // 有改动 → 写一份恢复副本；关掉开关 → 不写；存回文件 → 副本消失
+    const QString dataHome = QDir::tempPath() + QStringLiteral("/csm-autosave-ui");
+    QDir(dataHome).removeRecursively();
+    qputenv("XDG_DATA_HOME", dataHome.toUtf8());
+    QCoreApplication::setOrganizationName(QStringLiteral("CircuitMasterTest"));
+    QCoreApplication::setApplicationName(QStringLiteral("CircuitMasterTest"));
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, QDir::tempPath());
+    Autosave::clearAll();
+    Autosave::setEnabled(true);
+
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    auto* scene = window.findChild<SchematicScene*>();
+    QVERIFY(scene);
+    scene->placeComponent(ComponentType::Resistor, QPointF(300.0, 300.0));
+    settle();
+
+    window.writeRecoveryCopies();
+    QCOMPARE(Autosave::pending().size(), 1);
+    QCOMPARE(Autosave::pending().first().circuit.value(QStringLiteral("components")).toArray().size(), 1);
+
+    // 关掉「崩溃恢复」后不再写副本
+    Autosave::setRecoveryEnabled(false);
+    Autosave::clearAll();
+    window.writeRecoveryCopies();
+    QVERIFY(Autosave::pending().isEmpty());
+    Autosave::setRecoveryEnabled(true);
+
+    Autosave::setEnabled(true);
+    Autosave::clearAll();
+    QDir(dataHome).removeRecursively();
+    QFile::remove(QSettings().fileName());
+}
+
+
+void UiPanelTest::autosaveSavesNamedDocumentsBackToDisk()
+{
+    // 已经存过盘的图纸，自动保存应当直接写回原文件（等价于 Ctrl+S），
+    // 而不是只留一份副本；未命名的才走恢复副本
+    const QString dataHome = QDir::tempPath() + QStringLiteral("/csm-autosave-named");
+    QDir(dataHome).removeRecursively();
+    qputenv("XDG_DATA_HOME", dataHome.toUtf8());
+    QCoreApplication::setOrganizationName(QStringLiteral("CircuitMasterTest"));
+    QCoreApplication::setApplicationName(QStringLiteral("CircuitMasterTest"));
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, QDir::tempPath());
+    Autosave::clearAll();
+    Autosave::setEnabled(true);
+
+    const QString path = QDir::tempPath() + QStringLiteral("/csm-autosave-named.csm");
+    QFile::remove(path);
+    QVERIFY(QFile::copy(QStringLiteral(":/examples/01_rc_charge.csm"), path));
+    // 资源文件是只读的，复制出来的文件沿用了只读权限 —— 给它补上写权限
+    QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner
+                                    | QFileDevice::ReadUser | QFileDevice::WriteUser);
+
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+    QVERIFY(window.openPath(path));
+    settle();
+
+    auto* scene = window.findChild<SchematicScene*>();
+    QVERIFY(scene);
+    const int before = scene->componentItems().size();
+    scene->placeComponent(ComponentType::Resistor, QPointF(700.0, 560.0));
+    settle();
+    QVERIFY2(window.windowTitle().contains(QStringLiteral("*")), "改过之后标题应当带星号");
+
+    window.autosaveNow();
+    settle();
+
+    // 文件里应当多了那个电阻
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QJsonObject root = QJsonDocument::fromJson(file.readAll()).object();
+    file.close();
+    QCOMPARE(root.value(QStringLiteral("components")).toArray().size(), before + 1);
+    // 存回之后不再算「未保存」，也不留恢复副本
+    QVERIFY2(!window.windowTitle().contains(QStringLiteral("*")), "自动保存后不该再带星号");
+    QVERIFY(Autosave::pending().isEmpty());
+
+    QFile::remove(path);
+    QDir(dataHome).removeRecursively();
+    QFile::remove(QSettings().fileName());
 }
 
 #include "test_ui_panel.moc"

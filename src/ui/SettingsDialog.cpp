@@ -1,6 +1,9 @@
 #include "ui/SettingsDialog.h"
 
 #include "core/Grid.h"
+#include <QSpinBox>
+#include <QCheckBox>
+#include "core/Autosave.h"
 #include <QtGlobal>
 #include "core/Language.h"
 #include "ui/Dialogs.h"
@@ -89,12 +92,14 @@ QString themeLabel(Theme::Mode mode)
 
 SettingsDialog::SettingsDialog(QWidget* parent, std::function<void()> applyTheme,
                                std::function<void()> applyGrid,
-                               const QVector<ShortcutRow>& shortcuts)
+                               const QVector<ShortcutRow>& shortcuts,
+                               std::function<void()> applyAutosave)
     : QDialog(parent)
     , m_originalTheme(int(Theme::mode()))
     , m_applyTheme(std::move(applyTheme))
     , m_applyGrid(std::move(applyGrid))
     , m_rows(shortcuts)
+    , m_applyAutosave(std::move(applyAutosave))
 {
     setWindowTitle(CSM_TR("Settings"));
     setModal(true);
@@ -113,6 +118,7 @@ SettingsDialog::SettingsDialog(QWidget* parent, std::function<void()> applyTheme
     outer->addWidget(tabs, 1);
 
     auto* appearance = new QWidget(tabs);
+    appearance->setObjectName(QStringLiteral("appearanceTab"));
     auto* appearanceLayout = new QVBoxLayout(appearance);
     appearanceLayout->setContentsMargins(12, 12, 12, 8);
     appearanceLayout->setSpacing(12);
@@ -156,8 +162,57 @@ SettingsDialog::SettingsDialog(QWidget* parent, std::function<void()> applyTheme
     appearanceLayout->addWidget(hint);
     appearanceLayout->addStretch(1);
 
+    // ---------------- 保存 ----------------
+    auto* saving = new QWidget(tabs);
+    saving->setObjectName(QStringLiteral("savingTab"));
+    auto* savingLayout = new QVBoxLayout(saving);
+    savingLayout->setContentsMargins(12, 12, 12, 8);
+    savingLayout->setSpacing(12);
+    tabs->addTab(saving, CSM_TR("Saving"));
+
+    auto* autosaveBox = new QCheckBox(CSM_TR("Autosave"), saving);
+    autosaveBox->setObjectName(QStringLiteral("autosaveEnabled"));
+    autosaveBox->setChecked(Autosave::enabled());
+    savingLayout->addWidget(autosaveBox);
+
+    auto* intervalRow = new QHBoxLayout;
+    intervalRow->addSpacing(22);
+    intervalRow->addWidget(new QLabel(CSM_TR("Every"), saving));
+    auto* intervalSpin = new QSpinBox(saving);
+    intervalSpin->setObjectName(QStringLiteral("autosaveInterval"));
+    intervalSpin->setRange(1, 120);
+    intervalSpin->setSuffix(CSM_TR(" minutes"));
+    intervalSpin->setValue(Autosave::intervalMinutes());
+    intervalSpin->setEnabled(autosaveBox->isChecked());
+    intervalRow->addWidget(intervalSpin);
+    intervalRow->addStretch(1);
+    savingLayout->addLayout(intervalRow);
+
+    auto* recoveryBox = new QCheckBox(CSM_TR("Crash recovery"), saving);
+    recoveryBox->setObjectName(QStringLiteral("recoveryEnabled"));
+    recoveryBox->setChecked(Autosave::recoveryEnabled());
+    savingLayout->addWidget(recoveryBox);
+
+    auto* recoveryRow = new QHBoxLayout;
+    recoveryRow->addSpacing(22);
+    recoveryRow->addWidget(new QLabel(CSM_TR("Every"), saving));
+    auto* recoverySpin = new QSpinBox(saving);
+    recoverySpin->setObjectName(QStringLiteral("recoveryInterval"));
+    recoverySpin->setRange(1, 60);
+    recoverySpin->setSuffix(CSM_TR(" minutes"));
+    recoverySpin->setValue(Autosave::recoveryIntervalMinutes());
+    recoverySpin->setEnabled(recoveryBox->isChecked());
+    recoveryRow->addWidget(recoverySpin);
+    recoveryRow->addStretch(1);
+    savingLayout->addLayout(recoveryRow);
+    connect(recoveryBox, &QCheckBox::toggled, recoverySpin, &QSpinBox::setEnabled);
+    savingLayout->addStretch(1);
+
+    connect(autosaveBox, &QCheckBox::toggled, intervalSpin, &QSpinBox::setEnabled);
+
     // ---------------- 快捷键 ----------------
     auto* keys = new QWidget(tabs);
+    keys->setObjectName(QStringLiteral("shortcutsTab"));
     auto* keysLayout = new QVBoxLayout(keys);
     keysLayout->setContentsMargins(12, 12, 12, 8);
     keysLayout->setSpacing(10);
@@ -262,13 +317,22 @@ SettingsDialog::SettingsDialog(QWidget* parent, std::function<void()> applyTheme
     buttonRow->addWidget(okButton);
     buttonRow->addWidget(cancelButton);
 
-    connect(okButton, &QPushButton::clicked, this, [this, themeBox, gridBox, languageBox, table] {
+    connect(okButton, &QPushButton::clicked, this,
+            [this, themeBox, gridBox, languageBox, table, autosaveBox, intervalSpin,
+             recoveryBox, recoverySpin] {
         const double grid = gridBox->currentData().toDouble();
         if (!qFuzzyCompare(grid, Grid::size())) {
             Grid::setSize(grid);
             if (m_applyGrid)
                 m_applyGrid();
         }
+
+        Autosave::setEnabled(autosaveBox->isChecked());
+        Autosave::setIntervalMinutes(intervalSpin->value());
+        Autosave::setRecoveryEnabled(recoveryBox->isChecked());
+        Autosave::setRecoveryIntervalMinutes(recoverySpin->value());
+        if (m_applyAutosave)
+            m_applyAutosave();
 
         const Theme::Mode theme = Theme::Mode(themeBox->currentData().toInt());
         if (int(theme) != m_originalTheme) {

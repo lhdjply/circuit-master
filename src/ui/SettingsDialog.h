@@ -38,7 +38,8 @@ public:
     /// applyGrid ：网格间距变了要重画画布（吸附步长也跟着变）
     explicit SettingsDialog(QWidget* parent, std::function<void()> applyTheme,
                             std::function<void()> applyGrid,
-                            const QVector<ShortcutRow>& shortcuts = {});
+                            const QVector<ShortcutRow>& shortcuts = {},
+                            std::function<void()> applyAutosave = {});
 
     /// 点确定后各命令的快捷键（id → 序列）；空序列表示不绑定
     QHash<QString, QKeySequence> shortcuts() const { return m_edited; }
@@ -48,6 +49,7 @@ private:
     int m_originalTheme = 0;
     std::function<void()> m_applyTheme;
     std::function<void()> m_applyGrid;
+    std::function<void()> m_applyAutosave;
 
     QVector<ShortcutRow> m_rows;              // 表格里每一行对应的命令
     QHash<QString, QKeySequence> m_edited;    // 确定时收集到的结果

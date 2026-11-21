@@ -10,6 +10,13 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Added
 
+- **Autosave and crash recovery**: two independent switches under Settings →
+  Saving, each with **its own interval**. **Autosave** (default 10 minutes, 1–120)
+  writes unsaved changes **back to the circuit's own file**, exactly like pressing
+  Save; **crash recovery** (default 2 minutes, 1–60) keeps a separate copy on its
+  own schedule, covering untitled circuits and whatever changed between two saves,
+  and offers to restore it on the next start. Saving by hand clears the copy and a
+  clean exit clears them all.
 - **Waveform monitor defaults to F6**: F5 runs, F6 shows the traces; Esc (cancel
   wiring / clear selection) is in the shortcut table too and can be rebound.
 - **Customisable shortcuts**: a new Shortcuts tab in Edit → Settings to rebind every
