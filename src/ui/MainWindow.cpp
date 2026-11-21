@@ -966,7 +966,6 @@ void MainWindow::createActions()
     m_actGuide = new QAction(
         actionIcon(QStringLiteral("guide"), QStringLiteral("help-contents"), QStyle::SP_MessageBoxQuestion),
         CSM_TR("Quick Start"), this);
-    m_actGuide->setShortcut(QKeySequence::HelpContents);
 
     m_actAbout = new QAction(
         actionIcon(QStringLiteral("about"), QStringLiteral("help-about"), QStyle::SP_MessageBoxInformation),
