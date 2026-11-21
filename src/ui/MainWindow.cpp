@@ -1157,8 +1157,8 @@ void MainWindow::buildLibrary()
          GroundKind::Gnd},
         {ComponentType::NetLabel, CSM_TR("Net label"), CSM_TR("Switches and Grounds")},
 
-        {ComponentType::Probe, CSM_TR("Voltage probe"), CSM_TR("Measurement")},
         {ComponentType::MeasureProbe, CSM_TR("Measurement probe"), CSM_TR("Measurement")},
+        {ComponentType::Probe, CSM_TR("Voltage probe"), CSM_TR("Measurement")},
         {ComponentType::CurrentProbe, CSM_TR("Current probe"), CSM_TR("Measurement")},
         {ComponentType::Multimeter, CSM_TR("Multimeter"), CSM_TR("Measurement")},
     };
