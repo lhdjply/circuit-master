@@ -11,6 +11,8 @@
 //  取消不做任何改动 —— 用户可能只是点进去试了一下。
 // ---------------------------------------------------------------------------
 
+class QLabel;
+
 #include <QDialog>
 #include <QKeySequence>
 #include <QHash>
@@ -49,6 +51,12 @@ private:
 
     QVector<ShortcutRow> m_rows;              // 表格里每一行对应的命令
     QHash<QString, QKeySequence> m_edited;    // 确定时收集到的结果
+    QHash<QString, QKeySequence> m_currentKeys;  // 每行当前的按键（冲突时用它还原）
+    QHash<QString, QString> m_labels;            // id → 命令名，警告里要用
+    QLabel* m_shortcutWarning = nullptr;         // 表格下方的冲突提示
+
+    /// 输入框收下一个按键后立刻调用：与别的命令冲突就提示、并返回该行原来的按键
+    QKeySequence validateShortcut(const QString& id, const QKeySequence& sequence);
 };
 
 } // namespace csm

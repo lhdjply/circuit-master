@@ -12,13 +12,12 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 - **Waveform monitor defaults to F6**: F5 runs, F6 shows the traces; Esc (cancel
   wiring / clear selection) is in the shortcut table too and can be rebound.
-- **Customisable shortcuts**: a new Shortcuts tab in Edit → Settings lets you rebind
-  every command, clear a shortcut with the × at the end of its row, or restore the
-  defaults in one click.
-  Two commands on the same key combination are refused with a message. The choices
-  are saved with your user settings and survive a restart, and the key names shown
-  in the status bar, the startup tip and Quick Start follow them instead of being
-  hard-coded.
+- **Customisable shortcuts**: a new Shortcuts tab in Edit → Settings to rebind every
+  command. Typing a combination another command already uses warns you which one,
+  and the row snaps back to its previous key; the × at the end of a row clears it
+  (no shortcut) and Restore Defaults brings everything back. The choices are saved
+  with your user settings and survive a restart, and the key names in the status
+  bar, the startup tip and Quick Start follow them.
 
 ## [v0.5.0] - 2026-11-21
 

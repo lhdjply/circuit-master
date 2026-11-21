@@ -18,6 +18,8 @@
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QToolButton>
+
+#include <functional>
 #include <QVBoxLayout>
 
 namespace csm {
@@ -39,6 +41,14 @@ public:
 #endif
     }
 
+    /// 收下按键后同步校验：返回的值会被直接写回输入框。
+    /// 放在这里而不是 keySequenceChanged 里，是因为那个信号要等 1 秒的收尾定时器，
+    /// 冲突提示会慢半拍。
+    void setValidator(std::function<QKeySequence(const QKeySequence&)> validator)
+    {
+        m_validator = std::move(validator);
+    }
+
 protected:
     void keyPressEvent(QKeyEvent* event) override
     {
@@ -47,12 +57,22 @@ protected:
             return;
         }
         QKeySequenceEdit::keyPressEvent(event);
+        QKeySequence current = keySequence();
 #if QT_VERSION < QT_VERSION_CHECK(6, 5, 0)
-        const QKeySequence sequence = keySequence();
-        if (sequence.count() > 1)   // 6.4 没有 setMaximumSequenceLength，自己截断
-            setKeySequence(QKeySequence(sequence[sequence.count() - 1]));
+        if (current.count() > 1) {   // 6.4 没有 setMaximumSequenceLength，自己截断
+            current = QKeySequence(current[current.count() - 1]);
+            setKeySequence(current);
+        }
 #endif
+        if (!m_validator)
+            return;
+        const QKeySequence fixed = m_validator(current);
+        if (fixed != keySequence())
+            setKeySequence(fixed);
     }
+
+private:
+    std::function<QKeySequence(const QKeySequence&)> m_validator;
 };
 
 QString themeLabel(Theme::Mode mode)
@@ -175,6 +195,13 @@ SettingsDialog::SettingsDialog(QWidget* parent, std::function<void()> applyTheme
                           entry.defaultKey.toString(QKeySequence::PortableText));
         table->setCellWidget(row, 1, edit);
 
+        m_currentKeys.insert(entry.id, entry.current);
+        m_labels.insert(entry.id, entry.label);
+        const QString id = entry.id;
+        edit->setValidator([this, id](const QKeySequence& sequence) {
+            return validateShortcut(id, sequence);
+        });
+
         // 行尾的「×」：清空这一行的快捷键（= 不绑定），比在输入框里选中再删更直观
         auto* clear = new QToolButton(table);
         clear->setObjectName(QStringLiteral("clear_%1").arg(entry.id));
@@ -182,7 +209,12 @@ SettingsDialog::SettingsDialog(QWidget* parent, std::function<void()> applyTheme
         clear->setAutoRaise(true);
         clear->setCursor(Qt::PointingHandCursor);
         clear->setToolTip(CSM_TR("Clear this shortcut, leaving the command unbound"));
-        connect(clear, &QToolButton::clicked, edit, [edit] { edit->clear(); });
+        connect(clear, &QToolButton::clicked, edit, [this, edit, id = entry.id] {
+            edit->clear();
+            m_currentKeys[id] = QKeySequence();
+            if (m_shortcutWarning)
+                m_shortcutWarning->hide();
+        });
         auto* clearHolder = new QWidget(table);
         auto* clearLayout = new QHBoxLayout(clearHolder);
         clearLayout->setContentsMargins(0, 0, 0, 0);
@@ -191,6 +223,13 @@ SettingsDialog::SettingsDialog(QWidget* parent, std::function<void()> applyTheme
     }
     table->verticalHeader()->setDefaultSectionSize(34);   // 行高舒展开，输入框不至于贴边
     keysLayout->addWidget(table, 1);
+
+    m_shortcutWarning = new QLabel(keys);
+    m_shortcutWarning->setObjectName(QStringLiteral("shortcutWarning"));
+    m_shortcutWarning->setWordWrap(true);
+    m_shortcutWarning->setStyleSheet(QStringLiteral("color: %1;").arg(Theme::danger().name()));
+    m_shortcutWarning->hide();
+    keysLayout->addWidget(m_shortcutWarning);
 
     auto* keyButtons = new QHBoxLayout;
     auto* resetButton = new QPushButton(CSM_TR("Restore Defaults"), keys);
@@ -274,6 +313,28 @@ SettingsDialog::SettingsDialog(QWidget* parent, std::function<void()> applyTheme
     });
     connect(cancelButton, &QPushButton::clicked, this, &QDialog::reject);
     outer->addLayout(buttonRow);
+}
+
+QKeySequence SettingsDialog::validateShortcut(const QString& id, const QKeySequence& sequence)
+{
+    if (!sequence.isEmpty()) {
+        for (auto it = m_currentKeys.constBegin(); it != m_currentKeys.constEnd(); ++it) {
+            if (it.key() == id || it.value() != sequence)
+                continue;
+            // 冲突：提示是谁占用了，并把这一行还原成原来的按键
+            if (m_shortcutWarning) {
+                m_shortcutWarning->setText(
+                    CSM_TR("%1 is already used by %2; pick another shortcut.")
+                        .arg(sequence.toString(QKeySequence::NativeText), m_labels.value(it.key())));
+                m_shortcutWarning->show();
+            }
+            return m_currentKeys.value(id);
+        }
+    }
+    if (m_shortcutWarning)
+        m_shortcutWarning->hide();
+    m_currentKeys[id] = sequence;
+    return sequence;
 }
 
 } // namespace csm

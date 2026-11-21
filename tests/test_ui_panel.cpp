@@ -99,6 +99,7 @@ private slots:
     void savedShortcutsApplyAtStartup();
     void keyHintsFollowShortcuts();
     void holdingAKeyRecordsOneShortcut();
+    void conflictingShortcutWarnsAndRestores();
 
 private:
 
@@ -1111,6 +1112,57 @@ void UiPanelTest::holdingAKeyRecordsOneShortcut()
 
     QCOMPARE(edit->keySequence(), QKeySequence(QStringLiteral("Ctrl+R")));
     QCOMPARE(edit->keySequence().count(), 1);
+}
+
+
+void UiPanelTest::conflictingShortcutWarnsAndRestores()
+{
+    // 改到与别的命令相同的组合：当场提示是谁占了，并把这一行还原成原来的按键
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    SettingsDialog dialog(&window, [] {}, [] {},
+                          {{QStringLiteral("edit.rotate"), QStringLiteral("Rotate"),
+                            QKeySequence(QStringLiteral("Space")),
+                            QKeySequence(QStringLiteral("Space"))},
+                           {QStringLiteral("sim.run"), QStringLiteral("Run"),
+                            QKeySequence(QStringLiteral("F5")),
+                            QKeySequence(QStringLiteral("F5"))}});
+    dialog.show();
+    settle();
+    auto* tabs = dialog.findChild<QTabWidget*>(QStringLiteral("settingsTabs"));
+    QVERIFY(tabs);
+    tabs->setCurrentIndex(1);   // 切到快捷键页，否则控件不算「可见」
+    settle();
+
+    auto* rotate = dialog.findChild<QKeySequenceEdit*>(QStringLiteral("shortcut_edit.rotate"));
+    auto* warning = dialog.findChild<QLabel*>(QStringLiteral("shortcutWarning"));
+    QVERIFY(rotate);
+    QVERIFY(warning);
+    rotate->setFocus();
+    settle();
+
+    // 按 F5（已被「运行」占用）
+    auto* conflict = new QKeyEvent(QEvent::KeyPress, Qt::Key_F5, Qt::NoModifier,
+                                   QString(), false);
+    QCoreApplication::sendEvent(rotate, conflict);
+    delete conflict;
+    settle();
+
+    QCOMPARE(rotate->keySequence(), QKeySequence(QStringLiteral("Space")));   // 还原
+    QVERIFY2(warning->isVisible(), "冲突时必须提示");
+    QVERIFY2(warning->text().contains(QStringLiteral("Run")), qPrintable(warning->text()));
+
+    // 换成不冲突的键：警告收起，改动留下
+    auto* ok = new QKeyEvent(QEvent::KeyPress, Qt::Key_R, Qt::ControlModifier,
+                             QStringLiteral("R"), false);
+    QCoreApplication::sendEvent(rotate, ok);
+    delete ok;
+    settle();
+    QCOMPARE(rotate->keySequence(), QKeySequence(QStringLiteral("Ctrl+R")));
+    QVERIFY2(!warning->isVisible(), "冲突解除后提示应当收起");
 }
 
 #include "test_ui_panel.moc"
