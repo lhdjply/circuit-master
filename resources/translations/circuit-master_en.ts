@@ -752,6 +752,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Measurement</translation>
     </message>
     <message>
+        <source>Measurement probe</source>
+        <translation>Measurement probe</translation>
+    </message>
+    <message>
         <source>Messages</source>
         <translation>Messages</translation>
     </message>
@@ -1034,6 +1038,34 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
     <message>
         <source>Primary inductance L1</source>
         <translation>Primary inductance L1</translation>
+    </message>
+    <message>
+        <source>Probe I(dc): %1</source>
+        <translation>Probe I(dc): %1</translation>
+    </message>
+    <message>
+        <source>Probe I(pp): %1</source>
+        <translation>Probe I(pp): %1</translation>
+    </message>
+    <message>
+        <source>Probe I(rms): %1</source>
+        <translation>Probe I(rms): %1</translation>
+    </message>
+    <message>
+        <source>Probe V(dc): %1</source>
+        <translation>Probe V(dc): %1</translation>
+    </message>
+    <message>
+        <source>Probe V(pp): %1</source>
+        <translation>Probe V(pp): %1</translation>
+    </message>
+    <message>
+        <source>Probe V(rms): %1</source>
+        <translation>Probe V(rms): %1</translation>
+    </message>
+    <message>
+        <source>Probe f: %1</source>
+        <translation>Probe f: %1</translation>
     </message>
     <message>
         <source>Properties</source>

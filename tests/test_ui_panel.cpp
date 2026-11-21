@@ -791,7 +791,7 @@ void UiPanelTest::libraryFiltersByCategory()
     QCOMPARE(counts.value(QStringLiteral("数字逻辑")), 5);     // 与 / 或 / 非 / 异或 / 同或
     QCOMPARE(counts.value(QStringLiteral("电源")), 2);        // 电压源 / 电流源
     QCOMPARE(counts.value(QStringLiteral("开关与接地")), 4);  // 开关 / 按钮开关 / 接地 / 网络标签
-    QCOMPARE(counts.value(QStringLiteral("测量")), 3);        // TP / IP / 万用表
+    QCOMPARE(counts.value(QStringLiteral("测量")), 4);        // TP / IP / 万用表 / 测量探针
 
     int sum = 0;
     for (int n : counts)

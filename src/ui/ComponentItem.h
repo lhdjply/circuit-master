@@ -3,6 +3,7 @@
 #include "core/Component.h"
 
 #include <QGraphicsObject>
+#include <QStringList>
 
 namespace csm {
 
@@ -19,6 +20,13 @@ public:
     QRectF boundingRect() const override;
     QPainterPath shape() const override;
     void paint(QPainter* painter, const QStyleOptionGraphicsItem* option, QWidget* widget) override;
+
+private:
+    QRectF probePanelRect() const;
+    void paintProbeReadout(QPainter* painter) const;
+    void paintProbeArrow(QPainter* painter) const;
+
+public:
 
     const Component& component() const { return m_comp; }
     void setComponent(const Component& comp);
@@ -37,6 +45,26 @@ public:
 
     /// 发光二极管的亮度（0 = 灭，1 = 最亮），仿真后由主窗口写入
     void setLedBrightness(double brightness);
+
+    /// 测量探针的读数面板（每行一条，例如 "V(峰-峰): 3.42 V"）。
+    /// 传空列表即隐藏面板。
+    void setProbeReadout(const QStringList& lines);
+    /// 测量探针的占位读数（横杠）。还没仿真、或某几项算不出来时用它，
+    /// 保证黄框始终存在、行数固定。
+    static QStringList placeholderProbeReadout();
+    /// 测量探针是否落在导线上，以及它读到的是哪个元件的电流。
+    /// 落线上时符号旁会画一个绿色箭头（和 Multisim 的探头一样）。
+    void setProbeAttachment(bool onWire, const QPointF& arrowDir = QPointF(1.0, 0.0),
+                            const QVector<QPair<int, double>>& currentWeights = {});
+    /// 电流权重：导线在探针处切开后，一侧注入的元件电流。
+    /// 值为 +1 表示该元件的 I(引脚1注入) 计入，-1 表示 I(引脚0注入)。
+    /// 这样「两根支路汇合后的那一段」也能算对，而不是硬取某个元件。
+    const QVector<QPair<int, double>>& probeCurrentWeights() const { return m_probeCurrentWeights; }
+    bool probeOnWire() const { return m_probeOnWire; }
+    int probeTargetId() const { return m_probeTargetId; }
+    /// 箭头方向（沿导线）与电流符号：正号表示电流沿箭头方向为正
+    QPointF probeArrowDir() const { return m_probeArrowDir; }
+    QStringList probeReadout() const { return m_probeReadout; }
     double ledBrightness() const { return m_ledBrightness; }
 
     int rotationAngle() const { return m_comp.rotation; }
@@ -83,6 +111,11 @@ private:
     bool m_hover = false;
     double m_ledBrightness = 0.0;
     bool m_blown = false;
+    QStringList m_probeReadout;
+    bool m_probeOnWire = false;
+    int m_probeTargetId = -1;
+    QPointF m_probeArrowDir{1.0, 0.0};
+    QVector<QPair<int, double>> m_probeCurrentWeights;
     double m_blastProgress = 0.0;
     QPointF m_lastPos; // 上一次的位置，用来算增量
 };

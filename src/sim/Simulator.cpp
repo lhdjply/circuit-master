@@ -387,7 +387,7 @@ Problem buildProblem(const Circuit& circuit, const Netlist& net)
             p.elements.append(&comp);
             continue;
         }
-        if (comp.type == ComponentType::Probe) {
+        if (isVoltageTap(comp.type)) {
             p.elements.append(&comp);
             continue;
         }
@@ -820,6 +820,7 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
                 addG(a, n1, 0, 1e-6);
             break;
         }
+        case ComponentType::MeasureProbe:
         case ComponentType::Probe:
         case ComponentType::NetLabel:
             break;
@@ -1115,6 +1116,7 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
             current = mosOperating(vge, vce - vf, comp.vth, comp.k).id;
             break;
         }
+        case ComponentType::MeasureProbe:
         case ComponentType::Probe:
             break;
         case ComponentType::Multimeter:
@@ -1126,7 +1128,7 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
 
     // 与 makeSignals 的顺序保持一致：带参考地的测试点补一条差分值
     for (const Component* cp : p.elements) {
-        if (cp->type != ComponentType::Probe || cp->groundKind == GroundKind::Gnd)
+        if (!isVoltageTap(cp->type) || cp->groundKind == GroundKind::Gnd)
             continue;
         const int a = p.nodeOf(cp->id, 0);
         const int b = p.referenceNode.value(int(cp->groundKind), 0);
@@ -1173,7 +1175,7 @@ QVector<Signal> makeSignals(const Problem& p)
 
     // 测试点可以指定参考地：非 GND 时补一条 V(a,b) 的差分信号
     for (const Component* cp : p.elements) {
-        if (cp->type != ComponentType::Probe || cp->groundKind == GroundKind::Gnd)
+        if (!isVoltageTap(cp->type) || cp->groundKind == GroundKind::Gnd)
             continue;
         const int a = p.nodeOf(cp->id, 0);
         const int b = p.referenceNode.value(int(cp->groundKind), 0);
@@ -1324,7 +1326,7 @@ QString buildReport(const Circuit& circuit, const Problem& p, const Netlist& net
     // 万用表读数在采样向量里排在最后：节点电压 + 元件电流 + 带参考地的测试点差分之后
     int meterBase = int(p.nNodes + p.elements.size());
     for (const Component* cp : p.elements) {
-        if (cp->type == ComponentType::Probe && cp->groundKind != GroundKind::Gnd)
+        if (isVoltageTap(cp->type) && cp->groundKind != GroundKind::Gnd)
             ++meterBase;
     }
     QVector<QPair<QString, QString>> meters; // (名字, 单位)
@@ -1538,6 +1540,7 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
                 addG(a, n1, 0, Cx(1e-6, 0.0));
             break;
         }
+        case ComponentType::MeasureProbe:
         case ComponentType::Probe:
         case ComponentType::NetLabel:
             break;
@@ -1607,7 +1610,7 @@ bool LiveTransient::start(const Circuit& circuit, double step, QString* error)
         d.names << QStringLiteral("I(%1)").arg(comp->refdes);
     // 带参考地的测试点：与 sample()/makeSignals() 一致，补一条差分信号
     for (const Component* comp : d.problem.elements) {
-        if (comp->type != ComponentType::Probe || comp->groundKind == GroundKind::Gnd)
+        if (!isVoltageTap(comp->type) || comp->groundKind == GroundKind::Gnd)
             continue;
         const int a = d.problem.nodeOf(comp->id, 0);
         const int b = d.problem.referenceNode.value(int(comp->groundKind), 0);
@@ -1676,7 +1679,7 @@ bool LiveTransient::updateCircuit(const Circuit& circuit, QString* error)
         d.names << QStringLiteral("I(%1)").arg(comp->refdes);
     // 带参考地的测试点：与 sample()/makeSignals() 一致，补一条差分信号
     for (const Component* comp : d.problem.elements) {
-        if (comp->type != ComponentType::Probe || comp->groundKind == GroundKind::Gnd)
+        if (!isVoltageTap(comp->type) || comp->groundKind == GroundKind::Gnd)
             continue;
         const int a = d.problem.nodeOf(comp->id, 0);
         const int b = d.problem.referenceNode.value(int(comp->groundKind), 0);

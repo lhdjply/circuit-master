@@ -93,6 +93,10 @@ private slots:
     void wireCanBeSelectedAndDeleted();
     void dragWireEndpointKeepsOtherEnd();
     void drawWireWithMouse();
+    void measureProbeReadsTheWire();
+    void measureProbeUsesTheNearerWireEnd();
+    void measureProbeSumsTheSegmentCurrent();
+    void measureProbeBoxStaysReadableWhenRotated();
 
 private:
 
@@ -1766,6 +1770,209 @@ int main(int argc, char* argv[])
     }
     QFile::remove(logPath);
     return failures;
+}
+
+
+void UiEditorTest::measureProbeReadsTheWire()
+{
+    // 测量探针：贴在导线上就立刻有黄框（未仿真时是横杠），
+    // 跑完瞬态后填上峰峰值 / 有效值 / 直流，并沿导线给一个方向箭头。
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+    window.openPath(QStringLiteral(":/examples/01_rc_charge.csm"));
+    settle();
+
+    auto* scene = currentScene(window);
+    QVERIFY(scene);
+
+    Component probe;
+    probe.type = ComponentType::MeasureProbe;
+    probe.refdes = scene->nextRefdes(ComponentType::MeasureProbe);
+    probe.pos = QPointF(250.0, 200.0);   // R1 与 C1 之间的横导线
+    ComponentItem* item = scene->addComponent(probe);
+    QVERIFY(item);
+    settle();
+
+    QVERIFY2(item->probeOnWire(), "放在导线上应当识别为已连接");
+    QVERIFY2(item->probeReadout().size() >= 6, "未仿真时也该有占位框");
+    QVERIFY(item->probeReadout().first().contains(QStringLiteral("--")));
+    // 箭头沿导线（这一段是水平的）
+    QVERIFY2(std::abs(item->probeArrowDir().x()) > 0.9,
+             qPrintable(QStringLiteral("箭头方向 = (%1, %2)")
+                            .arg(item->probeArrowDir().x())
+                            .arg(item->probeArrowDir().y())));
+
+    window.runSimulation();
+    settle(20);
+
+    QVERIFY(item->probeTargetId() > 0);
+    const QStringList lines = item->probeReadout();
+    QVERIFY2(lines.size() >= 6, "仿真后应填满 V 与 I 两组");
+    for (const QString& line : lines)
+        QVERIFY2(!line.contains(QStringLiteral("--")), qPrintable(line));
+
+    // 挪到空白处：不再算「贴在导线上」，但黄框要留着（行数不变，值是横杠）
+    item->setPos(QPointF(250.0, 420.0));
+    settle();
+    QVERIFY(!item->probeOnWire());
+    QCOMPARE(item->probeReadout().size(), 6);
+}
+
+
+void UiEditorTest::measureProbeUsesTheNearerWireEnd()
+{
+    // 一根导线两端接着不同元件时，探针取「离自己更近」那一端的元件当电流来源。
+    // 否则一根长线（中途还有 T 型分支）会把末端支路的电流当成整根线的电流。
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+    auto* scene = currentScene(window);
+    QVERIFY(scene);
+
+    Component v;
+    v.type = ComponentType::VoltageSource;
+    v.id = 1;
+    v.refdes = QStringLiteral("V1");
+    v.function = SourceFunction::Constant;
+    v.value = 10.0;
+    v.pos = QPointF(100.0, 300.0);
+    QVERIFY(scene->addComponent(v));
+
+    Component r1;
+    r1.type = ComponentType::Resistor;
+    r1.id = 2;
+    r1.refdes = QStringLiteral("R1");
+    r1.value = 1000.0;
+    r1.pos = QPointF(600.0, 300.0);
+    QVERIFY(scene->addComponent(r1));
+
+    // 一根长线把 V1 正极和 R1 左端连起来。
+    // 注意要绕开 V1 自己的另一个引脚 —— 直着连过去会从它身上穿过，
+    // 网表按坐标合并节点，等于把电源短路了。
+    const QPointF plus = v.pinPosition(0);
+    const QPointF left = r1.pinPosition(0);
+    scene->addWire({plus, QPointF(plus.x(), 200.0), QPointF(left.x(), 200.0), left});
+    settle();
+
+    // 靠 V1 一侧 → 读 V1
+    Component nearSource;
+    nearSource.type = ComponentType::MeasureProbe;
+    nearSource.refdes = QStringLiteral("MP1");
+    nearSource.pos = QPointF(plus.x(), 260.0);
+    ComponentItem* mp1 = scene->addComponent(nearSource);
+    // 靠 R1 一侧 → 读 R1
+    Component nearLoad;
+    nearLoad.type = ComponentType::MeasureProbe;
+    nearLoad.refdes = QStringLiteral("MP2");
+    nearLoad.pos = QPointF(left.x(), 260.0);
+    ComponentItem* mp2 = scene->addComponent(nearLoad);
+    QVERIFY(mp1 && mp2);
+    settle();
+
+    QVERIFY(mp1->probeOnWire());
+    QVERIFY(mp2->probeOnWire());
+    QCOMPARE(mp1->probeTargetId(), 1);
+    QCOMPARE(mp2->probeTargetId(), 2);
+}
+
+
+void UiEditorTest::measureProbeSumsTheSegmentCurrent()
+{
+    // 一根导线上有 T 型分支时，分支前后的电流不同 —— 不能取某个元件顶替，
+    // 要在探针处切开、把这一侧注入的元件电流加起来。
+    // 场景：竖线两端各接 V1 / R1，中间两处抽头接 R2 / R3，探针夹在两个抽头之间。
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+    auto* scene = currentScene(window);
+    QVERIFY(scene);
+
+    Component v;
+    v.type = ComponentType::VoltageSource;
+    v.id = 1;
+    v.refdes = QStringLiteral("V1");
+    v.function = SourceFunction::Constant;
+    v.value = 10.0;
+    v.pos = QPointF(100.0, 300.0);
+    QVERIFY(scene->addComponent(v));
+
+    auto addResistor = [scene](int id, const char* refdes, const QPointF& pos) {
+        Component r;
+        r.type = ComponentType::Resistor;
+        r.id = id;
+        r.refdes = QString::fromLatin1(refdes);
+        r.value = 1000.0;
+        r.pos = pos;
+        QVERIFY(scene->addComponent(r));
+    };
+    addResistor(2, "R1", QPointF(600.0, 600.0));
+    addResistor(3, "R2", QPointF(500.0, 400.0));
+    addResistor(4, "R3", QPointF(500.0, 520.0));
+
+    // 主干竖线 + 两处 T 型抽头
+    scene->addWire({QPointF(130.0, 300.0), QPointF(400.0, 300.0)});
+    scene->addWire({QPointF(400.0, 300.0), QPointF(400.0, 600.0)});
+    scene->addWire({QPointF(400.0, 400.0), QPointF(470.0, 400.0)});
+    scene->addWire({QPointF(400.0, 520.0), QPointF(470.0, 520.0)});
+    scene->addWire({QPointF(400.0, 600.0), QPointF(570.0, 600.0)});
+    settle();
+
+    Component probe;
+    probe.type = ComponentType::MeasureProbe;
+    probe.refdes = QStringLiteral("MP1");
+    probe.pos = QPointF(400.0, 430.0);   // R2 抽头与 R3 抽头之间
+    ComponentItem* mp = scene->addComponent(probe);
+    QVERIFY(mp);
+    settle();
+
+    QVERIFY(mp->probeOnWire());
+    // 上下两侧各有两个元件贡献，取较近的一侧（V1 + R2）
+    const auto weights = mp->probeCurrentWeights();
+    QCOMPARE(weights.size(), 2);
+    // 多个元件合成时不标来源
+    QCOMPARE(mp->probeTargetId(), -1);
+}
+
+
+void UiEditorTest::measureProbeBoxStaysReadableWhenRotated()
+{
+    // 读数框里是横排的一行行文字，旋转只该改变框摆在哪一侧，
+    // 不能把框转成竖条 —— 否则一行字就会被裁掉（曾经就是这样）。
+    const QRectF base = probeReadoutBox();
+    QSet<QString> centers;
+    for (int angle : {0, 90, 180, 270}) {
+        const QRectF box = probeReadoutBoxFor(angle);
+        QCOMPARE(box.size(), base.size());          // 尺寸不变
+        centers.insert(QStringLiteral("%1,%2").arg(qRound(box.center().x()))
+                           .arg(qRound(box.center().y())));
+    }
+    // 四个方位各不相同（都摊在原点同一侧就没意义了）
+    QCOMPARE(centers.size(), 4);
+
+    // 0° 在上、90° 在右、180° 在下、270° 在左
+    QVERIFY(probeReadoutBoxFor(0).center().y() < 0);
+    QVERIFY(probeReadoutBoxFor(90).center().x() > 0);
+    QVERIFY(probeReadoutBoxFor(180).center().y() > 0);
+    QVERIFY(probeReadoutBoxFor(270).center().x() < 0);
+
+    // 标号不能被框压住 —— 90° / 270° 时曾经整个被盖掉
+    Component probe;
+    probe.type = ComponentType::MeasureProbe;
+    probe.refdes = QStringLiteral("MP1");
+    probe.pos = QPointF(400.0, 300.0);
+    for (int angle : {0, 90, 180, 270}) {
+        probe.rotation = angle;
+        ComponentItem item(probe);
+        item.setProbeAttachment(true, QPointF(1.0, 0.0));
+        const QRectF label = item.refLabelRect();
+        const QRectF box = probeReadoutBoxFor(angle);
+        QVERIFY2(!label.isEmpty() && !label.intersects(box),
+                 qPrintable(QStringLiteral("%1° 时标号与读数框重叠").arg(angle)));
+    }
 }
 
 #include "test_ui_editor.moc"

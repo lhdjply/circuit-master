@@ -51,7 +51,7 @@ int pinCount(const Component& comp)
 
 QVector<QPointF> pinOffsets(ComponentType type)
 {
-    if (type == ComponentType::Ground || type == ComponentType::Probe
+    if (type == ComponentType::Ground || isVoltageTap(type)
         || type == ComponentType::NetLabel)
         return {QPointF(0.0, 0.0)};
     if (type == ComponentType::OpAmp)
@@ -77,11 +77,17 @@ QVector<QPointF> pinOffsets(ComponentType type)
     return {QPointF(-30.0, 0.0), QPointF(30.0, 0.0)};
 }
 
+bool isVoltageTap(ComponentType type)
+{
+    return type == ComponentType::Probe || type == ComponentType::MeasureProbe;
+}
+
 int pinCount(ComponentType type)
 {
     switch (type) {
     case ComponentType::Ground: return 1;
-    case ComponentType::Probe:  return 1;
+    case ComponentType::Probe:
+    case ComponentType::MeasureProbe: return 1;
     case ComponentType::NetLabel: return 1;
     case ComponentType::Multimeter: return 2;
     case ComponentType::OpAmp:  return 3;
@@ -199,6 +205,8 @@ QString refPrefix(ComponentType type)
         return QStringLiteral("GND");
     if (type == ComponentType::Probe)
         return QStringLiteral("TP");
+    if (type == ComponentType::MeasureProbe)
+        return QStringLiteral("MP");
     if (type == ComponentType::CurrentProbe)
         return QStringLiteral("IP");
     if (type == ComponentType::NetLabel)
@@ -209,7 +217,8 @@ QString refPrefix(ComponentType type)
 bool isTwoTerminal(ComponentType type)
 {
     return type != ComponentType::Ground && type != ComponentType::OpAmp
-        && type != ComponentType::Probe && !isThreeTerminalDevice(type);
+        && type != ComponentType::Probe && type != ComponentType::MeasureProbe
+        && !isThreeTerminalDevice(type);
 }
 
 bool isThreeTerminalDevice(ComponentType type)

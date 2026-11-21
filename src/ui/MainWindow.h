@@ -79,6 +79,12 @@ private:
     Document* m_liveDoc = nullptr;
     /// 按仿真结果点亮/熄灭电路里的发光二极管
     void applyLedStates(const SimulationResult& result);
+    /// 更新测量探针上的读数面板
+    void applyProbeReadouts(const SimulationResult& result);
+    /// 实时仿真中刷新测量探针：按当前窗口累积最小/最大/均值/有效值
+    void refreshLiveProbes();
+    /// 清掉实时统计（开始 / 停止仿真、探针移动时）
+    void resetLiveProbeStats();
     /// 熄灭所有 LED（停止仿真或换电路时调用）
     void clearLedStates();
     /// 极性电容反接击穿：标记元件并播放爆炸动画
@@ -154,6 +160,19 @@ private:
     WaveformWindow* m_wavePlot = nullptr;   // 静态波形
     WaveformWindow* m_waveLive = nullptr;   // 动态示波器
     QHash<QString, MultimeterWindow*> m_meterWindows; // 万用表读数窗口（按参考编号）
+
+    /// 实时仿真中测量探针的统计（键为元件 id）。
+    /// 峰峰值 / 有效值用最近 kLiveProbeWindow 个采样算（滑动窗口），
+    /// 直流用最后一个瞬时值 —— 累计平均会让「拨一下开关」看起来像慢慢漂移。
+    struct LiveProbeStats {
+        QVector<double> volts;      // 最近的电压采样
+        QVector<double> amps;       // 最近的电流采样
+        double lastVolts = 0.0;     // 瞬时值
+        double lastAmps = 0.0;
+        bool hasVoltage = false;
+        bool hasCurrent = false;
+    };
+    QHash<int, LiveProbeStats> m_probeStats;
     /// 「只在仿真时能点开」这个提示只提示一次，免得每次选中都刷一条日志
     bool m_meterHintShown = false;
     QPlainTextEdit* m_log = nullptr;

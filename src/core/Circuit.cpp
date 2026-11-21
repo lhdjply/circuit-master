@@ -40,6 +40,7 @@ QString typeToTag(ComponentType type)
     case ComponentType::VoltageSource: return QStringLiteral("V");
     case ComponentType::CurrentSource: return QStringLiteral("I");
     case ComponentType::Probe:         return QStringLiteral("TP");
+    case ComponentType::MeasureProbe:  return QStringLiteral("MPR");
     case ComponentType::Multimeter:    return QStringLiteral("XMM");
     case ComponentType::NetLabel:      return QStringLiteral("NET");
     case ComponentType::LogicGate:     return QStringLiteral("GATE");
@@ -70,6 +71,7 @@ ComponentType tagToType(const QString& tag)
     if (tag == QLatin1String("V")) return ComponentType::VoltageSource;
     if (tag == QLatin1String("I")) return ComponentType::CurrentSource;
     if (tag == QLatin1String("TP")) return ComponentType::Probe;
+    if (tag == QLatin1String("MPR")) return ComponentType::MeasureProbe;
     if (tag == QLatin1String("XMM")) return ComponentType::Multimeter;
     if (tag == QLatin1String("NET")) return ComponentType::NetLabel;
     if (tag == QLatin1String("GATE")) return ComponentType::LogicGate;

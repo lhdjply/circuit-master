@@ -22,6 +22,9 @@ public:
     Circuit toCircuit() const;
 
     ComponentItem* addComponent(const Component& component);
+    /// 重新计算每个测量探针贴在哪个导线上、读哪个元件的电流。
+    /// 放元件、拖元件、改导线之后都要调（场景自己会在这些时机调用）。
+    void updateProbeAttachments();
     ComponentItem* placeComponent(ComponentType type, const QPointF& pos);
     WireItem* addWire(const QVector<QPointF>& points);
 

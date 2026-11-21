@@ -61,6 +61,48 @@ void drawVoltageSourceInside(QPainter* p, const Component& comp, const QColor& c
 
 } // namespace
 
+QRectF symbolBounds(const Component& comp)
+{
+    QRectF bounds(-42.0, -27.0, 84.0, 54.0);
+    if (comp.type == ComponentType::MeasureProbe)
+        bounds = bounds.united(probeReadoutBox());
+    return bounds;
+}
+
+QRectF probeReadoutBox()
+{
+    // 居中放在探针接点正上方，够放 6 行读数（画布 1 单位 ≈ 1 px，5.5pt 一行约 8 px）
+    return QRectF(-46.0, -74.0, 92.0, 50.0);
+}
+
+QRectF probeReadoutBoxFor(int rotation)
+{
+    const QRectF box = probeReadoutBox();
+    const int angle = ((rotation % 360) + 360) % 360;
+    // 只按 90° 的整数倍摆：斜着放时框取最近的 90°，免得框跟着歪
+    const QPointF center = box.center();
+    QPointF rotated;
+    switch (angle) {
+    case 90:  rotated = QPointF(-center.y(), center.x()); break;
+    case 180: rotated = QPointF(-center.x(), -center.y()); break;
+    case 270: rotated = QPointF(center.y(), -center.x()); break;
+    default:  rotated = center; break;
+    }
+    // 尺寸不跟着转：框里是横排的一行行读数，转成竖条就装不下了。
+    // 旋转只改变框摆在哪一侧。
+    return QRectF(rotated.x() - box.width() / 2.0, rotated.y() - box.height() / 2.0,
+                  box.width(), box.height());
+}
+
+void paintProbeBox(QPainter* p, const QRectF& box)
+{
+    p->save();
+    p->setPen(QPen(QColor(0xca, 0x8a, 0x04), 1.0));
+    p->setBrush(QColor(0xfe, 0xf9, 0xc3, 235));
+    p->drawRoundedRect(box, 3.0, 3.0);
+    p->restore();
+}
+
 QPainterPath symbolShape(ComponentType type)
 {
     QPainterPath path;
@@ -111,7 +153,15 @@ QPainterPath symbolShape(ComponentType type)
         path.addRoundedRect(QRectF(-16.0, -16.0, 46.0, 32.0), 4.0, 4.0);
         return path;
     }
-    if (type == ComponentType::Probe) {
+    if (type == ComponentType::MeasureProbe) {
+        // 探针本体 = 黄框 + 一小段引线 + 接点小球
+        QPainterPath probe;
+        probe.addRoundedRect(probeReadoutBox(), 3.0, 3.0);
+        probe.addRect(QRectF(-5.0, probeReadoutBox().bottom() - 2.0, 10.0,
+                             -probeReadoutBox().bottom() + 6.0));
+        return probe;
+    }
+    if (isVoltageTap(type)) {
         // 符号本体只有一根短棍 + 一个小圈，命中区给得比图形略大一点（还是贴着它），
         // 免得必须点在那条细线上
         path.addRoundedRect(QRectF(-9.0, -24.0, 18.0, 27.0), 6.0, 6.0);
@@ -666,13 +716,26 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         break;
     }
 
+    case ComponentType::MeasureProbe: {
+        // 测量探针 = 黄框 + 下面一个小圆球（接点）。不再画圆圈字母 ——
+        // 框本身就是它的样子，多一个圈反而抢眼
+        // 只有接点小球：引线与黄框由调用方在「未旋转」的坐标系里画，
+        // 否则框转了、字还是正的，就错位了
+        p->setPen(symbolPen(color, 1.6));
+        p->setBrush(Theme::symbolFill());
+        p->drawEllipse(QPointF(0.0, 0.0), 3.5, 3.5);
+        p->setBrush(Qt::NoBrush);
+        break;
+    }
+
     case ComponentType::Probe: {
+        p->setPen(symbolPen(color, 1.6));
         p->drawLine(QPointF(0.0, 0.0), QPointF(0.0, -8.0));
         p->setBrush(Theme::symbolFill());
         p->drawEllipse(QPointF(0.0, -16.0), 7.0, 7.0);
         p->setBrush(Qt::NoBrush);
         QFont font = p->font();
-        font.setPointSizeF(6.0);
+        font.setPointSizeF(7.0);
         font.setBold(true);
         p->setFont(font);
         p->save();
@@ -963,13 +1026,17 @@ QIcon componentIcon(const Component& comp, const QSize& size)
     QPainter p(&pm);
     p.setRenderHint(QPainter::Antialiasing, true);
 
+    // 按符号实际占的范围缩放居中：测量探针多了个读数框，用固定比例会被切掉
+    const QRectF bounds = symbolBounds(comp);
+    const double sx = size.width() / bounds.width();
+    const double sy = size.height() / bounds.height();
+    const double scale = std::min(sx, sy);
     p.translate(size.width() / 2.0, size.height() / 2.0);
-    if (comp.type == ComponentType::Probe)
-        p.translate(0.0, 8.0);
-    const double sx = size.width() / 84.0;
-    const double sy = size.height() / 54.0;
-    p.scale(sx, sy);
+    p.scale(scale, scale);
+    p.translate(-bounds.center().x(), -bounds.center().y());
     paintSymbol(&p, comp, false, false);
+    if (comp.type == ComponentType::MeasureProbe)
+        paintProbeBox(&p, probeReadoutBox());
     p.end();
 
     return QIcon(pm);

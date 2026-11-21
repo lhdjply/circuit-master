@@ -27,6 +27,7 @@ enum class ComponentType {
     VoltageSource,
     CurrentSource,
     Probe,
+    MeasureProbe,  ///< 测量探针：贴在节点上，显示该节点的电压/电流测量值
     CurrentProbe,
     Multimeter,   ///< 万用表：两引脚仪器，按档位测电压 / 电流 / 电阻
     NetLabel,     ///< 网络标签：单引脚，同名标签在网表里并成一个网络
@@ -77,6 +78,11 @@ enum class SourceFunction {
 /// 两端元件在 x 轴 ±30 处；运放为三引脚（同相、反相、输出）；接地只有一个原点引脚。
 /// 变压器这类「同一类型、不同引脚数」的元件请用下面按实例取的重载。
 QVector<QPointF> pinOffsets(ComponentType type);
+/// 「只在一个节点上取电压」的类型：电压测试点与测量探针。
+/// 网表、求解器、测试点列表里都用它代替 `== ComponentType::Probe`，
+/// 免得每加一种探针就要改十处。
+bool isVoltageTap(ComponentType type);
+
 int pinCount(ComponentType type);
 QVector<QPointF> pinOffsets(const struct Component& comp);
 int pinCount(const struct Component& comp);

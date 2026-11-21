@@ -25,3 +25,7 @@ compile_commands.json
 .snap
 .dev-*
 *.csm.bak
+
+# Python 缓存（scripts/*.py 被 import 时会生成）
+__pycache__/
+*.pyc

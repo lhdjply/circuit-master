@@ -6,6 +6,7 @@
 #include <QColor>
 #include <QIcon>
 #include <QPainterPath>
+#include <QRectF>
 #include <QSize>
 
 class QPainter;
@@ -13,6 +14,22 @@ class QPainter;
 namespace csm {
 
 // 颜色统一由 Theme 提供（浅色 / 深色两套），这里不再写死。
+
+/// 测量探针读数框在符号局部坐标里的位置。
+/// 它就是探针这个控件的样子 —— 画布上和元件库图标里都画同一个框，
+/// 读数文字填在里面，不需要按场合分别判断。
+QRectF probeReadoutBox();
+
+/// 按旋转角把读数框摆到对应方向（0° 上、90° 右、180° 下、270° 左），
+/// 框本身始终是正的 —— 所以旋转后框会挪位置，但不会歪。
+QRectF probeReadoutBoxFor(int rotation);
+
+/// 画读数框（淡黄底 + 琥珀边）。画布与元件库图标共用。
+void paintProbeBox(QPainter* p, const QRectF& box);
+
+/// 符号在局部坐标里占的范围（含测量探针的读数框）。
+/// 元件库图标按它缩放，保证不同元件都完整、居中。
+QRectF symbolBounds(const Component& comp);
 
 /// 元件的可点击区域（局部坐标）。
 QPainterPath symbolShape(ComponentType type);
@@ -33,7 +50,7 @@ void paintSymbol(QPainter* painter, const Component& component, bool selected, b
 QIcon svgIcon(const QString& path, bool forceFallback = false);
 
 /// 元件库图标。
-QIcon componentIcon(ComponentType type, const QSize& size = QSize(60, 42));
+QIcon componentIcon(ComponentType type, const QSize& size = QSize(84, 60));
 /// 把 SVG 渲染成蒙版再刷一层颜色。仓库里的图标是深藏青（#1e3a5f），放到深色
 /// 底上几乎看不见，所以按主题着色：浅色用 symbol（深藏青），深色用浅灰。
 /// 调用方在切主题时要重新生成图标，见 MainWindow::applyTheme()。
@@ -49,6 +66,6 @@ QIcon tintIcon(const QIcon& source, const QColor& color, int size = 48);
 QIcon iconForDarkSurface(const QIcon& source, int size = 48);
 /// 按一个具体元件画图标：用来区分「同类型但不同花样」的条目
 /// （比如五种逻辑门、五种接地符号）
-QIcon componentIcon(const Component& comp, const QSize& size = QSize(60, 42));
+QIcon componentIcon(const Component& comp, const QSize& size = QSize(84, 60));
 
 } // namespace csm

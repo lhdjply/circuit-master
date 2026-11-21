@@ -6,6 +6,32 @@ numbering follows [Semantic Versioning](https://semver.org/).
 The single source of truth for the version is the `VERSION` file at the
 repository root (same form as the tag, e.g. `v0.4.0`).
 
+## [Unreleased]
+
+### Added
+
+- **Measurement probe**: a new part under Measurement, modelled on Multisim's
+  probe. Drop it on a wire and a pale-yellow readout box appears — that box is
+  what the part looks like, in the library too:
+  - voltage peak-to-peak / RMS / DC, plus the same three for the current in that
+    segment
+  - the current comes from cutting the wire at the probe and applying KCL to one
+    side: a wire often carries T-branches, and the current genuinely differs on
+    either side of them, so the reading is that segment's real current. When only
+    one element contributes it is tagged after the reading (e.g. `[V1]`)
+  - the arrow runs along the wire and current is positive along it; rotate the
+    probe 180° to flip the sign. Peak-to-peak and RMS are always non-negative —
+    only the DC line is signed
+  - rotating moves the box to the top / right / bottom / left, while the box, its
+    text and the label all stay upright and out of each other's way
+  - while the live simulation runs the readings keep updating: peak-to-peak and
+    RMS over the last ~120 samples, DC from the instantaneous value — flipping a
+    switch in a resistive circuit shows the new value at once
+  - dashes until there is data; the box itself is always present. Frequency is
+    estimated by autocorrelation and omitted for non-periodic waveforms
+  - for an exact branch current use the **current probe (IP)**, a real 0 V branch
+    the solver measures directly
+
 ## [v0.4.1] - 2026-11-20
 
 A settings window, light and dark themes, a Chinese/English interface, and wider

@@ -1,4 +1,7 @@
 #include "ui/ComponentItem.h"
+#include "core/Grid.h"
+#include "core/Language.h"
+#include "ui/SchematicScene.h"
 
 #include "ui/Symbols.h"
 
@@ -24,14 +27,77 @@ ComponentItem::ComponentItem(const Component& comp, QGraphicsItem* parent)
     m_lastPos = comp.pos;
 }
 
+
+QRectF ComponentItem::probePanelRect() const
+{
+    if (m_probeReadout.isEmpty())
+        return QRectF();
+    // 框的几何由符号定义 —— 它就是这个控件的样子。旋转时只是换个方向摆，
+    // 框本身不歪，所以框里的字仍然是水平的。
+    return probeReadoutBoxFor(m_comp.rotation);
+}
+
+void ComponentItem::paintProbeArrow(QPainter* painter) const
+{
+    if (m_comp.type != ComponentType::MeasureProbe || !m_probeOnWire)
+        return;
+
+    // 贴在导线上时，沿导线方向画一个绿色箭头：箭头指向就是「电流为正」的方向
+    const double angle = std::atan2(m_probeArrowDir.y(), m_probeArrowDir.x()) * 180.0 / M_PI;
+    painter->save();
+    painter->translate(0.0, -4.0);
+    painter->rotate(angle);
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(QColor(0x16, 0xa3, 0x4a));
+    QPolygonF arrow;
+    arrow << QPointF(7.0, 0.0) << QPointF(-3.0, -4.0) << QPointF(-3.0, 4.0);
+    painter->drawPolygon(arrow);
+    painter->restore();
+}
+
+void ComponentItem::paintProbeReadout(QPainter* painter) const
+{
+    if (m_probeReadout.isEmpty() || !isVoltageTap(m_comp.type))
+        return;
+
+    const QRectF box = probePanelRect();
+
+    // 接点到框的一小段引线（在未旋转的坐标系里画，框转到哪一侧就朝哪一侧连）
+    const QPointF attach(std::clamp(0.0, box.left(), box.right()),
+                         std::clamp(0.0, box.top(), box.bottom()));
+    painter->save();
+    painter->setPen(QPen(Theme::symbol(), 1.6));
+    painter->drawLine(QPointF(0.0, 0.0), attach);
+    painter->restore();
+
+    paintProbeBox(painter, box);   // 框始终是正的
+
+    painter->save();
+    QFont font = painter->font();
+    font.setPointSizeF(5.5);
+    painter->setFont(font);
+    painter->setPen(QColor(0x42, 0x2a, 0x00));
+
+    const double lineHeight = box.height() / std::max<qsizetype>(1, m_probeReadout.size());
+    double y = box.top();
+    for (const QString& line : m_probeReadout) {
+        painter->drawText(QRectF(box.left() + 3.0, y, box.width() - 6.0, lineHeight),
+                          Qt::AlignLeft | Qt::AlignVCenter, line);
+        y += lineHeight;
+    }
+    painter->restore();
+}
+
 QRectF ComponentItem::boundingRect() const
 {
-    if (m_comp.type == ComponentType::Probe) {
+    if (isVoltageTap(m_comp.type)) {
         // 符号本体 + 标号（标号会随旋转跑到四个方向，或被拖到别处）
         QRectF r(-20.0, -30.0, 40.0, 40.0);
         const QRectF label = refLabelRect();
         if (!label.isEmpty())
             r = r.united(label);
+        if (!m_probeReadout.isEmpty())
+            r = r.united(probePanelRect());
         return r.adjusted(-8.0, -8.0, 8.0, 8.0);
     }
     if (m_comp.type == ComponentType::Ground)
@@ -72,7 +138,15 @@ QPainterPath ComponentItem::shape() const
     QTransform symbolTransform;
     symbolTransform.scale(m_comp.mirrorX ? -1.0 : 1.0, m_comp.mirrorY ? -1.0 : 1.0);
     symbolTransform.rotate(double(m_comp.rotation));
-    QPainterPath path = symbolTransform.map(symbolShape(m_comp.type));
+    QPainterPath path;
+    if (m_comp.type == ComponentType::MeasureProbe) {
+        // 探针的画面不跟着转（只有接点小球与框，框按方位摆），
+        // 命中区也要用同一个规则，否则一转就点不中了
+        path.addEllipse(QPointF(0.0, 0.0), 5.0, 5.0);
+        path.addRect(probePanelRect());
+    } else {
+        path = symbolTransform.map(symbolShape(m_comp.type));
+    }
 
     // 标号也并进命中区 —— 点「TP1」这种文字应当能选中元件。
     // 关键是 refLabelRect() 给的是「贴着文字」的小矩形，
@@ -109,6 +183,59 @@ void ComponentItem::setBlastProgress(double progress)
     if (qFuzzyCompare(clamped + 1.0, m_blastProgress + 1.0))
         return;
     m_blastProgress = clamped;
+    update();
+}
+
+QStringList ComponentItem::placeholderProbeReadout()
+{
+    const QString dash = QStringLiteral("--");
+    return {
+        CSM_TR("Probe V(pp): %1").arg(dash),
+        CSM_TR("Probe V(rms): %1").arg(dash),
+        CSM_TR("Probe V(dc): %1").arg(dash),
+        CSM_TR("Probe I(pp): %1").arg(dash),
+        CSM_TR("Probe I(rms): %1").arg(dash),
+        CSM_TR("Probe I(dc): %1").arg(dash),
+    };
+}
+
+void ComponentItem::setProbeAttachment(bool onWire, const QPointF& arrowDir,
+                                       const QVector<QPair<int, double>>& currentWeights)
+{
+    // 黄框一直在：没数据时先铺一层横杠占位。这一步必须放在「值没变就返回」
+    // 之前 —— 探针一开始就在空白处时，下面的判断会直接返回，框就永远不出现。
+    if (m_probeReadout.isEmpty()) {
+        m_probeReadout = placeholderProbeReadout();
+        prepareGeometryChange();
+        update();
+    }
+
+    if (m_probeOnWire == onWire && m_probeArrowDir == arrowDir
+        && m_probeCurrentWeights == currentWeights) {
+        // 状态没变：但占位框可能还没铺上
+        if (m_probeReadout.isEmpty()) {
+            m_probeReadout = placeholderProbeReadout();
+            prepareGeometryChange();
+            update();
+        }
+        return;
+    }
+    m_probeOnWire = onWire;
+    m_probeArrowDir = arrowDir;
+    m_probeCurrentWeights = currentWeights;
+    // 只有一个元件有贡献时，标签上就写出它；多个元件合成时不写
+    m_probeTargetId = (currentWeights.size() == 1) ? currentWeights.first().first : -1;
+
+    prepareGeometryChange();
+    update();
+}
+
+void ComponentItem::setProbeReadout(const QStringList& lines)
+{
+    if (m_probeReadout == lines)
+        return;
+    m_probeReadout = lines;
+    prepareGeometryChange();   // 面板会撑大 boundingRect
     update();
 }
 
@@ -246,7 +373,7 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
         return;
     }
 
-    if (m_comp.type == ComponentType::Probe) {
+    if (isVoltageTap(m_comp.type)) {
         // 标签随旋转方向摆放，避免压在导线上；用户还能再拖开
         const QPointF offset = probeLabelAnchor();
         QFont f = painter->font();
@@ -256,6 +383,11 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
         painter->setPen(selected ? Theme::selected() : Theme::textSecondary());
         painter->drawText(QRectF(offset.x() - 40.0, offset.y() - 9.0, 80.0, 18.0),
                           Qt::AlignCenter, m_comp.refdes);
+        // 测量探针还有箭头与读数框，画完标号不能直接返回
+        if (m_comp.type == ComponentType::MeasureProbe) {
+            paintProbeArrow(painter);
+            paintProbeReadout(painter);
+        }
         return;
     }
 
@@ -338,6 +470,8 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
     const QFontMetrics fm(f);
     const QString elided = fm.elidedText(value, Qt::ElideRight, int(valueRect.width()));
     painter->drawText(valueRect, valueAlign, elided);
+    paintProbeArrow(painter);
+    paintProbeReadout(painter);
 }
 
 void ComponentItem::labelLayout(QRectF* refRect, int* refAlign, QRectF* valueRect,
@@ -395,7 +529,17 @@ bool ComponentItem::symbolContains(const QPointF& itemPos) const
 
 QPointF ComponentItem::probeLabelAnchor() const
 {
-    // 标签放到「和引脚相反」的方向：0° 在上、90° 在右、180° 在下、270° 在左
+    // 标签放到「和引脚相反」的方向：0° 在上、90° 在右、180° 在下、270° 在左。
+    if (m_comp.type == ComponentType::MeasureProbe) {
+        // 测量探针的标号要避开黄框 —— 框转到哪一侧，标号就贴到那一侧的外沿，
+        // 否则 90° / 270° 时标号正好被框整个盖住（转一下就「看不见 MP1」了）
+        const QRectF box = probeReadoutBoxFor(m_comp.rotation);
+        if (box.center().y() < 0.0)
+            return QPointF(0.0, box.top() - 14.0) + m_comp.refLabelOffset;    // 框在上
+        if (box.center().y() > 0.0)
+            return QPointF(0.0, box.bottom() + 14.0) + m_comp.refLabelOffset; // 框在下
+        return QPointF(box.center().x(), box.top() - 14.0) + m_comp.refLabelOffset; // 框在左/右
+    }
     const double rad = qDegreesToRadians(double(m_comp.rotation));
     return QPointF(40.0 * std::sin(rad), -40.0 * std::cos(rad)) + m_comp.refLabelOffset;
 }
@@ -416,7 +560,7 @@ QRectF ComponentItem::refLabelRect() const
         return QRectF();
     // 测试点的标号是单独画的（位置随旋转走），这里按同一套规则算出来，
     // 否则光点符号那根小棍儿根本点不中
-    if (m_comp.type == ComponentType::Probe) {
+    if (isVoltageTap(m_comp.type)) {
         const QPointF at = probeLabelAnchor();
         // 画的时候文字是居中排在 80×18 的盒子里，命中区只取文字本身那么宽：
         // 否则 90° / 270° 时那个大盒子会盖住符号，按本体反倒拖走了标号
@@ -594,7 +738,8 @@ QVariant ComponentItem::itemChange(GraphicsItemChange change, const QVariant& va
 {
     if (change == ItemPositionChange && scene()) {
         const QPointF p = value.toPointF();
-        return QPointF(std::round(p.x() / 10.0) * 10.0, std::round(p.y() / 10.0) * 10.0);
+        const double step = Grid::size();
+        return QPointF(std::round(p.x() / step) * step, std::round(p.y() / step) * step);
     }
     if (change == ItemPositionHasChanged) {
         const QPointF delta = pos() - m_lastPos;
@@ -603,6 +748,11 @@ QVariant ComponentItem::itemChange(GraphicsItemChange change, const QVariant& va
         emit componentChanged();
         if (!qFuzzyIsNull(delta.x()) || !qFuzzyIsNull(delta.y()))
             emit movedBy(delta);
+        // 探针挪了位置：重新判断它有没有落在导线上
+        if (m_comp.type == ComponentType::MeasureProbe) {
+            if (auto* schematic = qobject_cast<SchematicScene*>(scene()))
+                schematic->updateProbeAttachments();
+        }
     }
     return QGraphicsObject::itemChange(change, value);
 }

@@ -755,6 +755,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>测量</translation>
     </message>
     <message>
+        <source>Measurement probe</source>
+        <translation>测量探针</translation>
+    </message>
+    <message>
         <source>Messages</source>
         <translation>消息</translation>
     </message>
@@ -1037,6 +1041,34 @@ Place a voltage (TP) or current (IP) test point and run again</source>
     <message>
         <source>Primary inductance L1</source>
         <translation>初级电感 L1</translation>
+    </message>
+    <message>
+        <source>Probe I(dc): %1</source>
+        <translation>I(直流): %1</translation>
+    </message>
+    <message>
+        <source>Probe I(pp): %1</source>
+        <translation>I(峰-峰): %1</translation>
+    </message>
+    <message>
+        <source>Probe I(rms): %1</source>
+        <translation>I(有效值): %1</translation>
+    </message>
+    <message>
+        <source>Probe V(dc): %1</source>
+        <translation>V(直流): %1</translation>
+    </message>
+    <message>
+        <source>Probe V(pp): %1</source>
+        <translation>V(峰-峰): %1</translation>
+    </message>
+    <message>
+        <source>Probe V(rms): %1</source>
+        <translation>V(有效值): %1</translation>
+    </message>
+    <message>
+        <source>Probe f: %1</source>
+        <translation>频率: %1</translation>
     </message>
     <message>
         <source>Properties</source>

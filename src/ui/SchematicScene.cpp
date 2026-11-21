@@ -71,6 +71,9 @@ void SchematicScene::load(const Circuit& circuit)
         if (wire.points.size() >= 2)
             addWire(wire.points);
     }
+    // 载入的工程里可能已经有测量探针：导线是在元件之后才加进来的，
+    // 这里必须重算一次，否则它们会一直显示「没贴在导线上」
+    updateProbeAttachments();
     refresh();
 }
 
@@ -93,6 +96,231 @@ Circuit SchematicScene::toCircuit() const
     return circuit;
 }
 
+namespace {
+/// 把坐标按网格取整成整数键，和 Netlist 的做法保持一致
+QPoint probeKey(const QPointF& p)
+{
+    const double grid = std::max(1e-6, Grid::size());
+    return QPoint(int(std::lround(p.x() / grid)), int(std::lround(p.y() / grid)));
+}
+
+bool probePointOnSegment(const QPoint& p, const QPoint& a, const QPoint& b)
+{
+    const int abx = b.x() - a.x();
+    const int aby = b.y() - a.y();
+    const int apx = p.x() - a.x();
+    const int apy = p.y() - a.y();
+    const int cross = abx * apy - aby * apx;
+    if (cross != 0)
+        return false;
+    return std::min(a.x(), b.x()) <= p.x() && p.x() <= std::max(a.x(), b.x())
+           && std::min(a.y(), b.y()) <= p.y() && p.y() <= std::max(a.y(), b.y());
+}
+} // namespace
+
+void SchematicScene::updateProbeAttachments()
+{
+    const QVector<WireItem*> wires = wireItems();
+    const QVector<ComponentItem*> components = componentItems();
+
+    // 收集所有导线的折线（按网格取整），后面用它们拼一张「导体图」
+    struct Polyline {
+        WireItem* wire = nullptr;
+        QVector<QPoint> points;
+    };
+    QVector<Polyline> lines;
+    for (WireItem* wire : wires) {
+        QVector<QPoint> pts;
+        for (const QPointF& p : wire->scenePoints())
+            pts.append(probeKey(p));
+        if (pts.size() >= 2)
+            lines.append({wire, pts});
+    }
+
+    // 图的节点：所有导线顶点 + 所有元件引脚 + 探针自己
+    QSet<QPoint> nodes;
+    for (const Polyline& line : lines)
+        for (const QPoint& p : line.points)
+            nodes.insert(p);
+    for (ComponentItem* item : components) {
+        const Component& c = item->component();
+        for (int pin = 0; pin < pinCount(c); ++pin)
+            nodes.insert(probeKey(c.pinPosition(pin)));
+    }
+    for (ComponentItem* item : components) {
+        if (item->component().type == ComponentType::MeasureProbe)
+            nodes.insert(probeKey(item->component().pos));
+    }
+
+    // 每条导线段上被节点切开，相邻节点之间连一条边。
+    // T 型分支、引脚落在段中间，都会因此成为一个真正的节点。
+    QHash<QPoint, QSet<QPoint>> adjacency;
+    auto connect = [&adjacency](const QPoint& a, const QPoint& b) {
+        if (a == b)
+            return;
+        adjacency[a].insert(b);
+        adjacency[b].insert(a);
+    };
+    for (const Polyline& line : lines) {
+        for (int i = 1; i < line.points.size(); ++i) {
+            const QPoint a = line.points.at(i - 1);
+            const QPoint b = line.points.at(i);
+            QVector<QPoint> onSegment;
+            for (const QPoint& p : nodes) {
+                if (probePointOnSegment(p, a, b))
+                    onSegment.append(p);
+            }
+            std::sort(onSegment.begin(), onSegment.end(),
+                      [&a, &b](const QPoint& u, const QPoint& v) {
+                          const int du = std::abs(u.x() - a.x()) + std::abs(u.y() - a.y());
+                          const int dv = std::abs(v.x() - a.x()) + std::abs(v.y() - a.y());
+                          return du < dv;
+                      });
+            for (int k = 1; k < onSegment.size(); ++k)
+                connect(onSegment.at(k - 1), onSegment.at(k));
+        }
+    }
+
+    // 每个引脚落在哪个节点上：给后面的「注入电流」用
+    struct PinRef {
+        int id = -1;
+        int pin = 0;
+        QPoint at;
+    };
+    QVector<PinRef> pins;
+    for (ComponentItem* item : components) {
+        const Component& c = item->component();
+        if (c.type == ComponentType::MeasureProbe || c.type == ComponentType::Ground)
+            continue;
+        for (int pin = 0; pin < pinCount(c); ++pin)
+            pins.append({c.id, pin, probeKey(c.pinPosition(pin))});
+    }
+
+    for (ComponentItem* item : components) {
+        if (item->component().type != ComponentType::MeasureProbe)
+            continue;
+
+        // 找最近的导线，记下最靠近探针的那一段
+        const QPoint key = probeKey(item->component().pos);
+        WireItem* bestWire = nullptr;
+        // 距离在「网格键」空间里算：折线已经取整，混用真实坐标会比出几十倍的差
+        const double grid = std::max(1e-6, Grid::size());
+        double bestDistance = 8.0 / grid;   // 8 px 以内算「放在线上」
+        const QPointF at(key.x(), key.y());
+        QPoint segA, segB;
+        for (const Polyline& line : lines) {
+            for (int i = 1; i < line.points.size(); ++i) {
+                const QPoint a = line.points.at(i - 1);
+                const QPoint b = line.points.at(i);
+                const QPointF af(a.x(), a.y());
+                const QPointF bf(b.x(), b.y());
+                const QPointF ab = bf - af;
+                const double len2 = ab.x() * ab.x() + ab.y() * ab.y();
+                double t = 0.0;
+                if (len2 > 1e-9) {
+                    t = ((at.x() - af.x()) * ab.x() + (at.y() - af.y()) * ab.y()) / len2;
+                    t = std::clamp(t, 0.0, 1.0);
+                }
+                const double distance = QLineF(at, af + ab * t).length();
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    bestWire = line.wire;
+                    segA = a;
+                    segB = b;
+                }
+            }
+        }
+        if (!bestWire) {
+            item->setProbeAttachment(false);
+            continue;
+        }
+
+        // 箭头与「探针所在的那一段导线」平行 —— 折线拐弯时不能拿首尾连线当方向；
+        // 但正负仍按整根线的走向统一，免得随线段存储顺序乱翻
+        const QVector<QPointF> wirePts = bestWire->scenePoints();
+        QPointF direction(segB.x() - segA.x(), segB.y() - segA.y());
+        {
+            const double length = std::hypot(direction.x(), direction.y());
+            direction = (length > 1e-6) ? direction / length : QPointF(1.0, 0.0);
+        }
+        if (wirePts.size() >= 2) {
+            const QPointF chord = wirePts.last() - wirePts.first();
+            if (chord.x() * direction.x() + chord.y() * direction.y() < 0.0)
+                direction = -direction;
+        }
+        const int angle = ((item->component().rotation % 360) + 360) % 360;
+        if (angle == 180)
+            direction = -direction;
+
+        // 在「切开探针」之后，从某一侧能走到的所有节点。
+        // 端点本身也要算上 —— 它上面往往就接着一个元件引脚。
+        auto sideOf = [&adjacency, &key](const QPoint& seed) {
+            QSet<QPoint> visited;
+            if (seed == key)
+                return visited;
+            QVector<QPoint> stack{seed};
+            visited.insert(seed);
+            while (!stack.isEmpty()) {
+                const QPoint cur = stack.takeLast();
+                for (const QPoint& next : adjacency.value(cur)) {
+                    if (next == key || visited.contains(next))
+                        continue;
+                    visited.insert(next);
+                    stack.append(next);
+                }
+            }
+            return visited;
+        };
+        // 这一侧的注入电流：从元件引脚 1 流出为正、从引脚 0 流出为负
+        auto injectionsOn = [&pins](const QSet<QPoint>& side) {
+            QHash<int, double> weights;
+            for (const PinRef& ref : pins) {
+                if (!side.contains(ref.at))
+                    continue;
+                weights[ref.id] += (ref.pin == 1) ? 1.0 : -1.0;
+            }
+            return weights;
+        };
+
+        const QSet<QPoint> sideA = sideOf(segA);
+        const QSet<QPoint> sideB = sideOf(segB);
+        QHash<int, double> weights = injectionsOn(sideA);
+        double sideFactor = 1.0;
+
+        // 两侧的电流数值相同、方向相反；挑「涉及的元件更少」的那一侧来报，
+        // 这样标签上能写清来源。数量相同时取离探针更近的一端。
+        const QHash<int, double> weightsB = injectionsOn(sideB);
+        if (weightsB.size() < weights.size()
+            || (weightsB.size() == weights.size() && !weightsB.isEmpty()
+                && QLineF(QPointF(key), QPointF(segB)).length()
+                       < QLineF(QPointF(key), QPointF(segA)).length())) {
+            weights = weightsB;
+            sideFactor = -1.0;
+        }
+
+        // 段方向与箭头方向相反时，正负号整体取反
+        QPointF cutDir(segB.x() - segA.x(), segB.y() - segA.y());
+        const double cutLen = std::hypot(cutDir.x(), cutDir.y());
+        if (cutLen > 1e-9)
+            cutDir /= cutLen;
+        const bool flipped = (cutDir.x() * direction.x() + cutDir.y() * direction.y()) < 0.0;
+
+        QVector<QPair<int, double>> list;
+        for (auto it = weights.constBegin(); it != weights.constEnd(); ++it) {
+            double weight = it.value() * sideFactor;
+            if (flipped)
+                weight = -weight;
+            if (qFuzzyIsNull(weight))
+                continue;
+            list.append({it.key(), weight});
+        }
+        std::sort(list.begin(), list.end(), [](const QPair<int, double>& a, const QPair<int, double>& b) {
+            return std::abs(a.second) > std::abs(b.second);
+        });
+        item->setProbeAttachment(true, direction, list);
+    }
+}
+
 ComponentItem* SchematicScene::addComponent(const Component& component)
 {
     Component comp = component;
@@ -105,12 +333,15 @@ ComponentItem* SchematicScene::addComponent(const Component& component)
     auto* item = new ComponentItem(comp);
     connect(item, &ComponentItem::componentChanged, this, [this] {
         refresh();
+        // 旋转 / 改参数都可能改变探针的箭头方向与电流符号，重算一次
+        updateProbeAttachments();
         emit circuitChanged();
     });
     connect(item, &ComponentItem::editRequested, this, [this, item] { emit editRequested(item); });
     connect(item, &ComponentItem::movedBy, this,
             [this, item](const QPointF& delta) { followComponent(item, delta); });
     addItem(item);
+    updateProbeAttachments();   // 探针可能直接放在导线上
     return item;
 }
 
@@ -200,6 +431,7 @@ ComponentItem* SchematicScene::placeComponent(ComponentType type, const QPointF&
         comp.netLabel = QStringLiteral("N%1").arg(n);
         break;
     }
+    case ComponentType::MeasureProbe:
     case ComponentType::Probe:
     case ComponentType::CurrentProbe:
     case ComponentType::Multimeter:
@@ -225,6 +457,7 @@ WireItem* SchematicScene::addWire(const QVector<QPointF>& points)
     refresh();
     emit circuitChanged();
     return item;
+    updateProbeAttachments();
 }
 
 QString SchematicScene::nextRefdes(ComponentType type) const

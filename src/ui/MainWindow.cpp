@@ -13,6 +13,7 @@
 #include "ui/PropertyPanel.h"
 #include "ui/SchematicScene.h"
 #include "ui/SchematicView.h"
+#include "ui/WireItem.h"
 #include "ui/SettingsDialog.h"
 #include "ui/Symbols.h"
 #include "ui/Theme.h"
@@ -227,7 +228,7 @@ QVector<QPair<QString, QString>> probeSpecs(const Circuit& circuit, const Netlis
     QVector<QPair<QString, QString>> probes;
     QSet<int> seenNodes;
     for (const Component& comp : circuit.components) {
-        if (comp.type == ComponentType::Probe) {
+        if (isVoltageTap(comp.type)) {
             const int node = net.nodeOf(comp.id, 0);
             if (node <= 0 || seenNodes.contains(node))
                 continue;
@@ -264,7 +265,7 @@ bool applyProbeSignals(const Circuit& circuit, const Netlist& net, SimulationRes
     QVector<ProbeRef> probes;
     QSet<int> seenNodes;
     for (const Component& comp : circuit.components) {
-        if (comp.type == ComponentType::Probe) {
+        if (isVoltageTap(comp.type)) {
             const int node = net.nodeOf(comp.id, 0);
             if (node <= 0 || seenNodes.contains(node))
                 continue;
@@ -1144,6 +1145,7 @@ void MainWindow::buildLibrary()
         {ComponentType::NetLabel, CSM_TR("Net label"), CSM_TR("Switches and Grounds")},
 
         {ComponentType::Probe, CSM_TR("Voltage probe"), CSM_TR("Measurement")},
+        {ComponentType::MeasureProbe, CSM_TR("Measurement probe"), CSM_TR("Measurement")},
         {ComponentType::CurrentProbe, CSM_TR("Current probe"), CSM_TR("Measurement")},
         {ComponentType::Multimeter, CSM_TR("Multimeter"), CSM_TR("Measurement")},
     };
@@ -1830,6 +1832,7 @@ void MainWindow::runSimulation()
 
     // 先点亮 LED / 播放爆炸：工作点分支会直接弹对话框返回，放在后面就轮不到它了
     applyLedStates(result);
+    applyProbeReadouts(result);
     applyBlownCapacitors(result.blownCapacitors);
 
     // 波形页只画测试点；万用表不进波形页，但它在实时仿真里要出读数，
@@ -2082,9 +2085,13 @@ WaveformWindow* MainWindow::liveScopeFor(Document* document)
         updateRunAction();
         if (document == doc() && m_view)
             m_view->setLiveRunning(running);
+        if (running && document == doc())
+            resetLiveProbeStats();   // 新的一轮实时仿真，统计从头算
         if (!running) {
-            if (document == doc())
+            if (document == doc()) {
                 closeMeterWindows();
+                resetLiveProbeStats();
+            }
             restorePushButtons();
         }
         if (document == doc() && running && m_actMonitor && !monitorAvailable()) {
@@ -2109,8 +2116,10 @@ WaveformWindow* MainWindow::liveScopeFor(Document* document)
 
     // 电路里有 LED / 电解电容时，实时仿真要不断刷新它们的显示
     connect(scope, &WaveformWindow::liveUpdated, this, [this, document] {
-        if (document == doc())
+        if (document == doc()) {
             refreshMeterWindows();
+            refreshLiveProbes();   // 测量探针的读数跟着实时刷新
+        }
         refreshDocumentLeds(document);
     });
     return scope;
@@ -2249,6 +2258,302 @@ void MainWindow::loadExample(int index)
         optionsFromJson(root.value(QStringLiteral("analysis")).toObject());
     loadCircuitData(circuit, name, QString(), options);
     appendLog(CSM_TR("Example \"%1\" loaded. Press F5 to run the simulation.").arg(name));
+}
+
+void MainWindow::applyProbeReadouts(const SimulationResult& result)
+{
+    if (!m_scene)
+        return;
+
+    // 只有瞬态分析的波形是「电压随时间」，才能算峰峰值 / 有效值 / 频率。
+    // 交流扫频的纵轴是 dB 增益，工作点分析没有时间序列 —— 这两种情况不显示面板，
+    // 否则算出来是些看着像电压的假数字。
+    if (result.kind != AnalysisKind::Transient) {
+        // 交流扫频的纵轴是 dB、工作点没有时间序列：显示横杠，但框要留着
+        for (ComponentItem* item : m_scene->componentItems()) {
+            if (item->component().type == ComponentType::MeasureProbe)
+                item->setProbeReadout(ComponentItem::placeholderProbeReadout());
+        }
+        return;
+    }
+
+    // 探针显示的是「这个节点上的电压」的统计量；节点号要从网表里查
+    const Circuit circuit = m_scene->toCircuit();
+    const Netlist net = circuit.buildNetlist();
+
+    // 探针贴在哪根线、读哪个元件的电流，由场景算好（见 updateProbeAttachments）
+    for (ComponentItem* item : m_scene->componentItems()) {
+        if (item->component().type != ComponentType::MeasureProbe)
+            continue;
+        const int targetId = item->probeTargetId();
+
+        const int node = net.nodeOf(item->component().id, 0);
+        const Signal* voltage = node > 0
+                                    ? result.signal(QStringLiteral("V(%1)").arg(node))
+                                    : nullptr;
+        if (!voltage || voltage->y.isEmpty()) {
+            item->setProbeReadout(ComponentItem::placeholderProbeReadout());
+            continue;
+        }
+
+
+        const QVector<double>& y = voltage->y;
+        double lo = y.first();
+        double hi = y.first();
+        double sum = 0.0;
+        double sumSquares = 0.0;
+        for (double v : y) {
+            lo = std::min(lo, v);
+            hi = std::max(hi, v);
+            sum += v;
+            sumSquares += v * v;
+        }
+        const double dc = sum / y.size();
+        const double rms = std::sqrt(sumSquares / y.size());
+
+        // 频率：用自相关找周期，而不是数过零点 —— 整流后的波形、占空比不为 50%
+        // 的方波，过零间隔是交替不等的，数出来会是错的。自相关在周期性波形上
+        // 会在一个整周期处出现明显峰值；RC 充放电这类非周期波形没有峰，就不显示。
+        double frequency = 0.0;
+        if (y.size() >= 32 && voltage->x.size() == y.size()) {
+            QVector<double> centered(y.size());
+            for (int i = 0; i < y.size(); ++i)
+                centered[i] = y.at(i) - dc;
+
+            const int maxLag = y.size() / 2;
+            QVector<double> correlation(maxLag, 0.0);
+            double energy = 0.0;
+            for (double v : centered)
+                energy += v * v;
+            if (energy > 1e-18) {
+                for (int lag = 2; lag < maxLag; ++lag) {
+                    double sum = 0.0;
+                    for (int i = 0; i + lag < centered.size(); ++i)
+                        sum += centered.at(i) * centered.at(i + lag);
+                    correlation[lag] = sum / energy;
+                }
+                // 先找一个「明显的谷」：自相关必须先掉到 0.2 以下，再回升到 0.5 以上，
+                // 才算真的在振荡。RC 充电这类波形自相关一直很高、不掉下去，
+                // 若只看「第一个极大值」会挑到一个很短的滞后，算出几十 kHz 的假频率。
+                int trough = -1;
+                for (int lag = 2; lag < maxLag; ++lag) {
+                    if (correlation.at(lag) < 0.2) {
+                        trough = lag;
+                        break;
+                    }
+                }
+                if (trough > 0) {
+                    for (int lag = trough + 1; lag + 1 < maxLag; ++lag) {
+                        if (correlation.at(lag) > 0.5
+                            && correlation.at(lag) >= correlation.at(lag - 1)
+                            && correlation.at(lag) >= correlation.at(lag + 1)) {
+                            const double period = (voltage->x.last() - voltage->x.first())
+                                                  * lag / double(y.size() - 1);
+                            if (period > 0.0)
+                                frequency = 1.0 / period;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // formatEng 自己会带工程前缀与单位（"3.42 V"、"600 mV"），不要再拼一个 V
+        auto volts = [](double value) {
+            return formatEng(value, QStringLiteral("V"), 3);
+        };
+
+        QStringList lines;
+        lines << CSM_TR("Probe V(pp): %1").arg(volts(hi - lo));
+        lines << CSM_TR("Probe V(rms): %1").arg(volts(rms));
+        lines << CSM_TR("Probe V(dc): %1").arg(volts(dc));
+        // 频率：只在估得出周期时才显示
+        if (frequency > 0.0)
+            lines << CSM_TR("Probe f: %1").arg(formatEng(frequency, QStringLiteral("Hz"), 3));
+
+        // 电流：把探针处「切开」后这一侧注入的元件电流加起来 ——
+        // 一根导线上如果有 T 型分支，分支前后的电流是不同的，单个元件代表不了。
+        // 权重由场景算好（probeCurrentWeights），这里只做加权求和。
+        QStringList tags;
+        QVector<const Signal*> currentWaves;
+        QVector<double> currentWeights;
+        for (const auto& entry : item->probeCurrentWeights()) {
+            QString refdes;
+            for (ComponentItem* other : m_scene->componentItems()) {
+                if (other->component().id == entry.first) {
+                    refdes = other->component().refdes;
+                    break;
+                }
+            }
+            if (refdes.isEmpty())
+                continue;
+            const Signal* wave = result.signal(QStringLiteral("I(%1)").arg(refdes));
+            if (!wave || wave->y.isEmpty())
+                continue;
+            currentWaves.append(wave);
+            currentWeights.append(entry.second);
+            tags << refdes;
+        }
+
+        if (currentWaves.isEmpty()) {
+            const QString dash = QStringLiteral("--");
+            lines << CSM_TR("Probe I(pp): %1").arg(dash);
+            lines << CSM_TR("Probe I(rms): %1").arg(dash);
+            lines << CSM_TR("Probe I(dc): %1").arg(dash);
+        } else {
+            // 逐点加权求和后再统计：峰峰值/有效值对和不能分开算
+            const int count = currentWaves.first()->y.size();
+            QVector<double> sum(count, 0.0);
+            for (int w = 0; w < currentWaves.size(); ++w) {
+                const QVector<double>& y = currentWaves.at(w)->y;
+                const int n = std::min(count, int(y.size()));
+                for (int i = 0; i < n; ++i)
+                    sum[i] += currentWeights.at(w) * y.at(i);
+            }
+            double iLo = sum.first();
+            double iHi = sum.first();
+            double iSum = 0.0;
+            double iSquares = 0.0;
+            for (double i : sum) {
+                iLo = std::min(iLo, i);
+                iHi = std::max(iHi, i);
+                iSum += i;
+                iSquares += i * i;
+            }
+            auto amps = [](double value) {
+                return formatEng(value, QStringLiteral("A"), 3);
+            };
+            // 只有一个元件贡献时才标出来源：多个元件合成时标一个反而误导
+            const QString tag = (tags.size() == 1) ? QStringLiteral(" [%1]").arg(tags.first())
+                                                  : QString();
+            lines << CSM_TR("Probe I(pp): %1").arg(amps(iHi - iLo)) + tag;
+            lines << CSM_TR("Probe I(rms): %1")
+                         .arg(amps(std::sqrt(iSquares / sum.size()))) + tag;
+            lines << CSM_TR("Probe I(dc): %1").arg(amps(iSum / sum.size())) + tag;
+        }
+
+        item->setProbeReadout(lines);
+    }
+}
+
+void MainWindow::resetLiveProbeStats()
+{
+    m_probeStats.clear();
+}
+
+void MainWindow::refreshLiveProbes()
+{
+    if (!m_scene || !m_waveLive || !m_waveLive->isLive())
+        return;
+
+    // 滑动窗口的样本数：约 120 拍（33 ms 一拍 ≈ 4 秒）。
+    // 不用「从开始累计」——那样拨一下开关之后，平均值要很久才追上，
+    // 看起来就像电压在慢慢漂，而纯电阻电路本该是瞬间跳变。
+    constexpr int kWindow = 120;
+
+    const Circuit circuit = m_scene->toCircuit();
+    const Netlist net = circuit.buildNetlist();
+    QSet<int> alive;
+
+    for (ComponentItem* item : m_scene->componentItems()) {
+        if (item->component().type != ComponentType::MeasureProbe)
+            continue;
+        const int id = item->component().id;
+        alive.insert(id);
+
+        LiveProbeStats& stats = m_probeStats[id];
+
+        // 电压：探头所在节点
+        const int node = net.nodeOf(id, 0);
+        if (node > 0) {
+            stats.lastVolts = m_waveLive->liveValue(QStringLiteral("V(%1)").arg(node));
+            stats.hasVoltage = true;
+            stats.volts.append(stats.lastVolts);
+            if (stats.volts.size() > kWindow)
+                stats.volts.remove(0, stats.volts.size() - kWindow);
+        }
+
+        // 电流：按场景给出的权重，把几个元件的电流加权求和
+        stats.hasCurrent = false;
+        double amps = 0.0;
+        int contributors = 0;
+        for (const auto& entry : item->probeCurrentWeights()) {
+            QString refdes;
+            for (ComponentItem* other : m_scene->componentItems()) {
+                if (other->component().id == entry.first) {
+                    refdes = other->component().refdes;
+                    break;
+                }
+            }
+            if (refdes.isEmpty())
+                continue;
+            amps += entry.second * m_waveLive->liveValue(QStringLiteral("I(%1)").arg(refdes));
+            ++contributors;
+        }
+        if (contributors > 0) {
+            stats.hasCurrent = true;
+            stats.lastAmps = amps;
+            stats.amps.append(amps);
+            if (stats.amps.size() > kWindow)
+                stats.amps.remove(0, stats.amps.size() - kWindow);
+        }
+        if (!stats.hasCurrent)
+            stats.amps.clear();
+
+        // 窗口里还没攒够样本时不动：避免数字乱跳，也不把静态仿真的值盖掉
+        if (stats.volts.size() < 8 && stats.amps.size() < 8)
+            continue;
+
+        const QString dash = QStringLiteral("--");
+        auto range = [](const QVector<double>& values) {
+            double lo = values.first();
+            double hi = values.first();
+            for (double v : values) {
+                lo = std::min(lo, v);
+                hi = std::max(hi, v);
+            }
+            return std::pair<double, double>(lo, hi);
+        };
+        auto rms = [](const QVector<double>& values) {
+            double squares = 0.0;
+            for (double v : values)
+                squares += v * v;
+            return std::sqrt(squares / values.size());
+        };
+
+        QStringList lines;
+        if (stats.volts.size() >= 8) {
+            const auto [lo, hi] = range(stats.volts);
+            lines << CSM_TR("Probe V(pp): %1").arg(formatEng(hi - lo, QStringLiteral("V"), 3));
+            lines << CSM_TR("Probe V(rms): %1").arg(formatEng(rms(stats.volts), QStringLiteral("V"), 3));
+            // 直流取瞬时值：纯电阻电路拨开关之后应当立刻变
+            lines << CSM_TR("Probe V(dc): %1").arg(formatEng(stats.lastVolts, QStringLiteral("V"), 3));
+        } else {
+            lines << CSM_TR("Probe V(pp): %1").arg(dash);
+            lines << CSM_TR("Probe V(rms): %1").arg(dash);
+            lines << CSM_TR("Probe V(dc): %1").arg(dash);
+        }
+        if (stats.amps.size() >= 8) {
+            const auto [lo, hi] = range(stats.amps);
+            lines << CSM_TR("Probe I(pp): %1").arg(formatEng(hi - lo, QStringLiteral("A"), 3));
+            lines << CSM_TR("Probe I(rms): %1").arg(formatEng(rms(stats.amps), QStringLiteral("A"), 3));
+            lines << CSM_TR("Probe I(dc): %1")
+                         .arg(formatEng(stats.lastAmps, QStringLiteral("A"), 3));
+        } else {
+            lines << CSM_TR("Probe I(pp): %1").arg(dash);
+            lines << CSM_TR("Probe I(rms): %1").arg(dash);
+            lines << CSM_TR("Probe I(dc): %1").arg(dash);
+        }
+        item->setProbeReadout(lines);
+    }
+
+    // 已经删掉的探针，把统计也清掉
+    for (auto it = m_probeStats.begin(); it != m_probeStats.end();) {
+        if (alive.contains(it.key()))
+            ++it;
+        else
+            it = m_probeStats.erase(it);
+    }
 }
 
 void MainWindow::applyLedStates(const SimulationResult& result)
