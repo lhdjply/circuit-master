@@ -33,6 +33,7 @@ enum class ComponentType {
     NetLabel,     ///< 网络标签：单引脚，同名标签在网表里并成一个网络
     LogicGate,    ///< 逻辑门：与 / 或 / 非 / 异或 / 同或，数字电平进出
     Ground,
+    SignalGenerator, ///< 信号发生器：两端元件，正弦 / 方波 / 三角波 / 锯齿波
 };
 
 /// 万用表的档位
@@ -73,6 +74,18 @@ enum class SourceFunction {
     Sine,
     Pulse,
 };
+
+/// 信号发生器的波形。与「电压源」的 SourceFunction 分开：
+/// 那边是 SPICE 风格的 DC / SIN / PULSE，这边是函数发生器常见的四种波形。
+enum class Waveform {
+    Sine,
+    Square,
+    Triangle,
+    Sawtooth,
+};
+
+/// 波形的显示名（正弦 / 方波 / 三角波 / 锯齿波）
+QString waveformName(Waveform waveform);
 
 /// 元件在“局部坐标”下的引脚位置（未旋转、未平移）。
 /// 两端元件在 x 轴 ±30 处；运放为三引脚（同相、反相、输出）；接地只有一个原点引脚。
@@ -180,6 +193,11 @@ struct Component {
     double pulseWidth = 5e-4;
     double pulsePeriod = 1e-3;
 
+    // 信号发生器：waveform 选波形，amplitude 存**峰值**（不像 SIN 那样存有效值），
+    // offset 是直流偏置，duty 是方波的占空比（0..1）。
+    Waveform waveform = Waveform::Sine;
+    double duty = 0.5;
+
     bool closed = true; // 开关 / 按钮（按钮：按住时与静止状态相反）
     /// 按钮开关的静止状态：false = 常开（按下才接通），true = 常闭（按下才断开）
     bool normallyClosed = false;
@@ -192,6 +210,8 @@ struct Component {
 
     /// 独立源在 t 时刻的输出值；非独立源返回 0。
     double sourceValueAt(double t) const;
+    /// 信号发生器的瞬时输出（峰值 = amplitude，含直流偏置）
+    double signalValueAt(double t) const;
     /// 正弦源的峰值（有效值 × √2）
     double peakAmplitude() const;
 

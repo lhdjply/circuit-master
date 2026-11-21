@@ -87,6 +87,7 @@ private slots:
     void themeFollowsSystemSchemeChanges();
     void logicGateIconsDiffer();
     void libraryDragPixmapHasNoSelectionBackground();
+    void signalGeneratorRowsFollowWaveform();
 
 private:
 
@@ -793,7 +794,7 @@ void UiPanelTest::libraryFiltersByCategory()
     QCOMPARE(counts.value(QStringLiteral("半导体")), 7);      // 二极管、LED、三极管、MOS、IGBT
     QCOMPARE(counts.value(QStringLiteral("模拟 IC")), 4);     // 运放 / TL431 / 光耦 / OB2362
     QCOMPARE(counts.value(QStringLiteral("数字逻辑")), 5);     // 与 / 或 / 非 / 异或 / 同或
-    QCOMPARE(counts.value(QStringLiteral("电源")), 2);        // 电压源 / 电流源
+    QCOMPARE(counts.value(QStringLiteral("电源")), 3);   // 电压源 / 电流源 / 信号发生器        // 电压源 / 电流源
     QCOMPARE(counts.value(QStringLiteral("开关与接地")), 4);  // 开关 / 按钮开关 / 接地 / 网络标签
     QCOMPARE(counts.value(QStringLiteral("测量")), 4);        // TP / IP / 万用表 / 测量探针
 
@@ -877,6 +878,45 @@ int main(int argc, char* argv[])
     }
     QFile::remove(logPath);
     return failures;
+}
+
+
+void UiPanelTest::signalGeneratorRowsFollowWaveform()
+{
+    // 占空比只对方波有意义。从正弦切到方波时要立刻出现，
+    // 不能等重新选中元件才发现 —— 之前就是切完还得点一下元件才看得到。
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    SchematicScene* scene = window.findChild<SchematicScene*>();
+    QVERIFY(scene);
+    auto* item = scene->placeComponent(ComponentType::SignalGenerator, QPointF(300, 300));
+    QVERIFY(item);
+    item->setSelected(true);
+    settle();
+
+    auto* waveform = window.findChild<QComboBox*>(QStringLiteral("waveformCombo"));
+    auto* duty = window.findChild<QLineEdit*>(QStringLiteral("dutyEdit"));
+    QVERIFY(waveform);
+    QVERIFY(duty);
+
+    // 默认正弦：占空比那行不显示
+    QCOMPARE(item->component().waveform, Waveform::Sine);
+    QVERIFY2(!duty->isVisible(), "正弦时不该显示占空比");
+
+    // 切到方波：占空比立刻出现
+    waveform->setCurrentIndex(waveform->findData(int(Waveform::Square)));
+    settle();
+    QCOMPARE(item->component().waveform, Waveform::Square);
+    QVERIFY2(duty->isVisible(), "切到方波后应当立刻显示占空比");
+
+    // 再切回三角波：又收起来
+    waveform->setCurrentIndex(waveform->findData(int(Waveform::Triangle)));
+    settle();
+    QCOMPARE(item->component().waveform, Waveform::Triangle);
+    QVERIFY2(!duty->isVisible(), "三角波时不该显示占空比");
 }
 
 #include "test_ui_panel.moc"

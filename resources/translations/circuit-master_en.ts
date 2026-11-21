@@ -94,6 +94,10 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</translat
         <translation>&amp;View</translation>
     </message>
     <message>
+        <source>**Peak** amplitude, measured from the DC offset</source>
+        <translation>**Peak** amplitude, measured from the DC offset</translation>
+    </message>
+    <message>
         <source>**RMS** value of the sine source; peak = RMS x 1.414</source>
         <translation>**RMS** value of the sine source; peak = RMS x 1.414</translation>
     </message>
@@ -192,6 +196,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Amp/div</source>
         <translation>Amp/div</translation>
+    </message>
+    <message>
+        <source>Amplitude (peak)</source>
+        <translation>Amplitude (peak)</translation>
     </message>
     <message>
         <source>Analog ICs</source>
@@ -526,6 +534,14 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Draw wire (W)</source>
         <translation>Draw wire (W)</translation>
+    </message>
+    <message>
+        <source>Duty %</source>
+        <translation>Duty %</translation>
+    </message>
+    <message>
+        <source>Duty cycle of the square wave, 0-100 %</source>
+        <translation>Duty cycle of the square wave, 0-100 %</translation>
     </message>
     <message>
         <source>EARTH (protective)</source>
@@ -1204,6 +1220,10 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
         <translation>Saved: %1</translation>
     </message>
     <message>
+        <source>Sawtooth</source>
+        <translation>Sawtooth</translation>
+    </message>
+    <message>
         <source>Secondary dot at bottom (inverted)</source>
         <translation>Secondary dot at bottom (inverted)</translation>
     </message>
@@ -1246,6 +1266,10 @@ to edit its parameters</translation>
         <translation>Show Grid</translation>
     </message>
     <message>
+        <source>Signal generator</source>
+        <translation>Signal generator</translation>
+    </message>
+    <message>
         <source>Signals</source>
         <translation>Signals</translation>
     </message>
@@ -1260,6 +1284,10 @@ to edit its parameters</translation>
     <message>
         <source>Simulation running: click Waveform Monitor to see the traces, Stop Simulation to end.</source>
         <translation>Simulation running: click Waveform Monitor to see the traces, Stop Simulation to end.</translation>
+    </message>
+    <message>
+        <source>Sine</source>
+        <translation>Sine</translation>
     </message>
     <message>
         <source>Sine (SIN)</source>
@@ -1288,6 +1316,10 @@ to edit its parameters</translation>
     <message>
         <source>Sources</source>
         <translation>Sources</translation>
+    </message>
+    <message>
+        <source>Square</source>
+        <translation>Square</translation>
     </message>
     <message>
         <source>Start</source>
@@ -1472,6 +1504,10 @@ to edit its parameters</translation>
     <message>
         <source>Transient failed at t = %1: %2</source>
         <translation>Transient failed at t = %1: %2</translation>
+    </message>
+    <message>
+        <source>Triangle</source>
+        <translation>Triangle</translation>
     </message>
     <message>
         <source>Try %1/%2  %3</source>

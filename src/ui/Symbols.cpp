@@ -59,16 +59,52 @@ void drawPinDots(QPainter* p, const Component& comp, bool selected)
 
 void paintVoltageSourceOverlay(QPainter* p, const Component& comp, const QColor& color)
 {
-    if (comp.type != ComponentType::VoltageSource)
+    const bool generator = (comp.type == ComponentType::SignalGenerator);
+    if (comp.type != ComponentType::VoltageSource && !generator)
         return;
-    const bool centred = (comp.function != SourceFunction::Constant);
+    const bool centred = generator || (comp.function != SourceFunction::Constant);
 
     // 波形图案：画在圆心，保持正立
     if (centred) {
         p->save();
         p->setPen(symbolPen(color, 1.8));
         p->setBrush(Qt::NoBrush);
-        if (comp.function == SourceFunction::Sine) {
+        if (generator) {
+            // 四种波形各画一个小图案，一眼能认出是哪种
+            QPainterPath wave;
+            switch (comp.waveform) {
+            case Waveform::Sine:
+                wave.moveTo(-7.0, 0.0);
+                wave.cubicTo(-5.0, -7.0, -2.0, -7.0, 0.0, 0.0);
+                wave.cubicTo(2.0, 7.0, 5.0, 7.0, 7.0, 0.0);
+                break;
+            case Waveform::Square:
+                wave.moveTo(-7.0, 3.0);
+                wave.lineTo(-4.0, 3.0);
+                wave.lineTo(-4.0, -3.0);
+                wave.lineTo(1.0, -3.0);
+                wave.lineTo(1.0, 3.0);
+                wave.lineTo(7.0, 3.0);
+                break;
+            case Waveform::Triangle:
+                wave.moveTo(-7.0, 3.0);
+                wave.lineTo(-3.5, -4.0);
+                wave.lineTo(0.0, 3.0);
+                wave.lineTo(3.5, -4.0);
+                wave.lineTo(7.0, 3.0);
+                break;
+            case Waveform::Sawtooth:
+                // 两段斜坡 + 竖直回落，读起来才像锯齿
+                wave.moveTo(-7.0, 3.0);
+                wave.lineTo(-2.0, -4.0);
+                wave.lineTo(-2.0, 3.0);
+                wave.lineTo(3.0, -4.0);
+                wave.lineTo(3.0, 3.0);
+                wave.lineTo(7.0, -1.0);
+                break;
+            }
+            p->drawPath(wave);
+        } else if (comp.function == SourceFunction::Sine) {
             QPainterPath wave;
             wave.moveTo(-7.0, 0.0);
             wave.cubicTo(-5.0, -7.0, -2.0, -7.0, 0.0, 0.0);
@@ -740,6 +776,20 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
             p->setBrush(Qt::NoBrush);
         }
         // 极性标记与万用表共用同一套位置
+        drawPinPolarity(p, rotation, mirrorX, mirrorY);
+        break;
+    }
+
+    case ComponentType::SignalGenerator: {
+        // 仪器外观：圆角矩形机身 + 圈内波形。用方形而不是圆圈，
+        // 是为了和正弦电压源（同样的圆圈 + 正弦）一眼分开。
+        // 机身宽度收到 ±13.5：极性标记画在 ±21（文字宽 14，从 14 起），
+        // 机身再宽就会把 + / − 压住
+        p->drawLine(QPointF(-30.0, 0.0), QPointF(-13.5, 0.0));
+        p->drawLine(QPointF(13.5, 0.0), QPointF(30.0, 0.0));
+        p->setBrush(Theme::symbolFill());
+        p->drawRoundedRect(QRectF(-13.5, -12.0, 27.0, 24.0), 5.0, 5.0);
+        p->setBrush(Qt::NoBrush);
         drawPinPolarity(p, rotation, mirrorX, mirrorY);
         break;
     }

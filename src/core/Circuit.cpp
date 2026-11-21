@@ -39,6 +39,7 @@ QString typeToTag(ComponentType type)
     case ComponentType::PushButton:    return QStringLiteral("PB");
     case ComponentType::VoltageSource: return QStringLiteral("V");
     case ComponentType::CurrentSource: return QStringLiteral("I");
+    case ComponentType::SignalGenerator: return QStringLiteral("SG");
     case ComponentType::Probe:         return QStringLiteral("TP");
     case ComponentType::MeasureProbe:  return QStringLiteral("MPR");
     case ComponentType::Multimeter:    return QStringLiteral("XMM");
@@ -70,6 +71,7 @@ ComponentType tagToType(const QString& tag)
     if (tag == QLatin1String("PB")) return ComponentType::PushButton;
     if (tag == QLatin1String("V")) return ComponentType::VoltageSource;
     if (tag == QLatin1String("I")) return ComponentType::CurrentSource;
+    if (tag == QLatin1String("SG")) return ComponentType::SignalGenerator;
     if (tag == QLatin1String("TP")) return ComponentType::Probe;
     if (tag == QLatin1String("MPR")) return ComponentType::MeasureProbe;
     if (tag == QLatin1String("XMM")) return ComponentType::Multimeter;
@@ -88,6 +90,25 @@ QString functionToTag(SourceFunction f)
     case SourceFunction::Pulse:    return QStringLiteral("PULSE");
     }
     return QStringLiteral("DC");
+}
+
+QString waveformToTag(Waveform waveform)
+{
+    switch (waveform) {
+    case Waveform::Sine:     return QStringLiteral("sine");
+    case Waveform::Square:   return QStringLiteral("square");
+    case Waveform::Triangle: return QStringLiteral("triangle");
+    case Waveform::Sawtooth: return QStringLiteral("sawtooth");
+    }
+    return QStringLiteral("sine");
+}
+
+Waveform tagToWaveform(const QString& tag)
+{
+    if (tag == QLatin1String("square"))   return Waveform::Square;
+    if (tag == QLatin1String("triangle")) return Waveform::Triangle;
+    if (tag == QLatin1String("sawtooth")) return Waveform::Sawtooth;
+    return Waveform::Sine;
 }
 
 SourceFunction tagToFunction(const QString& s)
@@ -177,6 +198,8 @@ QJsonObject Circuit::toJson() const
         o.insert(QStringLiteral("pulseFall"), c.pulseFall);
         o.insert(QStringLiteral("pulseWidth"), c.pulseWidth);
         o.insert(QStringLiteral("pulsePeriod"), c.pulsePeriod);
+        o.insert(QStringLiteral("waveform"), waveformToTag(c.waveform));
+        o.insert(QStringLiteral("duty"), c.duty);
         o.insert(QStringLiteral("closed"), c.closed);
         o.insert(QStringLiteral("polarized"), c.polarized);
         o.insert(QStringLiteral("beta"), c.beta);
@@ -272,6 +295,8 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
         c.pulseFall = o.value(QStringLiteral("pulseFall")).toDouble(1e-6);
         c.pulseWidth = o.value(QStringLiteral("pulseWidth")).toDouble(5e-4);
         c.pulsePeriod = o.value(QStringLiteral("pulsePeriod")).toDouble(1e-3);
+        c.waveform = tagToWaveform(o.value(QStringLiteral("waveform")).toString());
+        c.duty = o.value(QStringLiteral("duty")).toDouble(0.5);
         c.closed = o.value(QStringLiteral("closed")).toBool(true);
         c.polarized = o.value(QStringLiteral("polarized")).toBool(false);
         c.beta = o.value(QStringLiteral("beta")).toDouble(100.0);

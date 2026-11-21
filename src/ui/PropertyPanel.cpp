@@ -51,10 +51,13 @@ UnitKind sourceUnitFor(ComponentType type)
     return type == ComponentType::CurrentSource ? UnitKind::Ampere : UnitKind::Volt;
 }
 
-bool parseField(QLineEdit* edit, UnitKind unit, double* value, QString* reason)
+bool parseField(QLineEdit* edit, UnitKind unit, double* value, QString* reason,
+                 const QString& textOverride = QString())
 {
     bool ok = false;
-    const double parsed = parseQuantity(edit->text(), unit, &ok, reason);
+    // textOverride 用于「先把 ° / deg 去掉再解析」这类预处理过的文本
+    const QString text = textOverride.isNull() ? edit->text() : textOverride;
+    const double parsed = parseQuantity(text, unit, &ok, reason);
     if (!ok)
         return false;
     *value = parsed;
@@ -192,6 +195,24 @@ void PropertyPanel::buildUi()
     m_function->addItem(CSM_TR("Pulse (PULSE)"), int(SourceFunction::Pulse));
     m_form->addRow(CSM_TR("Waveform"), m_function);
 
+    // 信号发生器：波形、峰值、频率、偏置、占空比
+    m_waveform = new QComboBox(page);
+    m_waveform->setObjectName(QStringLiteral("waveformCombo"));   // 测试按名字找
+    m_waveform->addItem(CSM_TR("Sine"), int(Waveform::Sine));
+    m_waveform->addItem(CSM_TR("Square"), int(Waveform::Square));
+    m_waveform->addItem(CSM_TR("Triangle"), int(Waveform::Triangle));
+    m_waveform->addItem(CSM_TR("Sawtooth"), int(Waveform::Sawtooth));
+    m_form->addRow(CSM_TR("Waveform"), m_waveform);
+
+    m_peak = makeEdit();
+    m_peak->setToolTip(CSM_TR("**Peak** amplitude, measured from the DC offset"));
+    m_form->addRow(CSM_TR("Amplitude (peak)"), m_peak);
+
+    m_duty = makeEdit();
+    m_duty->setObjectName(QStringLiteral("dutyEdit"));   // 测试按名字找
+    m_duty->setToolTip(CSM_TR("Duty cycle of the square wave, 0-100 %"));
+    m_form->addRow(CSM_TR("Duty %"), m_duty);
+
     m_dc = makeEdit(QStringLiteral("5"));
     m_form->addRow(CSM_TR("DC value"), m_dc);
 
@@ -313,6 +334,10 @@ void PropertyPanel::buildUi()
     connect(m_dc, &QLineEdit::editingFinished, this, &PropertyPanel::applyDc);
     for (QLineEdit* edit : {m_amplitude, m_frequency, m_phase, m_offset, m_delay})
         connect(edit, &QLineEdit::editingFinished, this, &PropertyPanel::applySine);
+    for (QLineEdit* edit : {m_peak, m_duty})
+        connect(edit, &QLineEdit::editingFinished, this, &PropertyPanel::applyGenerator);
+    connect(m_waveform, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int) { applyGenerator(); });
     for (QLineEdit* edit : {m_pulseV1, m_pulseV2, m_rise, m_fall, m_width, m_period})
         connect(edit, &QLineEdit::editingFinished, this, &PropertyPanel::applyPulse);
 }
@@ -385,6 +410,10 @@ void PropertyPanel::refreshFromItem()
     m_function->setCurrentIndex(m_function->findData(int(c.function)));
 
     const UnitKind unit = sourceUnitFor(c.type);
+    // 信号发生器：峰值、频率、偏置、占空比
+    m_peak->setText(quantityText(c.amplitude, UnitKind::Volt));
+    m_duty->setText(QString::number(c.duty * 100.0, 'g', 3));
+    m_waveform->setCurrentIndex(std::max(0, m_waveform->findData(int(c.waveform))));
     m_dc->setText(quantityText(c.dcValue, unit));
     m_amplitude->setText(quantityText(c.amplitude, unit));
     m_frequency->setText(quantityText(c.frequency, UnitKind::Hertz));
@@ -413,7 +442,8 @@ void PropertyPanel::updateVisibility()
         return;
 
     const Component c = m_item->component();
-    const bool source = isSource(c.type);
+    const bool generator = (c.type == ComponentType::SignalGenerator);
+    const bool source = isSource(c.type) && !generator;
     const bool analog = c.type == ComponentType::Resistor || c.type == ComponentType::Capacitor
         || c.type == ComponentType::Inductor || c.type == ComponentType::OpAmp
         || c.type == ComponentType::Led || c.type == ComponentType::Optocoupler
@@ -524,6 +554,13 @@ void PropertyPanel::updateVisibility()
     const bool pulse = source && c.function == SourceFunction::Pulse;
     for (QLineEdit* edit : {m_pulseV1, m_pulseV2, m_rise, m_fall, m_width, m_period})
         m_form->setRowVisible(edit, pulse);
+
+    // 信号发生器：波形 / 峰值 / 频率 / 偏置；占空比只对方波有意义
+    m_form->setRowVisible(m_waveform, generator);
+    m_form->setRowVisible(m_peak, generator);
+    m_form->setRowVisible(m_duty, generator && c.waveform == Waveform::Square);
+    for (QLineEdit* edit : {m_frequency, m_offset, m_phase})
+        m_form->setRowVisible(edit, sine || generator);
 }
 
 void PropertyPanel::updateSubtitle()
@@ -832,6 +869,49 @@ void PropertyPanel::applySine()
     c.offset = values[3];
     c.delayTime = values[4];
     m_item->setComponent(c);
+    updateSubtitle();
+    emit changed();
+}
+
+void PropertyPanel::applyGenerator()
+{
+    if (!m_item || m_updating)
+        return;
+    if (m_item->component().type != ComponentType::SignalGenerator)
+        return;
+
+    double peak = 0.0;
+    double duty = 0.0;
+    double phase = 0.0;
+    QString reason;
+    if (!parseField(m_peak, UnitKind::Volt, &peak, &reason)) {
+        markInvalid(m_peak, reason);
+        return;
+    }
+    markValid(m_peak);
+    if (!parseField(m_duty, UnitKind::None, &duty, &reason)) {
+        markInvalid(m_duty, reason);
+        return;
+    }
+    markValid(m_duty);
+    QString phaseText = m_phase->text();
+    phaseText.remove(QStringLiteral("°"));
+    phaseText.remove(QStringLiteral("deg"), Qt::CaseInsensitive);
+    if (!parseField(m_phase, UnitKind::None, &phase, &reason, phaseText)) {
+        markInvalid(m_phase, reason);
+        return;
+    }
+    markValid(m_phase);
+
+    Component c = m_item->component();
+    c.waveform = Waveform(m_waveform->currentData().toInt());
+    c.amplitude = std::max(0.0, peak);
+    c.duty = std::clamp(duty / 100.0, 0.0, 1.0);
+    c.phaseDeg = phase;
+    m_item->setComponent(c);
+    // 占空比只在方波时显示：换了波形要立刻反映出来，
+    // 否则得重新选中元件（重走 refreshFromItem）才出现
+    updateVisibility();
     updateSubtitle();
     emit changed();
 }

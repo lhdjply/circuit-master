@@ -412,6 +412,7 @@ Problem buildProblem(const Circuit& circuit, const Netlist& net)
             continue;
         }
         const bool needsBranch = comp.type == ComponentType::VoltageSource
+            || comp.type == ComponentType::SignalGenerator
             || comp.type == ComponentType::Inductor || comp.type == ComponentType::OpAmp
             || comp.type == ComponentType::CurrentProbe
             || (comp.type == ComponentType::Multimeter
@@ -564,6 +565,11 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
 
         case ComponentType::VoltageSource:
             addBranch(a, b, p, comp.id, 0.0, comp.sourceValueAt(t));
+            break;
+
+        case ComponentType::SignalGenerator:
+            // 和电压源一样是理想电压支路，只是波形由 waveform 决定
+            addBranch(a, b, p, comp.id, 0.0, comp.signalValueAt(t));
             break;
 
         case ComponentType::CurrentProbe:
@@ -1053,6 +1059,7 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
         case ComponentType::Inductor:
         case ComponentType::Transformer:
         case ComponentType::Ob2362:
+        case ComponentType::SignalGenerator:
         case ComponentType::VoltageSource:
         case ComponentType::OpAmp:
         case ComponentType::CurrentProbe: {
@@ -1403,6 +1410,7 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
             addBranch(a, b, p, comp.id, Cx(0.0, 0.0), Cx(0.0, 0.0));
             break;
         case ComponentType::VoltageSource:
+        case ComponentType::SignalGenerator:
             addBranch(a, b, p, comp.id, Cx(0.0, 0.0), Cx(1.0, 0.0));
             break;
         case ComponentType::CurrentProbe:

@@ -1150,6 +1150,7 @@ void MainWindow::buildLibrary()
 
         {ComponentType::VoltageSource, CSM_TR("Voltage source"), CSM_TR("Sources")},
         {ComponentType::CurrentSource, CSM_TR("Current source"), CSM_TR("Sources")},
+        {ComponentType::SignalGenerator, CSM_TR("Signal generator"), CSM_TR("Sources")},
 
         {ComponentType::Switch, CSM_TR("Switch"), CSM_TR("Switches and Grounds")},
         {ComponentType::PushButton, CSM_TR("Push button"), CSM_TR("Switches and Grounds")},

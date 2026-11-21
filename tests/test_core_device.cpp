@@ -98,6 +98,8 @@ private slots:
     void multimeterMeasuresVoltageCurrentResistance();
     void multimeterMeasuresAcRms();
     void groundKindsAreSeparateNets();
+    void signalGeneratorPlaysEveryWaveform();
+    void signalGeneratorDrivesCircuitAndRoundTrips();
 };
 
 void CoreDeviceTest::bipolarTransistorAmplifies()
@@ -1920,6 +1922,128 @@ int main(int argc, char** argv)
     csm::saveLanguage(csm::Language::Chinese);   // 断言里的提示文案是中文
     CoreDeviceTest tc;
     return QTest::qExec(&tc, argc, argv);
+}
+
+
+void CoreDeviceTest::signalGeneratorPlaysEveryWaveform()
+{
+    Component sg;
+    sg.type = ComponentType::SignalGenerator;
+    sg.refdes = QStringLiteral("FG1");
+    sg.amplitude = 2.0;    // 峰值
+    sg.frequency = 1000.0;
+    sg.offset = 0.0;
+    const double period = 1.0 / sg.frequency;
+    const auto at = [&](double fraction) { return sg.signalValueAt(period * fraction); };
+
+    // 正弦：1/4 周期到正峰、3/4 周期到负峰
+    sg.waveform = Waveform::Sine;
+    QVERIFY(std::abs(at(0.25) - 2.0) < 1e-9);
+    QVERIFY(std::abs(at(0.75) + 2.0) < 1e-9);
+
+    // 方波：占空比 25 %，前四分之一高、其余低
+    sg.waveform = Waveform::Square;
+    sg.duty = 0.25;
+    QCOMPARE(at(0.10), 2.0);
+    QCOMPARE(at(0.50), -2.0);
+    QCOMPARE(at(0.90), -2.0);
+
+    // 三角波：0 → +峰 → 0 → −峰
+    sg.waveform = Waveform::Triangle;
+    QVERIFY(std::abs(at(0.0)) < 1e-9);
+    QVERIFY(std::abs(at(0.25) - 2.0) < 1e-9);
+    QVERIFY(std::abs(at(0.50)) < 1e-9);
+    QVERIFY(std::abs(at(0.75) + 2.0) < 1e-9);
+
+    // 锯齿波：从 −峰 线性升到 +峰
+    sg.waveform = Waveform::Sawtooth;
+    QVERIFY(std::abs(at(0.0001) + 2.0) < 1e-3);
+    QVERIFY(std::abs(at(0.9999) - 2.0) < 1e-3);
+
+    // 相位：正弦超前 90° 时 t=0 就是正峰；方波移相 180° 时高低对调
+    sg.waveform = Waveform::Sine;
+    sg.phaseDeg = 90.0;
+    QVERIFY(std::abs(at(0.0) - 2.0) < 1e-9);
+
+    sg.waveform = Waveform::Square;
+    sg.duty = 0.25;
+    sg.phaseDeg = 180.0;
+    QCOMPARE(at(0.10), -2.0);
+    QCOMPARE(at(0.60), 2.0);
+    sg.phaseDeg = 0.0;
+
+    // 直流偏置整体抬升
+    sg.offset = 1.5;
+    sg.waveform = Waveform::Square;
+    QCOMPARE(at(0.10), 3.5);
+    QCOMPARE(at(0.50), -0.5);
+}
+
+void CoreDeviceTest::signalGeneratorDrivesCircuitAndRoundTrips()
+{
+    // FG1 串一个 1 kΩ 到地：节点电压应当跟着波形走，且幅度等于设定峰值
+    Circuit circuit;
+    Component sg;
+    sg.type = ComponentType::SignalGenerator;
+    sg.id = 1;
+    sg.refdes = QStringLiteral("FG1");
+    sg.waveform = Waveform::Sine;
+    sg.amplitude = 2.0;
+    sg.frequency = 1000.0;
+    sg.pos = QPointF(100.0, 200.0);
+    Component r;
+    r.type = ComponentType::Resistor;
+    r.id = 2;
+    r.refdes = QStringLiteral("R1");
+    r.value = 1000.0;
+    r.pos = QPointF(300.0, 200.0);
+    Component gnd;
+    gnd.type = ComponentType::Ground;
+    gnd.id = 3;
+    gnd.refdes = QStringLiteral("GND");
+    gnd.pos = QPointF(100.0, 300.0);
+    circuit.components = {sg, r, gnd};
+    Wire w1;
+    w1.points = {sg.pinPosition(1), r.pinPosition(0)};
+    Wire w2;
+    w2.points = {r.pinPosition(1), gnd.pinPosition(0)};
+    Wire w3;
+    w3.points = {sg.pinPosition(0), gnd.pinPosition(0)};
+    circuit.wires = {w1, w2, w3};
+
+    const Netlist net = circuit.buildNetlist();
+    const int node = net.nodeOf(sg.id, 1);
+    QVERIFY(node > 0);
+
+    SimulationOptions options;
+    options.kind = AnalysisKind::Transient;
+    options.tStop = 1e-3;
+    options.tStep = 1e-6;
+    const SimulationResult result = Simulator::run(circuit, options);
+    QVERIFY2(result.ok, qPrintable(result.error));
+    const Signal* wave = result.signal(QStringLiteral("V(%1)").arg(node));
+    QVERIFY(wave);
+    double lo = wave->y.first();
+    double hi = wave->y.first();
+    for (double v : wave->y) {
+        lo = std::min(lo, v);
+        hi = std::max(hi, v);
+    }
+    // 引脚 0 接地，所以测到的是源的反相输出；幅度必须等于设定的峰值
+    QVERIFY2(std::abs(hi - lo - 4.0) < 0.05, qPrintable(QStringLiteral("峰峰值 %1").arg(hi - lo)));
+
+    // JSON 往返：波形与占空比要存得住
+    Circuit back = Circuit::fromJson(circuit.toJson());
+    const Component* reloaded = nullptr;
+    for (const Component& c : back.components) {
+        if (c.refdes == QLatin1String("FG1"))
+            reloaded = &c;
+    }
+    QVERIFY(reloaded);
+    QCOMPARE(reloaded->type, ComponentType::SignalGenerator);
+    QCOMPARE(reloaded->waveform, Waveform::Sine);
+    QVERIFY(std::abs(reloaded->amplitude - 2.0) < 1e-12);
+    QVERIFY(std::abs(reloaded->duty - 0.5) < 1e-12);
 }
 
 #include "test_core_device.moc"

@@ -38,6 +38,7 @@ private:
     void applyClosed();
     void applyDc();
     void applySine();
+    void applyGenerator();
     void applyPulse();
     void markInvalid(QLineEdit* edit, const QString& reason = QString());
     void markValid(QLineEdit* edit);
@@ -70,6 +71,9 @@ private:
     QLineEdit* m_netLabel = nullptr;    // 网络标签的名字
     QLabel* m_valueLabel = nullptr;
     QComboBox* m_function = nullptr;
+    QComboBox* m_waveform = nullptr;    // 信号发生器的波形
+    QLineEdit* m_peak = nullptr;        // 信号发生器的峰值幅值
+    QLineEdit* m_duty = nullptr;        // 方波的占空比
     QLineEdit* m_dc = nullptr;
     QLineEdit* m_amplitude = nullptr;
     QLineEdit* m_frequency = nullptr;

@@ -31,6 +31,12 @@ repository root (same form as the tag, e.g. `v0.4.0`).
     estimated by autocorrelation and omitted for non-periodic waveforms
   - for an exact branch current use the **current probe (IP)**, a real 0 V branch
     the solver measures directly
+- **Signal generator**: a new two-terminal part under Sources that takes part in
+  the simulation directly. Four waveforms — sine / square (adjustable duty cycle) /
+  triangle / sawtooth — plus peak amplitude, frequency, phase and DC offset. It is drawn
+  as a rounded "instrument body", so it is easy to tell apart from the voltage
+  source, which is also a circle with a sine; pick the waveform and set peak and
+  duty in the property panel.
 
 ### Changed
 

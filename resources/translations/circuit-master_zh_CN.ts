@@ -97,6 +97,10 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</source>
         <translation>视图(&amp;V)</translation>
     </message>
     <message>
+        <source>**Peak** amplitude, measured from the DC offset</source>
+        <translation>**峰值**幅值，从直流偏置算起</translation>
+    </message>
+    <message>
         <source>**RMS** value of the sine source; peak = RMS x 1.414</source>
         <translation>正弦源的**有效值**（RMS）；峰值 = 有效值 × 1.414</translation>
     </message>
@@ -195,6 +199,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Amp/div</source>
         <translation>电流/格</translation>
+    </message>
+    <message>
+        <source>Amplitude (peak)</source>
+        <translation>幅值（峰值）</translation>
     </message>
     <message>
         <source>Analog ICs</source>
@@ -529,6 +537,14 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Draw wire (W)</source>
         <translation>绘制导线 (W)</translation>
+    </message>
+    <message>
+        <source>Duty %</source>
+        <translation>占空比 %</translation>
+    </message>
+    <message>
+        <source>Duty cycle of the square wave, 0-100 %</source>
+        <translation>方波的占空比，0-100 %</translation>
     </message>
     <message>
         <source>EARTH (protective)</source>
@@ -1207,6 +1223,10 @@ Place a voltage (TP) or current (IP) test point and run again</source>
         <translation>已保存：%1</translation>
     </message>
     <message>
+        <source>Sawtooth</source>
+        <translation>锯齿波</translation>
+    </message>
+    <message>
         <source>Secondary dot at bottom (inverted)</source>
         <translation>次级同名端在下（反相）</translation>
     </message>
@@ -1249,6 +1269,10 @@ to edit its parameters</source>
         <translation>显示网格</translation>
     </message>
     <message>
+        <source>Signal generator</source>
+        <translation>信号发生器</translation>
+    </message>
+    <message>
         <source>Signals</source>
         <translation>信号</translation>
     </message>
@@ -1263,6 +1287,10 @@ to edit its parameters</source>
     <message>
         <source>Simulation running: click Waveform Monitor to see the traces, Stop Simulation to end.</source>
         <translation>仿真运行中：点「波形监控」查看波形，点「停止仿真」结束。</translation>
+    </message>
+    <message>
+        <source>Sine</source>
+        <translation>正弦</translation>
     </message>
     <message>
         <source>Sine (SIN)</source>
@@ -1291,6 +1319,10 @@ to edit its parameters</source>
     <message>
         <source>Sources</source>
         <translation>电源</translation>
+    </message>
+    <message>
+        <source>Square</source>
+        <translation>方波</translation>
     </message>
     <message>
         <source>Start</source>
@@ -1475,6 +1507,10 @@ to edit its parameters</source>
     <message>
         <source>Transient failed at t = %1: %2</source>
         <translation>瞬态求解在 t = %1 时失败：%2</translation>
+    </message>
+    <message>
+        <source>Triangle</source>
+        <translation>三角波</translation>
     </message>
     <message>
         <source>Try %1/%2  %3</source>

@@ -156,6 +156,7 @@ QString typeName(ComponentType type)
     case ComponentType::PushButton:    return CSM_TR("Push button");
     case ComponentType::VoltageSource: return CSM_TR("Voltage source");
     case ComponentType::CurrentSource: return CSM_TR("Current source");
+    case ComponentType::SignalGenerator: return CSM_TR("Signal generator");
     case ComponentType::Probe:         return CSM_TR("Voltage probe");
     case ComponentType::CurrentProbe:  return CSM_TR("Current probe");
     case ComponentType::MeasureProbe:  return CSM_TR("Measurement probe");
@@ -190,6 +191,7 @@ QString typeSymbol(ComponentType type)
     case ComponentType::PushButton:    return QStringLiteral("SB");
     case ComponentType::VoltageSource: return QStringLiteral("V");
     case ComponentType::CurrentSource: return QStringLiteral("I");
+    case ComponentType::SignalGenerator: return QStringLiteral("FG");
     case ComponentType::Probe:         return QStringLiteral("TP");
     case ComponentType::CurrentProbe:  return QStringLiteral("IP");
     case ComponentType::MeasureProbe:  return QStringLiteral("MP");
@@ -207,6 +209,8 @@ QString refPrefix(ComponentType type)
         return QStringLiteral("GND");
     if (type == ComponentType::Probe)
         return QStringLiteral("TP");
+    if (type == ComponentType::SignalGenerator)
+        return QStringLiteral("FG");
     if (type == ComponentType::MeasureProbe)
         return QStringLiteral("MP");
     if (type == ComponentType::CurrentProbe)
@@ -244,7 +248,8 @@ bool isPType(ComponentType type)
 
 bool isSource(ComponentType type)
 {
-    return type == ComponentType::VoltageSource || type == ComponentType::CurrentSource;
+    return type == ComponentType::VoltageSource || type == ComponentType::CurrentSource
+           || type == ComponentType::SignalGenerator;
 }
 
 bool supportsRotation(ComponentType type)
@@ -301,6 +306,17 @@ QVector<QPointF> Component::pinPositions() const
     return out;
 }
 
+QString waveformName(Waveform waveform)
+{
+    switch (waveform) {
+    case Waveform::Sine:     return CSM_TR("Sine");
+    case Waveform::Square:   return CSM_TR("Square");
+    case Waveform::Triangle: return CSM_TR("Triangle");
+    case Waveform::Sawtooth: return CSM_TR("Sawtooth");
+    }
+    return {};
+}
+
 double Component::peakAmplitude() const
 {
     return amplitude * std::sqrt(2.0);
@@ -346,6 +362,40 @@ double Component::sourceValueAt(double t) const
     return dcValue;
 }
 
+double Component::signalValueAt(double t) const
+{
+    // 峰值幅值直接取 amplitude（与 SIN 的「存有效值」不同：函数发生器习惯按峰值给）
+    const double peak = amplitude;
+    const double period = frequency > 0.0 ? 1.0 / frequency : 1.0;
+    double local = std::fmod(std::max(t - delayTime, 0.0), period);
+    if (local < 0.0)
+        local += period;
+    // 0..1 的相位，含用户设定的相位偏移（单位：度）
+    double frac = period > 0.0 ? local / period : 0.0;
+    frac += phaseDeg / 360.0;
+    frac -= std::floor(frac);   // 归一到 [0,1)
+
+    switch (waveform) {
+    case Waveform::Sine:
+        return offset + peak * std::sin(2.0 * kPi * frac);
+    case Waveform::Square: {
+        const double high = std::clamp(duty, 0.0, 1.0);
+        return offset + ((frac < high) ? peak : -peak);
+    }
+    case Waveform::Triangle:
+        // 0 → +peak → 0 → −peak → 0
+        if (frac < 0.25)
+            return offset + peak * (4.0 * frac);
+        if (frac < 0.75)
+            return offset + peak * (2.0 - 4.0 * frac);
+        return offset + peak * (4.0 * frac - 4.0);
+    case Waveform::Sawtooth:
+        // −peak 线性升到 +peak，然后跳回
+        return offset + peak * (2.0 * frac - 1.0);
+    }
+    return offset;
+}
+
 QString Component::unitName() const
 {
     switch (type) {
@@ -354,6 +404,7 @@ QString Component::unitName() const
     case ComponentType::Inductor:      return QStringLiteral("H");
     case ComponentType::VoltageSource: return QStringLiteral("V");
     case ComponentType::CurrentSource: return QStringLiteral("A");
+    case ComponentType::SignalGenerator: return QStringLiteral("V");
     case ComponentType::Diode:         return QStringLiteral("A");
     case ComponentType::OpAmp:         return QString();
     case ComponentType::Led:           return QStringLiteral("V");
@@ -442,6 +493,12 @@ QString Component::displayValue() const
             return QStringLiteral("1:%1:%2")
                 .arg(QString::number(auxRatio, 'g', 3), QString::number(value, 'g', 3));
         return QStringLiteral("1:") + QString::number(value, 'g', 3);
+
+    case ComponentType::SignalGenerator:
+        // 例如 "方波 1 kHz / 2 Vpp"：波形 + 频率 + 峰峰值（含占空比时补上）
+        return QStringLiteral("%1 %2 / %3")
+            .arg(waveformName(waveform), formatEng(frequency, QStringLiteral("Hz"), 3),
+                 formatEng(2.0 * amplitude, QStringLiteral("Vpp"), 3));
 
     case ComponentType::Switch:
         return closed ? CSM_TR("Closed") : CSM_TR("Open");
