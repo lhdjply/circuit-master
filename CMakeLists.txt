@@ -247,7 +247,8 @@ if(WIN32)
 endif()
 
 # ---------------------------------------------------------------- 测试
-# 打包时用 -DCSM_BUILD_TESTS=OFF 跳过（见 debian/rules）
+# 默认构建测试；debian/rules 里也开着，打包时会顺带跑一遍 ctest。
+# 需要 Qt6::Test（Qt6Test 的 CMake 配置在 qt6-base-dev 里）。
 option(CSM_BUILD_TESTS "构建单元测试（需要 Qt6::Test）" ON)
 
 if (CSM_BUILD_TESTS AND TARGET Qt6::Test)

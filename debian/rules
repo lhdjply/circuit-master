@@ -21,7 +21,7 @@
 override_dh_auto_configure:
 	dh_auto_configure -- \
 		-DCMAKE_BUILD_TYPE=RelWithDebInfo \
-		-DCSM_BUILD_TESTS=OFF
+		-DCSM_BUILD_TESTS=ON
 
 # 安装内容由 CMake 的 install 规则负责（二进制、图标、desktop、示例），
 # 无需额外的 override_dh_auto_install。
