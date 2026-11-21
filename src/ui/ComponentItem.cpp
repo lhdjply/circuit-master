@@ -316,6 +316,9 @@ void ComponentItem::paint(QPainter* painter, const QStyleOptionGraphicsItem* opt
 
     painter->restore();
 
+    // 波形图案与极性标记画在未旋转的坐标系里：跟着转的话，90° 时减号会变成竖线
+    paintVoltageSourceOverlay(painter, m_comp, selected ? Theme::selected() : Theme::symbol());
+
     // 斜放时引脚会吸附到网格，符号画出的引脚端点可能差几像素，补一小段引线
     if (m_comp.rotation % 90 != 0) {
         painter->save();

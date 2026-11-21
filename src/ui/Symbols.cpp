@@ -19,6 +19,30 @@ QPen symbolPen(const QColor& color, qreal width = 2.0)
     return pen;
 }
 
+/// 引脚极性标记：0 号引脚是「+」、1 号是「−」。
+/// 万用表与电压源共用同一套位置，免得同一个极性在两处画得高低不一。
+/// 调用时画笔已处在「符号被旋转过」的坐标系里，文字再反着转回来，
+/// 保证转到哪个角度都正着读。
+void drawPinPolarity(QPainter* p, int rotation, bool mirrorX, bool mirrorY)
+{
+    QFont font = p->font();
+    font.setPointSizeF(7.0);
+    font.setBold(true);
+    p->save();
+    p->setFont(font);
+    const auto mark = [&](const QPointF& at, const QString& text) {
+        p->save();
+        p->translate(at);
+        p->rotate(-double(rotation));
+        p->scale(mirrorX ? -1.0 : 1.0, mirrorY ? -1.0 : 1.0);
+        p->drawText(QRectF(-7.0, -7.0, 14.0, 14.0), Qt::AlignCenter, text);
+        p->restore();
+    };
+    mark(QPointF(-21.0, -8.0), QStringLiteral("+"));
+    mark(QPointF(21.0, -8.0), QStringLiteral("−"));
+    p->restore();
+}
+
 void drawPinDots(QPainter* p, const Component& comp, bool selected)
 {
     const QVector<QPointF> offsets = pinOffsets(comp);
@@ -31,35 +55,39 @@ void drawPinDots(QPainter* p, const Component& comp, bool selected)
         p->drawEllipse(off, 2.8, 2.8);
 }
 
-void drawVoltageSourceInside(QPainter* p, const Component& comp, const QColor& color)
-{
-    p->setPen(symbolPen(color, 1.8));
-    p->setBrush(Qt::NoBrush);
-
-    if (comp.function == SourceFunction::Sine) {
-        QPainterPath wave;
-        wave.moveTo(-7.0, 0.0);
-        wave.cubicTo(-5.0, -7.0, -2.0, -7.0, 0.0, 0.0);
-        wave.cubicTo(2.0, 7.0, 5.0, 7.0, 7.0, 0.0);
-        p->drawPath(wave);
-    } else if (comp.function == SourceFunction::Pulse) {
-        QPainterPath wave;
-        wave.moveTo(-7.0, 2.0);
-        wave.lineTo(-4.0, 2.0);
-        wave.lineTo(-4.0, -4.0);
-        wave.lineTo(1.0, -4.0);
-        wave.lineTo(1.0, 2.0);
-        wave.lineTo(7.0, 2.0);
-        p->drawPath(wave);
-    } else {
-        // 直流：画 + / −
-        p->drawLine(QPointF(-7.0, -4.0), QPointF(-2.0, -4.0));
-        p->drawLine(QPointF(-4.5, -6.5), QPointF(-4.5, -1.5));
-        p->drawLine(QPointF(2.0, 4.0), QPointF(7.0, 4.0));
-    }
-}
-
 } // namespace
+
+void paintVoltageSourceOverlay(QPainter* p, const Component& comp, const QColor& color)
+{
+    if (comp.type != ComponentType::VoltageSource)
+        return;
+    const bool centred = (comp.function != SourceFunction::Constant);
+
+    // 波形图案：画在圆心，保持正立
+    if (centred) {
+        p->save();
+        p->setPen(symbolPen(color, 1.8));
+        p->setBrush(Qt::NoBrush);
+        if (comp.function == SourceFunction::Sine) {
+            QPainterPath wave;
+            wave.moveTo(-7.0, 0.0);
+            wave.cubicTo(-5.0, -7.0, -2.0, -7.0, 0.0, 0.0);
+            wave.cubicTo(2.0, 7.0, 5.0, 7.0, 7.0, 0.0);
+            p->drawPath(wave);
+        } else {
+            QPainterPath wave;
+            wave.moveTo(-7.0, 2.0);
+            wave.lineTo(-4.0, 2.0);
+            wave.lineTo(-4.0, -4.0);
+            wave.lineTo(1.0, -4.0);
+            wave.lineTo(1.0, 2.0);
+            wave.lineTo(7.0, 2.0);
+            p->drawPath(wave);
+        }
+        p->restore();
+    }
+
+}
 
 QRectF symbolBounds(const Component& comp)
 {
@@ -694,12 +722,25 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
     }
 
     case ComponentType::VoltageSource: {
-        p->drawLine(QPointF(-30.0, 0.0), QPointF(-14.0, 0.0));
-        p->drawLine(QPointF(14.0, 0.0), QPointF(30.0, 0.0));
-        p->setBrush(Theme::symbolFill());
-        p->drawEllipse(QPointF(0.0, 0.0), 14.0, 14.0);
-        p->setBrush(Qt::NoBrush);
-        drawVoltageSourceInside(p, comp, color);
+        if (comp.function == SourceFunction::Constant) {
+            // 直流：画电池（长片为正、短片为负），再配 + / −
+            p->setPen(symbolPen(color, 1.6));
+            p->drawLine(QPointF(-30.0, 0.0), QPointF(-3.5, 0.0));
+            p->drawLine(QPointF(3.5, 0.0), QPointF(30.0, 0.0));
+            p->setPen(symbolPen(color, 1.8));
+            p->drawLine(QPointF(-3.5, -11.0), QPointF(-3.5, 11.0));   // 长片：正极
+            p->setPen(symbolPen(color, 4.0));
+            p->drawLine(QPointF(3.5, -6.0), QPointF(3.5, 6.0));       // 短片：负极
+        } else {
+            // 正弦 / 脉冲：只画引线与圆圈，波形图案由 overlay 画（保持正立）
+            p->drawLine(QPointF(-30.0, 0.0), QPointF(-14.0, 0.0));
+            p->drawLine(QPointF(14.0, 0.0), QPointF(30.0, 0.0));
+            p->setBrush(Theme::symbolFill());
+            p->drawEllipse(QPointF(0.0, 0.0), 14.0, 14.0);
+            p->setBrush(Qt::NoBrush);
+        }
+        // 极性标记与万用表共用同一套位置
+        drawPinPolarity(p, rotation, mirrorX, mirrorY);
         break;
     }
 
@@ -709,10 +750,17 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         p->setBrush(Theme::symbolFill());
         p->drawEllipse(QPointF(0.0, 0.0), 14.0, 14.0);
         p->setBrush(Qt::NoBrush);
-        p->setPen(symbolPen(color, 1.8));
-        p->drawLine(QPointF(0.0, 8.0), QPointF(0.0, -5.0));
-        p->drawLine(QPointF(0.0, -9.0), QPointF(-4.0, -3.0));
-        p->drawLine(QPointF(0.0, -9.0), QPointF(4.0, -3.0));
+
+        // 圈里画一支「顺着导线」的实心箭头：箭头指向就是电流的参考方向
+        // （求解器里电流从引脚 0 经元件流向引脚 1，所以 0° 时朝右）
+        p->setPen(symbolPen(color, 2.2));
+        p->drawLine(QPointF(-7.5, 0.0), QPointF(1.0, 0.0));
+        QPolygonF head;
+        head << QPointF(10.0, 0.0) << QPointF(1.0, -5.2) << QPointF(1.0, 5.2);
+        p->setPen(Qt::NoPen);
+        p->setBrush(color);
+        p->drawPolygon(head);
+        p->setBrush(Qt::NoBrush);
         break;
     }
 
@@ -763,6 +811,8 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         p->scale(mirrorX ? -1.0 : 1.0, mirrorY ? -1.0 : 1.0);
         p->drawText(QRectF(-8.0, -8.0, 16.0, 16.0), Qt::AlignCenter, QStringLiteral("A"));
         p->restore();
+        // 极性：0 号引脚是「+」，电流沿 + → − 为正（与万用表、电压源同一套位置）
+        drawPinPolarity(p, rotation, mirrorX, mirrorY);
         break;
     }
 
@@ -791,21 +841,8 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         p->drawText(QRectF(-11.0, -9.0, 22.0, 18.0), Qt::AlignCenter, letter);
         p->restore();
 
-        // 引脚极性：0 号引脚是「+」（红表笔），1 号是「−」（COM / 黑表笔）。
-        // 位置写在元件自己的坐标系里 —— 跟着引脚一起转，转到哪都贴在对应引线旁；
-        // 文字再反向旋转，保证始终正着读。
-        font.setPointSizeF(7.0);
-        p->setFont(font);
-        const auto mark = [&](const QPointF& at, const QString& text) {
-            p->save();
-            p->translate(at);
-            p->rotate(-double(rotation));
-            p->scale(mirrorX ? -1.0 : 1.0, mirrorY ? -1.0 : 1.0);
-            p->drawText(QRectF(-7.0, -7.0, 14.0, 14.0), Qt::AlignCenter, text);
-            p->restore();
-        };
-        mark(QPointF(-21.0, -8.0), QStringLiteral("+"));
-        mark(QPointF(21.0, -8.0), QStringLiteral("−"));
+        // 引脚极性：0 号引脚是「+」（红表笔），1 号是「−」（COM / 黑表笔）
+        drawPinPolarity(p, rotation, mirrorX, mirrorY);
         break;
     }
 
@@ -1035,6 +1072,7 @@ QIcon componentIcon(const Component& comp, const QSize& size)
     p.scale(scale, scale);
     p.translate(-bounds.center().x(), -bounds.center().y());
     paintSymbol(&p, comp, false, false);
+    paintVoltageSourceOverlay(&p, comp, Theme::symbol());
     if (comp.type == ComponentType::MeasureProbe)
         paintProbeBox(&p, probeReadoutBox());
     p.end();

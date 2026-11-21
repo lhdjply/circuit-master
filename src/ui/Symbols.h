@@ -20,6 +20,12 @@ namespace csm {
 /// 读数文字填在里面，不需要按场合分别判断。
 QRectF probeReadoutBox();
 
+/// 电压源里「不该跟着转」的部分：正弦 / 脉冲的波形图案、以及 + / − 极性标记。
+/// 它们要画在未旋转的坐标系里 —— 跟着转的话，90° 时减号会变成一根竖线、
+/// 波形也立起来（教科书和 Multisim 里这两样始终保持正立）。
+/// 直流源的电池极板是跟着转的，仍在 paintSymbol 里画。
+void paintVoltageSourceOverlay(QPainter* p, const Component& comp, const QColor& color);
+
 /// 按旋转角把读数框摆到对应方向（0° 上、90° 右、180° 下、270° 左），
 /// 框本身始终是正的 —— 所以旋转后框会挪位置，但不会歪。
 QRectF probeReadoutBoxFor(int rotation);

@@ -32,6 +32,20 @@ repository root (same form as the tag, e.g. `v0.4.0`).
   - for an exact branch current use the **current probe (IP)**, a real 0 V branch
     the solver measures directly
 
+### Changed
+
+- **Voltage source symbols**: DC is now drawn as a battery (long plate positive,
+  short plate negative) while sine and pulse sources keep their waveform inside
+  the circle; all three show + / − polarity. The polarity marks share the
+  multimeter's position and size, so the two line up side by side. The waveform
+  and the polarity text never rotate with the part — they stay upright at 90°,
+  only the battery plates turn, matching the usual textbook and Multisim look.
+- **Current probe (IP)**: now shows + / − polarity (pin 0 is +), in the same place
+  and size as the multimeter and voltage sources.
+- **Current source symbol**: the arrow inside the circle now runs along the wire
+  and points in the reference direction of the current (pin 0 → pin 1), turning
+  with the part. The old vertical arrow gave no indication of direction.
+
 ### Fixed
 
 - **Editing shortcuts did nothing on a new tab**: after **New**, Space would not
