@@ -1061,7 +1061,11 @@ void UiPanelTest::keyHintsFollowShortcuts()
     window.show();
     waitShown(window);
 
-    // 状态栏（选择模式）里的旋转提示应当是新的键
+    // 状态栏（选择模式）里的旋转提示应当是新的键。
+    // 比较用的文本要用 NativeText 现算：macOS 上 Ctrl+R 显示成「⌘R」，
+    // 写死 "Ctrl+R" 在那边必然失败
+    const QString rebound = QKeySequence(QStringLiteral("Ctrl+R")).toString(QKeySequence::NativeText);
+    const QString defaultKey = QKeySequence(Qt::Key_Space).toString(QKeySequence::NativeText);
     bool found = false;
     for (QLabel* label : window.findChildren<QLabel*>()) {
         if (!label->text().contains(QStringLiteral("旋转"))
@@ -1069,8 +1073,8 @@ void UiPanelTest::keyHintsFollowShortcuts()
             continue;
         }
         found = true;
-        QVERIFY2(label->text().contains(QStringLiteral("Ctrl+R")), qPrintable(label->text()));
-        QVERIFY2(!label->text().contains(QStringLiteral("空格")), qPrintable(label->text()));
+        QVERIFY2(label->text().contains(rebound), qPrintable(label->text()));
+        QVERIFY2(!label->text().contains(defaultKey), qPrintable(label->text()));
     }
     QVERIFY2(found, "没找到状态栏的选择模式提示");
 
