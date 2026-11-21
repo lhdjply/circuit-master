@@ -158,6 +158,7 @@ QString typeName(ComponentType type)
     case ComponentType::CurrentSource: return CSM_TR("Current source");
     case ComponentType::Probe:         return CSM_TR("Voltage probe");
     case ComponentType::CurrentProbe:  return CSM_TR("Current probe");
+    case ComponentType::MeasureProbe:  return CSM_TR("Measurement probe");
     case ComponentType::Multimeter:    return CSM_TR("Multimeter");
     case ComponentType::NetLabel:      return CSM_TR("Net label");
     case ComponentType::LogicGate:     return CSM_TR("Logic gate");
@@ -191,6 +192,7 @@ QString typeSymbol(ComponentType type)
     case ComponentType::CurrentSource: return QStringLiteral("I");
     case ComponentType::Probe:         return QStringLiteral("TP");
     case ComponentType::CurrentProbe:  return QStringLiteral("IP");
+    case ComponentType::MeasureProbe:  return QStringLiteral("MP");
     case ComponentType::Multimeter:    return QStringLiteral("XMM");
     case ComponentType::NetLabel:      return QStringLiteral("NET");
     case ComponentType::LogicGate:     return QStringLiteral("U");
@@ -369,6 +371,7 @@ QString Component::unitName() const
     case ComponentType::Probe:
     case ComponentType::Ground:        return QString();
     case ComponentType::CurrentProbe:  return QStringLiteral("A");
+    case ComponentType::MeasureProbe:  return QString(); // 读数来自仿真，没有可设的数值
     case ComponentType::Multimeter:    return QString(); // 万用表没有可设的数值
     case ComponentType::NetLabel:      return QString(); // 网络标签只有名字
     case ComponentType::LogicGate:     return QStringLiteral("V");
@@ -449,6 +452,7 @@ QString Component::displayValue() const
 
     case ComponentType::Probe:
     case ComponentType::CurrentProbe:
+    case ComponentType::MeasureProbe:
         return QString();
 
     case ComponentType::Multimeter:

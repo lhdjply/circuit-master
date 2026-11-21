@@ -2298,8 +2298,6 @@ void MainWindow::applyProbeReadouts(const SimulationResult& result)
     for (ComponentItem* item : m_scene->componentItems()) {
         if (item->component().type != ComponentType::MeasureProbe)
             continue;
-        const int targetId = item->probeTargetId();
-
         const int node = net.nodeOf(item->component().id, 0);
         const Signal* voltage = node > 0
                                     ? result.signal(QStringLiteral("V(%1)").arg(node))
