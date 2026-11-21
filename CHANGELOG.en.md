@@ -32,6 +32,13 @@ repository root (same form as the tag, e.g. `v0.4.0`).
   - for an exact branch current use the **current probe (IP)**, a real 0 V branch
     the solver measures directly
 
+### Fixed
+
+- **Editing shortcuts did nothing on a new tab**: after **New**, Space would not
+  rotate and Delete would not delete on the fresh schematic. The editing
+  shortcuts are attached to the canvas view, and a new document's view never got
+  them — only the first tab worked.
+
 ## [v0.4.1] - 2026-11-20
 
 A settings window, light and dark themes, a Chinese/English interface, and wider

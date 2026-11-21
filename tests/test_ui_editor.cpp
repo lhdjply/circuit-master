@@ -97,6 +97,7 @@ private slots:
     void measureProbeUsesTheNearerWireEnd();
     void measureProbeSumsTheSegmentCurrent();
     void measureProbeBoxStaysReadableWhenRotated();
+    void shortcutsWorkOnANewTab();
 
 private:
 
@@ -1973,6 +1974,49 @@ void UiEditorTest::measureProbeBoxStaysReadableWhenRotated()
         QVERIFY2(!label.isEmpty() && !label.intersects(box),
                  qPrintable(QStringLiteral("%1° 时标号与读数框重叠").arg(angle)));
     }
+}
+
+
+void UiEditorTest::shortcutsWorkOnANewTab()
+{
+    // 「新建」会开一个新标签页，每张图纸有自己的视图。编辑类快捷键
+    // （空格旋转、Delete…）是挂到视图上的，新视图没挂上就整个失效 ——
+    // 早先就是这样：第一个标签能转，新建的图纸按空格没反应。
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    QAction* newAction = nullptr;
+    for (QAction* action : window.findChildren<QAction*>()) {
+        if (action->text().startsWith(QStringLiteral("新建")))
+            newAction = action;
+    }
+    QVERIFY(newAction);
+    newAction->trigger();
+    settle();
+
+    auto* view = currentView(window);
+    auto* scene = currentScene(window);
+    QVERIFY(view && scene);
+    view->setFocus();
+    settle();
+
+    ComponentItem* item = scene->placeComponent(ComponentType::Resistor, QPointF(300.0, 300.0));
+    QVERIFY(item);
+    scene->clearSelection();
+    item->setSelected(true);
+    settle();
+
+    const int before = item->component().rotation;
+    QTest::keyClick(view, Qt::Key_Space);
+    settle();
+    QCOMPARE(item->component().rotation, ((before - 90) % 360 + 360) % 360);
+
+    // Delete 也应当在新标签页上生效
+    QTest::keyClick(view, Qt::Key_Delete);
+    settle();
+    QVERIFY(scene->componentItems().isEmpty());
 }
 
 #include "test_ui_editor.moc"

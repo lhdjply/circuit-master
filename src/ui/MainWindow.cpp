@@ -510,6 +510,10 @@ Document* MainWindow::addDocument(const QString& name, const QString& path)
     document->scene = new SchematicScene(this);
     document->view = new SchematicView(document->scene, this);
     wireDocument(document);
+    // 新文档的视图也要挂上编辑快捷键（空格旋转、Delete…）。
+    // 构造期间第一个文档走这条路径时这些动作还没建出来，函数里做了空指针兜底，
+    // 之后构造函数末尾会再挂一次。
+    attachCanvasActions(document->view);
 
     m_documents.append(document);
     m_tabs->addTab(document->view, document->tabTitle());
@@ -990,10 +994,19 @@ void MainWindow::createActions()
     m_actRotate->setEnabled(false);
 
     // 这些快捷键只在画布获得焦点时生效，避免与属性面板输入冲突
+    attachCanvasActions(m_view);
+}
+
+void MainWindow::attachCanvasActions(SchematicView* view)
+{
+    if (!view)
+        return;
     for (QAction* action : {m_actUndo, m_actRedo, m_actCut, m_actCopy, m_actPaste, m_actDelete,
                             m_actRotate, m_actSelectAll, m_actSelectTool, m_actWireTool}) {
+        if (!action)
+            continue;   // 构造期间可能还没建出来
         action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
-        m_view->addAction(action);
+        view->addAction(action);
     }
 }
 

@@ -136,6 +136,10 @@ private:
     void wireDocument(Document* document);
     /// 切到第 index 个标签：重绑缓存指针、刷新界面
     void switchToDocument(int index);
+    /// 把这些只在画布上有意义的快捷键挂到某个视图上。
+    /// 每个新文档都有一张自己的视图，必须逐个挂 —— 早先只挂了第一个，
+    /// 于是「新建」之后空格旋转、Delete 全都不响应。
+    void attachCanvasActions(SchematicView* view);
     /// 关闭第 index 个标签（脏的先问保存）
     bool closeDocument(int index);
     /// 关闭当前标签
