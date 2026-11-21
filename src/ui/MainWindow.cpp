@@ -760,23 +760,33 @@ void MainWindow::createActions()
         CSM_TR("&Save"), this);
     m_actSave->setShortcut(QKeySequence::Save);
 
-    m_actSaveAs = new QAction(CSM_TR("Save &As…"), this);
+    m_actSaveAs = new QAction(
+        actionIcon(QStringLiteral("save_as"), QStringLiteral("document-save-as"), QStyle::SP_DialogSaveButton),
+        CSM_TR("Save &As…"), this);
     m_actSaveAs->setShortcut(QKeySequence::SaveAs);
 
 
-    m_actCloseTab = new QAction(CSM_TR("Close &Tab"), this);
+    m_actCloseTab = new QAction(
+        actionIcon(QStringLiteral("close_tab"), QStringLiteral("window-close"), QStyle::SP_DialogCloseButton),
+        CSM_TR("Close &Tab"), this);
     m_actCloseTab->setShortcut(QKeySequence::Close); // Ctrl+W
     m_actCloseTab->setStatusTip(CSM_TR("Close the current tab; unsaved changes are confirmed first"));
 
-    m_actNextTab = new QAction(CSM_TR("Next Tab"), this);
+    m_actNextTab = new QAction(
+        actionIcon(QStringLiteral("next_tab"), QStringLiteral("go-next"), QStyle::SP_ArrowForward),
+        CSM_TR("Next Tab"), this);
     m_actNextTab->setShortcut(QKeySequence(QStringLiteral("Ctrl+Tab")));
     m_actNextTab->setShortcutContext(Qt::WindowShortcut);
 
-    m_actPrevTab = new QAction(CSM_TR("Previous Tab"), this);
+    m_actPrevTab = new QAction(
+        actionIcon(QStringLiteral("prev_tab"), QStringLiteral("go-previous"), QStyle::SP_ArrowBack),
+        CSM_TR("Previous Tab"), this);
     m_actPrevTab->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+Tab")));
     m_actPrevTab->setShortcutContext(Qt::WindowShortcut);
 
-    m_actQuit = new QAction(CSM_TR("&Quit"), this);
+    m_actQuit = new QAction(
+        actionIcon(QStringLiteral("quit"), QStringLiteral("application-exit"), QStyle::SP_DialogCloseButton),
+        CSM_TR("&Quit"), this);
     m_actQuit->setShortcut(QKeySequence::Quit);
 
     m_actUndo = new QAction(
@@ -791,13 +801,16 @@ void MainWindow::createActions()
     m_actRedo->setShortcut(QKeySequence::Redo);
     m_actRedo->setEnabled(false);
 
-    m_actCut = new QAction(CSM_TR("Cut"), this);
+    m_actCut = new QAction(
+        actionIcon(QStringLiteral("cut"), QStringLiteral("edit-cut"), QStyle::SP_CustomBase), CSM_TR("Cut"), this);
     m_actCut->setShortcut(QKeySequence::Cut);
     m_actCut->setEnabled(false);
-    m_actCopy = new QAction(CSM_TR("Copy"), this);
+    m_actCopy = new QAction(
+        actionIcon(QStringLiteral("copy"), QStringLiteral("edit-copy"), QStyle::SP_CustomBase), CSM_TR("Copy"), this);
     m_actCopy->setShortcut(QKeySequence::Copy);
     m_actCopy->setEnabled(false);
-    m_actPaste = new QAction(CSM_TR("Paste"), this);
+    m_actPaste = new QAction(
+        actionIcon(QStringLiteral("paste"), QStringLiteral("edit-paste"), QStyle::SP_CustomBase), CSM_TR("Paste"), this);
     m_actPaste->setShortcut(QKeySequence::Paste);
     m_actPaste->setEnabled(false);
 
@@ -806,7 +819,9 @@ void MainWindow::createActions()
         CSM_TR("Delete"), this);
     m_actDelete->setShortcut(QKeySequence::Delete);
 
-    m_actRotate = new QAction(CSM_TR("Rotate 90°"), this);
+    m_actRotate = new QAction(
+        actionIcon(QStringLiteral("rotate"), QStringLiteral("object-rotate-right"), QStyle::SP_CustomBase),
+        CSM_TR("Rotate 90°"), this);
     m_actRotate->setObjectName(QStringLiteral("actRotate"));
     // 空格旋转：和 KiCad 的习惯一致，选中元件后连按空格就能连续转
     m_actRotate->setShortcut(QKeySequence(Qt::Key_Space));
@@ -821,8 +836,34 @@ void MainWindow::createActions()
         {CSM_TR("Center vertically"), SchematicScene::AlignMode::CenterV},
         {CSM_TR("Align bottom"), SchematicScene::AlignMode::Bottom},
     };
+    // 每种对齐有自己的图标，一眼能分出来
+    const auto alignIcon = [](SchematicScene::AlignMode mode) {
+        switch (mode) {
+        case SchematicScene::AlignMode::Left:
+            return actionIcon(QStringLiteral("align_left"), QStringLiteral("format-align-left"),
+                              QStyle::SP_CustomBase);
+        case SchematicScene::AlignMode::CenterH:
+            return actionIcon(QStringLiteral("align_center_h"),
+                              QStringLiteral("format-align-horizontal-center"),
+                              QStyle::SP_CustomBase);
+        case SchematicScene::AlignMode::Right:
+            return actionIcon(QStringLiteral("align_right"), QStringLiteral("format-align-right"),
+                              QStyle::SP_CustomBase);
+        case SchematicScene::AlignMode::Top:
+            return actionIcon(QStringLiteral("align_top"), QStringLiteral("format-align-top"),
+                              QStyle::SP_CustomBase);
+        case SchematicScene::AlignMode::CenterV:
+            return actionIcon(QStringLiteral("align_center_v"),
+                              QStringLiteral("format-align-vertical-center"),
+                              QStyle::SP_CustomBase);
+        case SchematicScene::AlignMode::Bottom:
+            return actionIcon(QStringLiteral("align_bottom"),
+                              QStringLiteral("format-align-bottom"), QStyle::SP_CustomBase);
+        }
+        return QIcon();
+    };
     for (const auto& entry : alignItems) {
-        auto* action = new QAction(entry.first, this);
+        auto* action = new QAction(alignIcon(entry.second), entry.first, this);
         action->setEnabled(false);
         const SchematicScene::AlignMode mode = entry.second;
         connect(action, &QAction::triggered, this, [this, mode] {
@@ -837,9 +878,15 @@ void MainWindow::createActions()
         {CSM_TR("Distribute vertically"), Qt::Vertical},
     };
     for (const auto& entry : distributeItems) {
-        auto* action = new QAction(entry.first, this);
-        action->setEnabled(false);
         const Qt::Orientation orientation = entry.second;
+        auto* action = new QAction(
+            orientation == Qt::Horizontal
+                ? actionIcon(QStringLiteral("distribute_h"), QStringLiteral("format-justify-fill"),
+                             QStyle::SP_CustomBase)
+                : actionIcon(QStringLiteral("distribute_v"), QStringLiteral("format-justify-fill"),
+                             QStyle::SP_CustomBase),
+            entry.first, this);
+        action->setEnabled(false);
         connect(action, &QAction::triggered, this, [this, orientation] {
             if (m_scene)
                 m_scene->distributeSelection(orientation);
@@ -847,7 +894,9 @@ void MainWindow::createActions()
         m_distributeActions.append(action);
     }
 
-    m_actSelectAll = new QAction(CSM_TR("Select All"), this);
+    m_actSelectAll = new QAction(
+        actionIcon(QStringLiteral("select_all"), QStringLiteral("edit-select-all"), QStyle::SP_FileDialogDetailedView),
+        CSM_TR("Select All"), this);
     m_actSelectAll->setShortcut(QKeySequence::SelectAll);
 
     m_actZoomIn = new QAction(
@@ -910,12 +959,18 @@ void MainWindow::createActions()
     toolGroup->addAction(m_actSelectTool);
     toolGroup->addAction(m_actWireTool);
 
-    m_actCheckUpdates = new QAction(CSM_TR("Check for Updates…"), this);
+    m_actCheckUpdates = new QAction(
+        actionIcon(QStringLiteral("update"), QStringLiteral("system-software-update"), QStyle::SP_BrowserReload),
+        CSM_TR("Check for Updates…"), this);
 
-    m_actGuide = new QAction(CSM_TR("Quick Start"), this);
+    m_actGuide = new QAction(
+        actionIcon(QStringLiteral("guide"), QStringLiteral("help-contents"), QStyle::SP_MessageBoxQuestion),
+        CSM_TR("Quick Start"), this);
     m_actGuide->setShortcut(QKeySequence::HelpContents);
 
-    m_actAbout = new QAction(CSM_TR("About Circuit Master"), this);
+    m_actAbout = new QAction(
+        actionIcon(QStringLiteral("about"), QStringLiteral("help-about"), QStyle::SP_MessageBoxInformation),
+        CSM_TR("About Circuit Master"), this);
 
     connect(m_actNew, &QAction::triggered, this, &MainWindow::newCircuit);
     connect(m_actOpen, &QAction::triggered, this, &MainWindow::openCircuit);
@@ -994,7 +1049,9 @@ void MainWindow::createActions()
     connect(m_actGuide, &QAction::triggered, this, &MainWindow::showQuickGuide);
     connect(m_actAbout, &QAction::triggered, this, &MainWindow::showAbout);
 
-    m_actSnapWires = new QAction(CSM_TR("Snap Wires to Grid"), this);
+    m_actSnapWires = new QAction(
+        actionIcon(QStringLiteral("snap_wires"), QStringLiteral("snap-grid"), QStyle::SP_CustomBase),
+        CSM_TR("Snap Wires to Grid"), this);
     m_actSnapWires->setToolTip(CSM_TR("Snap wire corners to the grid, fixing offsets left by older paste"));
     connect(m_actSnapWires, &QAction::triggered, this, [this] { m_scene->snapWiresToGrid(); });
 
@@ -1144,6 +1201,8 @@ void MainWindow::createMenus()
 
     QMenu* arrangeMenu = editMenu->addMenu(CSM_TR("Align and Distribute"));
     arrangeMenu->setObjectName(QStringLiteral("menuArrange"));
+    arrangeMenu->setIcon(actionIcon(QStringLiteral("arrange"), QStringLiteral("format-align-justify"),
+                                    QStyle::SP_FileDialogDetailedView));
     for (QAction* action : m_alignActions)
         arrangeMenu->addAction(action);
     arrangeMenu->addSeparator();
@@ -1157,6 +1216,8 @@ void MainWindow::createMenus()
 
     editMenu->addSeparator();
     QAction* settingsAction = editMenu->addAction(CSM_TR("Settings…"));
+    settingsAction->setIcon(actionIcon(QStringLiteral("settings"), QStringLiteral("preferences-system"),
+                                       QStyle::SP_FileDialogListView));
     settingsAction->setShortcut(QKeySequence::Preferences);
     connect(settingsAction, &QAction::triggered, this, &MainWindow::showSettings);
 
@@ -1179,8 +1240,13 @@ void MainWindow::createMenus()
     simMenu->addSeparator();
 
     QMenu* examples = simMenu->addMenu(CSM_TR("Example Circuits"));
+    examples->setIcon(actionIcon(QStringLiteral("examples"), QStringLiteral("document-open-recent"),
+                                 QStyle::SP_DirOpenIcon));
     for (int i = 0; i < m_exampleTitles.size(); ++i) {
-        QAction* action = examples->addAction(m_exampleTitles.at(i));
+        QAction* action = examples->addAction(
+            actionIcon(QStringLiteral("examples"), QStringLiteral("document-open-recent"),
+                       QStyle::SP_FileIcon),
+            m_exampleTitles.at(i));
         connect(action, &QAction::triggered, this, [this, i] { loadExample(i); });
     }
 
@@ -1370,7 +1436,21 @@ void MainWindow::createDocks()
         for (QDockWidget* dock : findChildren<QDockWidget*>()) {
             if (dock->objectName() == QStringLiteral("drawerDock"))
                 continue;
-            viewMenu->addAction(dock->toggleViewAction());
+            QAction* toggle = dock->toggleViewAction();
+            // 三块面板各有各的图标，菜单里一眼能认出是哪块
+            if (dock->objectName() == QStringLiteral("libraryDock"))
+                toggle->setIcon(actionIcon(QStringLiteral("library"),
+                                           QStringLiteral("view-list-details"),
+                                           QStyle::SP_FileDialogListView));
+            else if (dock->objectName() == QStringLiteral("propsDock"))
+                toggle->setIcon(actionIcon(QStringLiteral("properties"),
+                                           QStringLiteral("document-properties"),
+                                           QStyle::SP_FileDialogInfoView));
+            else if (dock->objectName() == QStringLiteral("logDock"))
+                toggle->setIcon(actionIcon(QStringLiteral("messages"),
+                                           QStringLiteral("dialog-information"),
+                                           QStyle::SP_MessageBoxInformation));
+            viewMenu->addAction(toggle);
         }
     }
 }

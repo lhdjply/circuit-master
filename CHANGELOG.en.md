@@ -18,6 +18,9 @@ repository root (same form as the tag, e.g. `v0.4.0`).
   (no shortcut) and Restore Defaults brings everything back. The choices are saved
   with your user settings and survive a restart, and the key names in the status
   bar, the startup tip and Quick Start follow them.
+- **Icons for every menu command**: all five menus, the Align and Distribute and
+  Example Circuits submenus, and the three panel toggles — 46 entries in total —
+  now carry an icon, recoloured automatically in the dark theme.
 
 ## [v0.5.0] - 2026-11-21
 
