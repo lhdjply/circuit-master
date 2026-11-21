@@ -1,0 +1,94 @@
+name: 缺陷报告
+description: 仿真结果不对、界面异常、打包或安装出问题
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请尽量把下面填全 —— 「哪个版本、什么系统、怎么复现」这三样齐全，
+        大部分问题就能直接定位。附上 `.csm` 电路文件或截图会更快。
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      description: 菜单「帮助 → 关于」里显示的版本，或安装包文件名里的版本号
+      placeholder: v0.5.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: package
+    attributes:
+      label: 安装方式
+      options:
+        - Debian / Ubuntu 系的 .deb
+        - Linux 便携包（tar.gz）
+        - Windows 安装版（setup.exe）
+        - Windows 便携版（zip）
+        - macOS（dmg）
+        - 自己从源码编译
+    validations:
+      required: true
+
+  - type: input
+    id: system
+    attributes:
+      label: 系统与架构
+      description: 发行版与版本，以及 CPU 架构
+      placeholder: Deepin 25 / x86_64；或 Debian 12 / arm64
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从打开程序开始，一步一步写清怎么操作
+      placeholder: |
+        1. 打开示例「RC 充电与放电」
+        2. 按 F5 运行仿真
+        3. 点「波形监控」
+        ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望的结果
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际的结果
+      description: 有报错就贴原文；是数值不对就说清哪个量、期望多少、实际多少
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 消息区日志或截图
+      description: 主窗口下方的「消息」页内容，或直接拖图片进来
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: circuit
+    attributes:
+      label: 电路文件
+      description: 能把 `.csm` 拖进来最好；不方便的话附截图也可以
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 自查
+      options:
+        - label: 已经在最新版本上试过（菜单「帮助 → 检查更新」）
+        - label: 电路里有接地符号（GND），否则无法确定参考电位

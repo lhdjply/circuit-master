@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 下载与更新日志
+    url: https://github.com/lhdjply/circuit-master/releases
+    about: 各平台安装包、每个版本改了什么，都在发布页
+  - name: 使用说明
+    url: https://github.com/lhdjply/circuit-master#readme
+    about: 先看看 README 的「快速上手」，常见操作里面都有
