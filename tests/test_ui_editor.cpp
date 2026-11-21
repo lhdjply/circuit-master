@@ -98,6 +98,7 @@ private slots:
     void measureProbeSumsTheSegmentCurrent();
     void measureProbeBoxStaysReadableWhenRotated();
     void shortcutsWorkOnANewTab();
+    void draggingAComponentDoesNotPullUnrelatedWires();
 
 private:
 
@@ -2017,6 +2018,53 @@ void UiEditorTest::shortcutsWorkOnANewTab()
     QTest::keyClick(view, Qt::Key_Delete);
     settle();
     QVERIFY(scene->componentItems().isEmpty());
+}
+
+
+void UiEditorTest::draggingAComponentDoesNotPullUnrelatedWires()
+{
+    // 拖动元件时，只有「一开始就接着它的引脚」的导线才跟着走。
+    // 早先是每步重新判断「有没有导线顶点压在引脚上」，于是元件扫过一根线时
+    // 那根线的顶点会被临时认领、被一路拖走 —— 看起来就是「线被吸过来了」。
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+    auto* view = currentView(window);
+    auto* scene = currentScene(window);
+    QVERIFY(view && scene);
+
+    // 一根与元件无关的悬空竖线，自由端正好在元件拖过去要经过的位置
+    WireItem* wire = scene->addWire({QPointF(400.0, 600.0), QPointF(400.0, 400.0)});
+    QVERIFY(wire);
+    ComponentItem* resistor = scene->placeComponent(ComponentType::Resistor, QPointF(430.0, 340.0));
+    QVERIFY(resistor);
+    scene->clearSelection();
+    resistor->setSelected(true);
+    settle();
+
+    const QVector<QPointF> before = wire->scenePoints();
+
+    // 往下拖：中途引脚正好压过导线自由端 (400,400)
+    QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier,
+                      view->mapFromScene(QPointF(430.0, 340.0)));
+    for (int y = 360; y <= 520; y += 20) {
+        const QPoint p = view->mapFromScene(QPointF(430.0, y));
+        QMouseEvent move(QEvent::MouseMove, QPointF(p), view->viewport()->mapToGlobal(p),
+                         Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(view->viewport(), &move);
+    }
+    QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier,
+                        view->mapFromScene(QPointF(430.0, 520.0)));
+    settle();
+
+    QVERIFY(resistor->pos().y() > 400.0);   // 元件确实动了
+    const QVector<QPointF> after = wire->scenePoints();
+    QCOMPARE(after.size(), before.size());
+    for (int i = 0; i < before.size(); ++i) {
+        QVERIFY2(QLineF(before.at(i), after.at(i)).length() <= 0.5,
+                 qPrintable(QStringLiteral("导线第 %1 个点被拖动了").arg(i)));
+    }
 }
 
 #include "test_ui_editor.moc"

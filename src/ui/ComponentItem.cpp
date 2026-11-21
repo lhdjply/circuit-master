@@ -596,6 +596,7 @@ void ComponentItem::mousePressEvent(QGraphicsSceneMouseEvent* event)
         // 免得旋转之后「拖本体」变成「拖位号」
         if (symbolContains(p)) {
             QGraphicsObject::mousePressEvent(event);
+            emit moveStarted();   // 先让基类处理（它会更新选中状态）
             return;
         }
         if (refLabelRect().contains(p)) {
@@ -642,6 +643,7 @@ void ComponentItem::mouseReleaseEvent(QGraphicsSceneMouseEvent* event)
         return;
     }
     QGraphicsObject::mouseReleaseEvent(event);
+    emit moveFinished();
 }
 
 void ComponentItem::setComponent(const Component& comp)

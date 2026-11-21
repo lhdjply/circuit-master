@@ -83,6 +83,10 @@ signals:
     void componentChanged();
     /// 元件被拖动后的位移增量（场景坐标），场景据此带着连线一起走
     void movedBy(const QPointF& delta);
+    /// 一次拖动开始 / 结束。场景在这两点之间锁定「哪些导线顶点要跟着走」——
+    /// 若每步都重新判断，拖过一根线时它的顶点会被临时「认领」，看起来像把线吸过来。
+    void moveStarted();
+    void moveFinished();
     void editRequested();
 
 protected:

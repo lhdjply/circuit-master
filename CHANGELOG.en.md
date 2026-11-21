@@ -38,6 +38,9 @@ repository root (same form as the tag, e.g. `v0.4.0`).
   rotate and Delete would not delete on the fresh schematic. The editing
   shortcuts are attached to the canvas view, and a new document's view never got
   them — only the first tab worked.
+- **Dragging a part dragged unrelated wires along**: passing a part over another
+  wire made that wire's vertices follow it, as if pulled in. Now only wires that
+  were attached to a pin at the moment you pressed the mouse come along.
 
 ## [v0.4.1] - 2026-11-20
 

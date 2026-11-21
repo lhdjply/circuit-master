@@ -340,6 +340,8 @@ ComponentItem* SchematicScene::addComponent(const Component& component)
     connect(item, &ComponentItem::editRequested, this, [this, item] { emit editRequested(item); });
     connect(item, &ComponentItem::movedBy, this,
             [this, item](const QPointF& delta) { followComponent(item, delta); });
+    connect(item, &ComponentItem::moveStarted, this, [this] { beginComponentDrag(); });
+    connect(item, &ComponentItem::moveFinished, this, [this] { endComponentDrag(); });
     addItem(item);
     updateProbeAttachments();   // 探针可能直接放在导线上
     return item;
@@ -1038,12 +1040,55 @@ QPointF SchematicScene::snap(const QPointF& point) const
     return QPointF(std::round(point.x() / step) * step, std::round(point.y() / step) * step);
 }
 
-void SchematicScene::followComponent(ComponentItem* item, const QPointF& delta)
+namespace {
+/// 收集落在这些引脚上的导线顶点（被选中、会整组平移的导线跳过）
+QVector<QPointF> verticesAtPins(const QVector<QPointF>& pins,
+                                const QVector<WireItem*>& wires)
 {
-    if (!item || (qFuzzyIsNull(delta.x()) && qFuzzyIsNull(delta.y())))
-        return;
+    QVector<QPointF> out;
+    for (WireItem* wire : wires) {
+        if (wire->isSelected())
+            continue;   // 整组平移的导线不用再补
+        for (const QPointF& point : wire->scenePoints()) {
+            for (const QPointF& pin : pins) {
+                if (QLineF(point, pin).length() <= 0.5) {
+                    out.append(point);
+                    break;
+                }
+            }
+        }
+    }
+    return out;
+}
+} // namespace
 
-    // 引脚现在的坐标减去增量，就是它移动前的位置：落在那里的顶点才是「接着这个引脚」
+void SchematicScene::beginComponentDrag()
+{
+    // 拖动开始：把「现在正好接着某个引脚」的导线顶点记下来。
+    // 之后整次拖动只动这些点 —— 否则每步都重新判断，元件扫过一根线时
+    // 它的顶点会被临时认领，看起来就像线被吸过来了。
+    QVector<QPointF> pins;
+    for (ComponentItem* item : componentItems()) {
+        if (!item->isSelected())
+            continue;
+        const QVector<QPointF> positions = item->pinScenePositions();
+        for (const QPointF& pin : positions)
+            pins.append(pin);
+    }
+    m_dragAnchors = verticesAtPins(pins, wireItems());
+    m_dragActive = true;
+}
+
+void SchematicScene::endComponentDrag()
+{
+    m_dragAnchors.clear();
+    m_dragActive = false;
+}
+
+void SchematicScene::moveAttachedWireVertices(QVector<QPointF>& anchors, const QPointF& delta)
+{
+    if (anchors.isEmpty())
+        return;
     for (WireItem* wire : wireItems()) {
         // 被一起选中的导线由 QGraphicsItem 自己整组平移，
         // 这里再补一次增量会走双倍距离
@@ -1051,12 +1096,13 @@ void SchematicScene::followComponent(ComponentItem* item, const QPointF& delta)
             continue;
         QVector<QPointF> points = wire->scenePoints();
         bool changed = false;
-        for (const QPointF& pin : item->pinScenePositions()) {
-            const QPointF oldPin = pin - delta;
-            for (QPointF& point : points) {
-                if (QLineF(point, oldPin).length() <= 0.5) {
+        for (QPointF& point : points) {
+            for (QPointF& anchor : anchors) {
+                if (QLineF(point, anchor).length() <= 0.5) {
                     point += delta;
+                    anchor += delta;   // 跟着走，下一步还对得上
                     changed = true;
+                    break;
                 }
             }
         }
@@ -1065,6 +1111,25 @@ void SchematicScene::followComponent(ComponentItem* item, const QPointF& delta)
             // 端点被带走后可能拉出斜段：立刻整理成横平竖直
             wire->orthogonalize();
         }
+    }
+}
+
+void SchematicScene::followComponent(ComponentItem* item, const QPointF& delta)
+{
+    if (!item || (qFuzzyIsNull(delta.x()) && qFuzzyIsNull(delta.y())))
+        return;
+
+    if (m_dragActive) {
+        // 用户拖动：只动按下时锁定的那些顶点
+        moveAttachedWireVertices(m_dragAnchors, delta);
+    } else {
+        // 程序化的位移（对齐 / 分布、属性面板、撤销后的重定位）：
+        // 按「移动前的几何」临时判断一次，行为与早先一致
+        QVector<QPointF> pins = item->pinScenePositions();
+        for (QPointF& pin : pins)
+            pin -= delta;
+        QVector<QPointF> anchors = verticesAtPins(pins, wireItems());
+        moveAttachedWireVertices(anchors, delta);
     }
     refresh();
 }

@@ -25,6 +25,13 @@ public:
     /// 重新计算每个测量探针贴在哪个导线上、读哪个元件的电流。
     /// 放元件、拖元件、改导线之后都要调（场景自己会在这些时机调用）。
     void updateProbeAttachments();
+    /// 拖动元件前锁定「哪些导线顶点跟着走」：只在真正接着引脚的那些顶点上生效，
+    /// 拖动过程中经过的其它导线不会被顺手牵走。
+    QVector<QPointF> m_dragAnchors;   // 本次拖动要带着走的导线顶点
+    bool m_dragActive = false;        // 是否处在一次用户拖动中
+    void moveAttachedWireVertices(QVector<QPointF>& anchors, const QPointF& delta);
+    void beginComponentDrag();
+    void endComponentDrag();
     ComponentItem* placeComponent(ComponentType type, const QPointF& pos);
     WireItem* addWire(const QVector<QPointF>& points);
 
