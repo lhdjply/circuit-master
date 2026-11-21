@@ -1,3 +1,14 @@
+circuit-master (0.5.1) unstable; urgency=medium
+
+  * 新增自动保存：定时把未保存的更改写回电路自己的 .csm（默认 10 分钟）。
+  * 新增崩溃恢复：另存一份副本，程序被强杀或崩溃后下次启动询问是否恢复
+    （默认 2 分钟，与自动保存各自独立）。
+  * 新增快捷键设置：可逐个命令重设按键、清空、恢复默认；波形监控默认 F6，
+    Esc 也进了表。
+  * 菜单栏所有命令（共 46 项）都配上了 SVG 图标，深色主题下自动换浅色。
+
+ -- Circuit Master Maintainers <lhdjply@users.noreply.github.com>  Sat, 21 Nov 2026 16:20:00 +0800
+
 circuit-master (0.5.0) unstable; urgency=medium
 
   * 新增测量探针（Multisim 式探头）：放在导线上即显示该处电压与电流的

@@ -6,28 +6,27 @@ numbering follows [Semantic Versioning](https://semver.org/).
 The single source of truth for the version is the `VERSION` file at the
 repository root (same form as the tag, e.g. `v0.4.0`).
 
-## [Unreleased]
+## [v0.5.1] - 2026-11-21
+
+This release adds autosave and crash recovery, customisable shortcuts, and an icon
+for every menu command.
 
 ### Added
 
-- **Autosave and crash recovery**: two independent switches under Settings →
-  Saving, each with **its own interval**. **Autosave** (default 10 minutes, 1–120)
-  writes unsaved changes **back to the circuit's own file**, exactly like pressing
-  Save; **crash recovery** (default 2 minutes, 1–60) keeps a separate copy on its
-  own schedule, covering untitled circuits and whatever changed between two saves,
-  and offers to restore it on the next start. Saving by hand clears the copy and a
-  clean exit clears them all.
-- **Waveform monitor defaults to F6**: F5 runs, F6 shows the traces; Esc (cancel
-  wiring / clear selection) is in the shortcut table too and can be rebound.
-- **Customisable shortcuts**: a new Shortcuts tab in Edit → Settings to rebind every
-  command. Typing a combination another command already uses warns you which one,
-  and the row snaps back to its previous key; the × at the end of a row clears it
-  (no shortcut) and Restore Defaults brings everything back. The choices are saved
-  with your user settings and survive a restart, and the key names in the status
-  bar, the startup tip and Quick Start follow them.
-- **Icons for every menu command**: all five menus, the Align and Distribute and
-  Example Circuits submenus, and the three panel toggles — 46 entries in total —
-  now carry an icon, recoloured automatically in the dark theme.
+- **Autosave and crash recovery**: two independent switches, each with its own
+  interval, under Settings → Saving. Autosave (default 10 minutes) writes unsaved
+  changes **back to the `.csm`**, exactly like pressing Save; crash recovery
+  (default 2 minutes) keeps a separate copy covering untitled circuits and
+  whatever changed between two saves, and offers to restore it on the next start.
+- **Customisable shortcuts**: rebind any command under Settings → Shortcuts —
+  typing a combination another command already uses warns you and snaps the row
+  back; the × at the end of a row clears it and Restore Defaults brings everything
+  back. The waveform monitor defaults to **F6** and Esc (cancel wiring / clear
+  selection) is in the table too; the key names shown in the status bar, the
+  startup tip and Quick Start follow them.
+- **Every menu command has an icon**: the five menus, the Align and Distribute and
+  Example Circuits submenus, and the three panel toggles — 46 entries in total,
+  recoloured automatically in the dark theme.
 
 ## [v0.5.0] - 2026-11-21
 

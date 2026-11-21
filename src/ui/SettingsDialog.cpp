@@ -98,8 +98,8 @@ SettingsDialog::SettingsDialog(QWidget* parent, std::function<void()> applyTheme
     , m_originalTheme(int(Theme::mode()))
     , m_applyTheme(std::move(applyTheme))
     , m_applyGrid(std::move(applyGrid))
-    , m_rows(shortcuts)
     , m_applyAutosave(std::move(applyAutosave))
+    , m_rows(shortcuts)
 {
     setWindowTitle(CSM_TR("Settings"));
     setModal(true);
