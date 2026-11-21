@@ -617,6 +617,9 @@ void UiPanelTest::themeFollowsSystemSchemeChanges()
 
     Theme::save(Theme::Mode::System);
     Theme::apply(*qApp);
+#if QT_VERSION >= QT_VERSION_CHECK(6, 5, 0)
+    // Qt 6.4（Debian 12）既没有 Qt::ColorScheme，也没有 colorSchemeChanged 信号，
+    // 这一段只能整段跳过 —— 下面的 ThemeChange 那条与版本无关，仍然会跑。
     QMetaObject::invokeMethod(QGuiApplication::styleHints(), "colorSchemeChanged",
                               Q_ARG(Qt::ColorScheme, Qt::ColorScheme::Dark));
     QCOMPARE(notified, 1);
@@ -625,6 +628,7 @@ void UiPanelTest::themeFollowsSystemSchemeChanges()
     QMetaObject::invokeMethod(QGuiApplication::styleHints(), "colorSchemeChanged",
                               Q_ARG(Qt::ColorScheme, Qt::ColorScheme::Dark));
     QCOMPARE(notified, 1); // 固定模式不响应
+#endif
 
     // 平台发 QEvent::ThemeChange 也要能触发（这条与 Qt 版本无关，
     // Debian 12 的 Qt 6.4 上没有 colorSchemeChanged 信号，靠的就是它）
