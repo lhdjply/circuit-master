@@ -23,6 +23,10 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Fixed
 
+- **A circuit opened after discarding a tab would not simulate**: closing a tab with
+  Discard tears down that document's live scope, but loading an example reuses the same
+  document without rebinding it — `startLiveScope()` was skipped, so the button stayed on
+  Run and the waveform monitor stayed greyed out. The scope is now rebound on load.
 - **Invisible input borders in the dark theme**: the line edits in the property panel
   had no visible edge at night — Fusion draws frames by darkening the background,
   which is invisible on a dark fill. QLineEdit now gets an explicit

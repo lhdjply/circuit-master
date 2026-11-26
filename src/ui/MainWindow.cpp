@@ -2072,6 +2072,11 @@ Document* MainWindow::loadCircuitData(const Circuit& circuit, const QString& tit
     target->scene->load(circuit);
     m_loading = false;
 
+    // 关闭标签页时那一份动态示波器是被销毁的（见 closeDocument）。这里复用的
+    // 文档如果正是它，m_waveLive 还指着空 —— 之后 startLiveScope() 会被跳过，
+    // 表现出来就是「点了运行仿真，按钮不变、波形也出不来」。重新绑一次。
+    bindLiveScope(target);
+
     target->dirty = false;
     target->hasResult = false;
     target->resultStale = false;

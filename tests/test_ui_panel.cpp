@@ -115,6 +115,7 @@ private slots:
     void settingsDialogHasCustomHeaderAndStaysResizable();
     void waveMonitorUsesCustomHeader();
     void multimeterIsFramelessAndFixedSize();
+    void discardingTabThenRunningExampleStillStartsLive();
     void draggingTheTopRowMovesTheWindow();
 
 private:
@@ -1490,6 +1491,81 @@ void UiPanelTest::multimeterIsFramelessAndFixedSize()
              "万用表不该有最大化按钮");
 
     meter.close();
+}
+
+
+void UiPanelTest::discardingTabThenRunningExampleStillStartsLive()
+{
+    // 关闭标签页（选丢弃）会销毁该图纸的动态示波器。之后把示例载进同一个文档时
+    // 必须重新绑一份，否则 startLiveScope() 会被跳过：按钮停在「运行仿真」，
+    // 波形监控也一直是灰的。
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    auto* scene = window.findChild<SchematicScene*>();
+    QVERIFY(scene);
+    scene->placeComponent(ComponentType::Resistor, QPointF(300.0, 300.0));
+    settle();
+
+    // 关闭标签页 → 在弹窗里选「丢弃」
+    QTimer::singleShot(200, [] {
+        QWidget* dialog = QApplication::activeModalWidget();
+        if (!dialog)
+            return;
+        for (QPushButton* button : dialog->findChildren<QPushButton*>()) {
+            if (button->text().contains(QStringLiteral("丢弃"))) {
+                button->click();
+                return;
+            }
+        }
+        dialog->close();
+    });
+    const auto findAction = [&window](const QString& text) -> QAction* {
+        for (QAction* action : window.findChildren<QAction*>()) {
+            QString plain = action->text();
+            plain.remove(QLatin1Char('&'));
+            if (plain.startsWith(text))
+                return action;
+        }
+        return nullptr;
+    };
+    QAction* closeTab = findAction(QStringLiteral("关闭标签页"));
+    QVERIFY(closeTab);
+    closeTab->trigger();
+    settle();
+
+    // 打开 TL431 示例
+    QMenu* examples = nullptr;
+    for (QMenu* menu : window.menuBar()->findChildren<QMenu*>()) {
+        if (menu->title().contains(QStringLiteral("示例")))
+            examples = menu;
+    }
+    QVERIFY(examples);
+    QAction* tl431 = nullptr;
+    for (QAction* action : examples->actions()) {
+        if (action->text().contains(QStringLiteral("TL431")))
+            tl431 = action;
+    }
+    QVERIFY(tl431);
+    tl431->trigger();
+    settle();
+
+    QAction* run = findAction(QStringLiteral("运行仿真"));
+    QVERIFY(run);
+    run->trigger();
+    settle();
+
+    // 连续仿真真的起来了：按钮变「停止仿真」，波形监控可用
+    QCOMPARE(run->text(), CSM_TR("Stop Simulation"));
+    QAction* monitor = findAction(QStringLiteral("波形监控"));
+    QVERIFY(monitor);
+    QVERIFY2(monitor->isEnabled(), "仿真跑起来后波形监控应当可用");
+
+    run->trigger();   // 收尾：停掉，免得定时器在别的用例里继续跑
+    settle();
+    QCOMPARE(run->text(), CSM_TR("Run Simulation"));
 }
 
 #include "test_ui_panel.moc"
