@@ -1390,6 +1390,9 @@ void MainWindow::createTitleBar()
     // 左上角放应用图标（和多数桌面软件一样，一眼认出是哪个程序）。
     // 设成透明接收鼠标：拖它也算「拖空白处」，能搬窗口。
     auto* iconBox = new QWidget(this);
+    // 竖向撑满菜单栏：否则它只包住图标那么高，底下那条边框会画在图标正下方
+    // （看起来像图标下面多了一道短线），而不是和菜单栏的分界线对齐
+    iconBox->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     auto* iconLayout = new QHBoxLayout(iconBox);
     iconLayout->setContentsMargins(8, 0, 8, 0);
     auto* iconLabel = new QLabel(iconBox);
@@ -1398,12 +1401,11 @@ void MainWindow::createTitleBar()
     if (!mark.isNull())
         iconLabel->setPixmap(mark.pixmap(QSize(18, 18)));
     iconLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
-    iconLayout->addWidget(iconLabel);
+    iconLayout->addWidget(iconLabel, 0, Qt::AlignVCenter);
+    // 不要给它画背景和边框：这一格保持透明，菜单栏自己的底色与那条分界线
+    // 就会从下面透上来，和两边的线严丝合缝（自己画的话高度对不齐，
+    // 图标下面会多出一道短线）
     iconBox->setAttribute(Qt::WA_TransparentForMouseEvents);
-    Theme::styleWidget(iconBox, [] {
-        return QStringLiteral("background: %1; border: none; border-bottom: 1px solid %2;")
-            .arg(Theme::surface().name(), Theme::border().name());
-    });
     menuBar()->setCornerWidget(iconBox, Qt::TopLeftCorner);
 
     menuBar()->setCornerWidget(m_titleBar, Qt::TopRightCorner);

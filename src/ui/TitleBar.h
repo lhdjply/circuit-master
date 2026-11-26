@@ -52,7 +52,6 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
-    void paintEvent(QPaintEvent* event) override;
 
 private:
     /// startSystemMove() 不被窗口管理器支持时，自己按偏移量搬窗口

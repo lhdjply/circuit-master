@@ -190,13 +190,4 @@ void TitleBar::mouseDoubleClickEvent(QMouseEvent* event)
     QWidget::mouseDoubleClickEvent(event);
 }
 
-void TitleBar::paintEvent(QPaintEvent*)
-{
-    QPainter painter(this);
-    painter.fillRect(rect(), Theme::surface());
-    // 与下面的工具栏之间画一条细线，把「标题 / 菜单」和「命令」分开
-    painter.setPen(Theme::border());
-    painter.drawLine(0, height() - 1, width(), height() - 1);
-}
-
 } // namespace csm
