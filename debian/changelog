@@ -1,3 +1,13 @@
+circuit-master (0.5.2) unstable; urgency=medium
+
+  * 新增自绘标题栏：主窗口与所有弹窗去掉系统标题栏，菜单、软件图标与窗口按钮
+    并成一行，正文多出约 34 px；整条顶栏可拖动、双击最大化。
+  * 修复：关闭标签页（选丢弃）后新载入的电路点「运行仿真」没有反应 —— 动态
+    示波器没有重新绑定，连续仿真被跳过。
+  * 修复：深色主题下属性面板的输入框看不见边框。
+
+ -- Circuit Master Maintainers <lhdjply@users.noreply.github.com>  Thu, 26 Nov 2026 17:20:00 +0800
+
 circuit-master (0.5.1) unstable; urgency=medium
 
   * 新增自动保存：定时把未保存的更改写回电路自己的 .csm（默认 10 分钟）。
