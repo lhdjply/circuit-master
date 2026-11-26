@@ -135,9 +135,11 @@ target_compile_options(csm_core PRIVATE -Wall -Wextra -Wno-unused-parameter)
 set(CSM_UI_SOURCES
     src/ui/I18n.cpp
     src/ui/Dialogs.cpp
+    src/ui/DialogFrame.cpp
     src/ui/SingleInstance.cpp
     src/ui/Symbols.cpp
     src/ui/SettingsDialog.cpp
+    src/ui/TitleBar.cpp
     src/ui/Theme.cpp
     src/ui/ComponentItem.cpp
     src/ui/WireItem.cpp

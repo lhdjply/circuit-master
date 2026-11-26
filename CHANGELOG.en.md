@@ -8,8 +8,28 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ## [Unreleased]
 
+### Changed
+
+- **Custom title bar**: the system title bar is gone; the menu and the
+  minimise / maximise / close buttons share one row, giving the content about
+  34 px more height. Dragging, double-click to maximise and edge resizing work as
+  before (via QWindow::startSystemMove / startSystemResize, so the window manager
+  still does the work). The **whole top row can be dragged** — including the blank
+  space right of the menus — and double-clicking it maximises or restores. The app
+  icon sits at the far left, the menu labels are vertically centred with it, and a
+  hairline separates the row from the toolbar. The window title is left to the task
+  bar instead of being repeated up there. The trade-off is losing the system window
+  menu and edge snapping.
+
 ### Fixed
 
+- **Custom dialog headers**: the save-changes prompt, Quick Start, About, Changelog, the
+  settings window, the waveform monitor and the multimeter drop the system title bar for
+  the same header the main window uses (centred title plus a close button, draggable).
+  Windows that stay resizable (settings, waveform monitor) also get the eight edge /
+  corner drag zones, and the monitor's header follows its window title as the tab
+  changes. The multimeter goes the other way: fixed size and no maximise button — it is
+  just a small meter floating over the canvas.
 - **Fixed-size dialogs**: the save-changes prompt, Quick Start, About and Changelog
   windows now size themselves to their content and cannot be resized (the settings
   dialog stays resizable).

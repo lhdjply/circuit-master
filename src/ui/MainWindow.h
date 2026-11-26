@@ -13,6 +13,7 @@ class QComboBox;
 class QDockWidget;
 class QTabWidget;
 class QTimer;
+class QWidget;
 class QLabel;
 class QListWidget;
 class QListWidgetItem;
@@ -22,6 +23,8 @@ namespace csm {
 
 class ComponentItem;
 class PropertyPanel;
+class TitleBar;
+class ResizeGrips;
 class SchematicScene;
 class SchematicView;
 class WaveformWindow;
@@ -49,11 +52,16 @@ public:
 
 
 protected:
+    void changeEvent(QEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
     void closeEvent(QCloseEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
     void createActions();
+    /// 自绘标题栏：把「菜单 + 标题 + 窗口按钮」并成一行（窗口是无边框的）
+    void createTitleBar();
+    void toggleMaximized();
     void createMenus();
     void createToolBar();
     void createDocks();
@@ -224,6 +232,11 @@ private:
     bool m_loading = false;
     bool m_updateCheckScheduled = false;
     QTimer* m_liveRestartTimer = nullptr; // 电路改动后重建实时引擎（防抖）
+    TitleBar* m_titleBar = nullptr;       // 自绘标题栏
+    /// 菜单栏空白处的拖动（相当于拖标题栏）
+    bool m_menuDragging = false;
+    QPoint m_menuDragOffset;
+    ResizeGrips* m_resizeGrips = nullptr;  // 无边框窗口的四边 / 四角拖拽区
     QTimer* m_autosaveTimer = nullptr;    // 自动保存（写回原文件）
     QTimer* m_recoveryTimer = nullptr;    // 崩溃恢复（写恢复副本）
     QTimer* m_blastTimer = nullptr;       // 爆炸动画驱动

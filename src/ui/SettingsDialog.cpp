@@ -4,6 +4,7 @@
 #include <QSpinBox>
 #include <QCheckBox>
 #include "core/Autosave.h"
+#include "ui/DialogFrame.h"
 #include <QtGlobal>
 #include "core/Language.h"
 #include "ui/Dialogs.h"
@@ -109,9 +110,9 @@ SettingsDialog::SettingsDialog(QWidget* parent, std::function<void()> applyTheme
     setMinimumSize(520, 420);
     Dialogs::applyStyle(*this);   // 和其它提示框同一套观感
 
-    auto* outer = new QVBoxLayout(this);
-    outer->setContentsMargins(20, 18, 20, 14);
-    outer->setSpacing(14);
+    // 和其它窗口一样用自绘顶栏；这个窗口要能拉大小，再挂上八向拖拽区
+    auto* outer = makeFramelessShell(*this, CSM_TR("Settings"), QMargins(20, 16, 20, 14), 14);
+    m_resizeGrips = new ResizeGrips(this);
 
     auto* tabs = new QTabWidget(this);
     tabs->setObjectName(QStringLiteral("settingsTabs"));

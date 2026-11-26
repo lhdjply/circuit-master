@@ -819,6 +819,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>最大步长</translation>
     </message>
     <message>
+        <source>Maximize</source>
+        <translation>最大化</translation>
+    </message>
+    <message>
         <source>Measurement</source>
         <translation>测量</translation>
     </message>
@@ -829,6 +833,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Messages</source>
         <translation>消息</translation>
+    </message>
+    <message>
+        <source>Minimize</source>
+        <translation>最小化</translation>
     </message>
     <message>
         <source>Mirror %1</source>
@@ -1221,6 +1229,10 @@ Place a voltage (TP) or current (IP) test point and run again</source>
     <message>
         <source>Resistor</source>
         <translation>电阻</translation>
+    </message>
+    <message>
+        <source>Restore</source>
+        <translation>还原</translation>
     </message>
     <message>
         <source>Restore Defaults</source>

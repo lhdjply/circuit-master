@@ -22,6 +22,8 @@ class QLabel;
 
 namespace csm {
 
+class ResizeGrips;
+
 class SettingsDialog : public QDialog {
     Q_OBJECT
 
@@ -56,6 +58,7 @@ private:
     QHash<QString, QKeySequence> m_currentKeys;  // 每行当前的按键（冲突时用它还原）
     QHash<QString, QString> m_labels;            // id → 命令名，警告里要用
     QLabel* m_shortcutWarning = nullptr;         // 表格下方的冲突提示
+    ResizeGrips* m_resizeGrips = nullptr;        // 无边框窗口的四边 / 四角拖拽区
 
     /// 输入框收下一个按键后立刻调用：与别的命令冲突就提示、并返回该行原来的按键
     QKeySequence validateShortcut(const QString& id, const QKeySequence& sequence);

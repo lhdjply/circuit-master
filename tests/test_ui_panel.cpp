@@ -3,6 +3,7 @@
 #include "csm_platform.h"
 #include "csm_version.h"
 #include "ui/ComponentItem.h"
+#include "core/Component.h"
 #include "core/Language.h"
 #include "ui/I18n.h"
 #include "ui/MainWindow.h"
@@ -27,6 +28,7 @@
 #include <QImage>
 #include <QComboBox>
 #include "ui/Dialogs.h"
+#include <QMenuBar>
 #include <QDialog>
 #include <QKeyEvent>
 #include <QToolButton>
@@ -109,6 +111,11 @@ private slots:
     void autosaveWritesRecoveryForDirtyDocuments();
     void autosaveSavesNamedDocumentsBackToDisk();
     void infoDialogsCannotBeResized();
+    void framelessWindowHasCustomTitleBar();
+    void settingsDialogHasCustomHeaderAndStaysResizable();
+    void waveMonitorUsesCustomHeader();
+    void multimeterIsFramelessAndFixedSize();
+    void draggingTheTopRowMovesTheWindow();
 
 private:
 
@@ -1331,6 +1338,158 @@ void UiPanelTest::infoDialogsCannotBeResized()
     arm();
     Dialogs::changelog(&window);
     verify("更新日志");
+}
+
+
+void UiPanelTest::framelessWindowHasCustomTitleBar()
+{
+    // 系统那条标题栏去掉了，换成菜单行右上角的「标题 + 三个按钮」
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    QVERIFY2(window.windowFlags().testFlag(Qt::FramelessWindowHint), "窗口应当无边框");
+    QVERIFY2(window.menuBar() != nullptr, "菜单栏不能因为自绘标题栏而丢掉");
+
+    auto* titleBar = window.findChild<QWidget*>(QStringLiteral("titleBar"));
+    QVERIFY(titleBar);
+    // 左上角的软件图标
+    auto* mark = window.findChild<QLabel*>(QStringLiteral("titleBarIcon"));
+    QVERIFY2(mark != nullptr, "左上角应当有软件图标");
+    QVERIFY2(!mark->pixmap().isNull(), "图标没有加载出来");
+
+    for (const char* name : {"windowMinimize", "windowMaximize", "windowClose"})
+        QVERIFY2(window.findChild<QWidget*>(QString::fromLatin1(name)) != nullptr, name);
+
+    // 顶栏不再重复显示窗口标题，只留按钮
+    QVERIFY2(window.findChild<QLabel*>(QStringLiteral("titleBarTitle")) == nullptr,
+             "顶栏不该再有标题文字");
+
+    // 最大化时按钮换成「还原」：这里只验证状态切换不崩、按钮还在
+    window.showMaximized();
+    settle();
+    QVERIFY(window.findChild<QWidget*>(QStringLiteral("windowMaximize")) != nullptr);
+    window.showNormal();
+    settle();
+}
+
+
+void UiPanelTest::draggingTheTopRowMovesTheWindow()
+{
+    MainWindow window;
+    window.resize(1100, 760);
+    window.show();
+    waitShown(window);
+    settle();
+
+    QMenuBar* bar = window.menuBar();
+    QVERIFY(bar);
+    // 菜单项右侧的空白区：那里既不是菜单、也不是窗口按钮
+    const QPoint blank(bar->width() - 260, bar->height() / 2);
+    QVERIFY2(!bar->actionAt(blank), "取样点应当落在空白处");
+
+    const QPoint start = window.pos();
+    const auto send = [&](QEvent::Type type, const QPoint& at, Qt::MouseButtons buttons,
+                          Qt::MouseButton button) {
+        const QPoint global = bar->mapToGlobal(at);
+        QMouseEvent event(type, QPointF(at), QPointF(global), button, buttons, Qt::NoModifier);
+        QCoreApplication::sendEvent(bar, &event);
+    };
+
+    // 按住拖 40×30：窗口应当跟着走（offscreen 平台没有窗口管理器，
+    // 走的是 startSystemMove() 失败后的手动搬运）
+    send(QEvent::MouseButtonPress, blank, Qt::LeftButton, Qt::LeftButton);
+    send(QEvent::MouseMove, blank + QPoint(40, 30), Qt::LeftButton, Qt::NoButton);
+    send(QEvent::MouseButtonRelease, blank + QPoint(40, 30), Qt::NoButton, Qt::LeftButton);
+    settle();
+    QCOMPARE(window.pos(), start + QPoint(40, 30));
+
+    // 双击同一片空白：最大化 / 还原
+    window.showNormal();
+    settle();
+    send(QEvent::MouseButtonDblClick, blank, Qt::LeftButton, Qt::LeftButton);
+    settle();
+    QVERIFY2(window.isMaximized(), "双击顶部应当最大化");
+    const QPoint maximizedPos = window.pos();
+    Q_UNUSED(maximizedPos);
+
+    send(QEvent::MouseButtonDblClick, blank, Qt::LeftButton, Qt::LeftButton);
+    settle();
+    QVERIFY2(!window.isMaximized(), "再双击应当还原");
+
+    window.close();
+}
+
+
+void UiPanelTest::settingsDialogHasCustomHeaderAndStaysResizable()
+{
+    // 设置窗口也换了自绘顶栏，但它要能拉大小，所以不能像提示框那样锁死
+    MainWindow window;
+    window.show();
+    waitShown(window);
+
+    SettingsDialog dialog(&window, [] {}, [] {}, {});
+    dialog.show();
+    settle();
+
+    QVERIFY2(dialog.windowFlags().testFlag(Qt::FramelessWindowHint), "设置窗口应当无边框");
+    auto* header = dialog.findChild<QWidget*>(QStringLiteral("dialogHeader"));
+    QVERIFY(header);
+    QVERIFY(dialog.findChild<QWidget*>(QStringLiteral("dialogHeaderClose")) != nullptr);
+
+    // 可调：最小尺寸与最大尺寸不相等，改大之后确实变大
+    QVERIFY(dialog.minimumSize() != dialog.maximumSize());
+    const QSize before = dialog.size();
+    dialog.resize(before + QSize(80, 60));
+    settle();
+    QCOMPARE(dialog.size(), before + QSize(80, 60));
+}
+
+
+void UiPanelTest::waveMonitorUsesCustomHeader()
+{
+    // 波形监控是独立窗口，顶部同样换成自绘的
+    MainWindow window;
+    window.resize(1100, 760);
+    window.show();
+    waitShown(window);
+
+    window.openScope();
+    settle();
+
+    auto* monitor = window.findChild<QWidget*>(QStringLiteral("waveMonitorWindow"));
+    QVERIFY(monitor);
+    QVERIFY2(monitor->windowFlags().testFlag(Qt::FramelessWindowHint), "波形监控应当无边框");
+    QVERIFY(monitor->findChild<QWidget*>(QStringLiteral("dialogHeader")) != nullptr);
+    QVERIFY(monitor->findChild<QWidget*>(QStringLiteral("dialogHeaderClose")) != nullptr);
+
+    monitor->close();
+    settle();
+}
+
+
+void UiPanelTest::multimeterIsFramelessAndFixedSize()
+{
+    // 万用表是浮在画布上的小窗：同样自绘顶栏，但尺寸固定 —— 拉不动，也不能最大化
+    MultimeterWindow meter(QStringLiteral("R1"), MultimeterMode::Voltage);
+    meter.show();
+    settle();
+
+    QVERIFY2(meter.windowFlags().testFlag(Qt::FramelessWindowHint), "万用表应当无边框");
+    QVERIFY(meter.findChild<QWidget*>(QStringLiteral("dialogHeader")) != nullptr);
+    QCOMPARE(meter.minimumSize(), meter.maximumSize());   // 固定尺寸 = 无法拉伸
+
+    const QSize before = meter.size();
+    meter.resize(before + QSize(120, 80));
+    settle();
+    QCOMPARE(meter.size(), before);
+
+    // 没有最大化位：窗口管理器不会提供最大化动作
+    QVERIFY2(!meter.windowFlags().testFlag(Qt::WindowMaximizeButtonHint),
+             "万用表不该有最大化按钮");
+
+    meter.close();
 }
 
 #include "test_ui_panel.moc"

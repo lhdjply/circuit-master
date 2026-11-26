@@ -1,6 +1,7 @@
 #include "ui/MultimeterWindow.h"
 #include "core/Language.h"
 
+#include "ui/DialogFrame.h"
 #include "ui/Theme.h"
 
 #include "core/Component.h"
@@ -390,12 +391,12 @@ MultimeterWindow::MultimeterWindow(const QString& refdes, MultimeterMode mode, Q
 {
     setWindowTitle(CSM_TR("%1 — Multimeter").arg(refdes));
     setAttribute(Qt::WA_DeleteOnClose);
-    resize(330, 150);
 
-    auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(10, 8, 10, 10);
+    // 和主窗口一样自绘顶栏；表盘大小固定，所以不挂拖拽区，也不让它最大化
+    auto* root = makeFramelessShell(*this, CSM_TR("Multimeter"), QMargins(10, 8, 10, 10), 0);
 
     auto* header = new QHBoxLayout;
+    header->setSpacing(8);
     auto* title = new QLabel(refdes, this);
     QFont titleFont = title->font();
     titleFont.setBold(true);
@@ -438,6 +439,14 @@ MultimeterWindow::MultimeterWindow(const QString& refdes, MultimeterMode mode, Q
     root->addWidget(m_display, 1);
 
     setValue(std::numeric_limits<double>::quiet_NaN());
+
+    // 内容固定（表头一行 + 一块数码管），尺寸算一次就锁死：既拉不动边，
+    // 也没有最大化按钮。窗口标志里去掉最大化位，窗口管理器就不会给这个动作
+    if (QLayout* layout = this->layout())
+        layout->activate();
+    const QSize hint = sizeHint();
+    setFixedSize(qMax(360, hint.width()), qMax(200, hint.height()));
+    setWindowFlag(Qt::WindowMaximizeButtonHint, false);
 }
 
 void MultimeterWindow::setMode(MultimeterMode mode)

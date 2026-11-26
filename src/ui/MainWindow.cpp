@@ -19,6 +19,8 @@
 #include "ui/SettingsDialog.h"
 #include "ui/Symbols.h"
 #include "ui/Theme.h"
+#include "ui/TitleBar.h"
+#include "ui/DialogFrame.h"
 #include "ui/UpdateDialog.h"
 #include "ui/WaveformWindow.h"
 #include "ui/Dialogs.h"
@@ -26,6 +28,9 @@
 #include <QAbstractItemView>
 #include <QUuid>
 #include <QDateTime>
+#include <QResizeEvent>
+#include <QWindow>
+#include <QBoxLayout>
 #include <QAction>
 #include <QRegularExpression>
 #include <QComboBox>
@@ -425,7 +430,12 @@ QTabBar::close-button:hover {
 
     createActions();
     scanExamples();
+    // 无边框：系统那条标题栏由自绘的一行代替（菜单 + 标题 + 三个按钮）
+    setWindowFlag(Qt::FramelessWindowHint);
+
     createMenus();
+    createTitleBar();
+    m_resizeGrips = new ResizeGrips(this);
     createToolBar();
     createDocks();
     createMonitorWindow();
@@ -1370,6 +1380,89 @@ void MainWindow::createMenus()
     helpMenu->addAction(m_actAbout);
 }
 
+void MainWindow::createTitleBar()
+{
+    m_titleBar = new TitleBar(this);
+
+    // 标题与三个按钮挂在菜单栏右上角：这样「菜单 + 标题 + 窗口按钮」本来就是
+    // 同一行，也不用把 QMenuBar 从 QMainWindow 里搬走（搬走会让 menuBar()
+    // 返回一个新建的空菜单栏，所有菜单都找不到）。
+    // 左上角放应用图标（和多数桌面软件一样，一眼认出是哪个程序）。
+    // 设成透明接收鼠标：拖它也算「拖空白处」，能搬窗口。
+    auto* iconBox = new QWidget(this);
+    auto* iconLayout = new QHBoxLayout(iconBox);
+    iconLayout->setContentsMargins(8, 0, 8, 0);
+    auto* iconLabel = new QLabel(iconBox);
+    iconLabel->setObjectName(QStringLiteral("titleBarIcon"));
+    QIcon mark = svgIcon(QStringLiteral(":/icons/icon.svg"));
+    if (!mark.isNull())
+        iconLabel->setPixmap(mark.pixmap(QSize(18, 18)));
+    iconLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+    iconLayout->addWidget(iconLabel);
+    iconBox->setAttribute(Qt::WA_TransparentForMouseEvents);
+    Theme::styleWidget(iconBox, [] {
+        return QStringLiteral("background: %1; border: none; border-bottom: 1px solid %2;")
+            .arg(Theme::surface().name(), Theme::border().name());
+    });
+    menuBar()->setCornerWidget(iconBox, Qt::TopLeftCorner);
+
+    menuBar()->setCornerWidget(m_titleBar, Qt::TopRightCorner);
+
+    // 顶栏比原生菜单栏高（要和标题、窗口按钮对齐），默认的条目排版会贴着上边。
+    // 用内边距把文字压到竖直中线 —— 34 px 减去文字高度，上下各 8 px 正好。
+    Theme::styleWidget(menuBar(), [] {
+        return QStringLiteral(R"(
+QMenuBar {
+    background: %1;
+    border: none;
+    border-bottom: 1px solid %3;
+    padding: 0px;
+    spacing: 0px;
+}
+QMenuBar::item {
+    background: transparent;
+    padding: 8px 8px;
+    margin: 0px;
+    border: none;
+}
+QMenuBar::item:selected {
+    background: %2;
+    border-radius: 5px;
+}
+)").arg(Theme::surface().name(), Theme::surfaceAlt().name(),
+                  Theme::border().name());
+    });
+    // 菜单栏右侧的空白也算「标题区」：拖它搬窗口，双击最大化
+    menuBar()->installEventFilter(this);
+
+    connect(m_titleBar, &TitleBar::minimizeRequested, this, &QWidget::showMinimized);
+    connect(m_titleBar, &TitleBar::maximizeRequested, this, &MainWindow::toggleMaximized);
+    connect(m_titleBar, &TitleBar::closeRequested, this, &QWidget::close);
+    m_titleBar->setMaximized(isMaximized());
+}
+
+void MainWindow::toggleMaximized()
+{
+    if (isMaximized())
+        showNormal();
+    else
+        showMaximized();
+}
+
+void MainWindow::resizeEvent(QResizeEvent* event)
+{
+    QMainWindow::resizeEvent(event);
+}
+
+void MainWindow::changeEvent(QEvent* event)
+{
+    QMainWindow::changeEvent(event);
+    if (event->type() == QEvent::WindowStateChange) {
+        if (m_titleBar)
+            m_titleBar->setMaximized(isMaximized());
+    }
+}
+
 void MainWindow::createToolBar()
 {
     QToolBar* bar = addToolBar(CSM_TR("Main toolbar"));
@@ -2223,6 +2316,51 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event)
         if (m_actMonitor)
             m_actMonitor->setChecked(false);
     }
+
+    // 菜单栏的空白处当标题栏用：拖动搬窗口、双击最大化。
+    // 落在菜单项上就放过，那是要点菜单的。
+    if (watched == menuBar()) {
+        auto* mouse = static_cast<QMouseEvent*>(event);
+        const bool onBlank = (event->type() == QEvent::MouseButtonPress
+                              || event->type() == QEvent::MouseMove
+                              || event->type() == QEvent::MouseButtonRelease
+                              || event->type() == QEvent::MouseButtonDblClick)
+                             && !menuBar()->actionAt(mouse->position().toPoint());
+        if (onBlank) {
+            switch (event->type()) {
+            case QEvent::MouseButtonPress:
+                if (mouse->button() == Qt::LeftButton) {
+                    // 优先交给窗口管理器；不支持时自己按偏移量搬
+                    QWindow* handle = windowHandle();
+                    if (!handle || !handle->startSystemMove()) {
+                        m_menuDragging = true;
+                        m_menuDragOffset = mouse->globalPosition().toPoint()
+                                           - frameGeometry().topLeft();
+                    }
+                    return true;
+                }
+                break;
+            case QEvent::MouseMove:
+                if (m_menuDragging && (mouse->buttons() & Qt::LeftButton)) {
+                    move(mouse->globalPosition().toPoint() - m_menuDragOffset);
+                    return true;
+                }
+                break;
+            case QEvent::MouseButtonRelease:
+                m_menuDragging = false;
+                break;
+            case QEvent::MouseButtonDblClick:
+                if (mouse->button() == Qt::LeftButton) {
+                    toggleMaximized();
+                    return true;
+                }
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
     return QMainWindow::eventFilter(watched, event);
 }
 
@@ -2273,8 +2411,11 @@ void MainWindow::createMonitorWindow()
     m_waveWindow->setObjectName(QStringLiteral("waveMonitorWindow"));
     m_waveWindow->setWindowTitle(CSM_TR("Waveform Monitor — Circuit Master"));
     m_waveWindow->resize(1040, 620);
-    auto* windowLayout = new QVBoxLayout(m_waveWindow);
-    windowLayout->setContentsMargins(0, 0, 0, 0);
+    // 和主窗口一样：无边框 + 自绘顶栏，标题跟着窗口标题走
+    // （切到「动态示波器」页时它会变）
+    auto* windowLayout = makeFramelessShell(*m_waveWindow, CSM_TR("Waveform Monitor"),
+                                            QMargins(0, 0, 0, 0), 0, true);
+    new ResizeGrips(m_waveWindow);
 
     m_waveTabs = new QTabWidget(m_waveWindow);
     m_wavePlot = new WaveformWindow(m_waveTabs);

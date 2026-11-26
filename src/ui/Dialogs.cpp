@@ -2,6 +2,7 @@
 #include "core/Language.h"
 
 #include "ui/Theme.h"
+#include "ui/DialogFrame.h"
 
 #include <QAbstractButton>
 #include <QApplication>
@@ -19,6 +20,7 @@
 #include <QTextCursor>
 #include <QTextDocument>
 #include <QVBoxLayout>
+#include <QWindow>
 
 #include <cmath>
 
@@ -141,9 +143,7 @@ QMessageBox::StandardButton runMessage(QWidget* parent, const QPixmap& icon,
     dialog.setWindowFlag(Qt::WindowContextHelpButtonHint, false);
     dialog.setStyleSheet(dialogStyleSheet());
 
-    auto* outer = new QVBoxLayout(&dialog);
-    outer->setContentsMargins(20, 18, 20, 14);
-    outer->setSpacing(16);
+    auto* outer = makeFramelessShell(dialog, title, QMargins(20, 16, 20, 14), 16);
 
     auto* row = new QHBoxLayout;
     row->setSpacing(14);
@@ -269,9 +269,7 @@ QTextBrowser {
 }
 )").arg(Theme::surface().name(), Theme::border().name(), Theme::accent().name()));
 
-    auto* outer = new QVBoxLayout(&dialog);
-    outer->setContentsMargins(20, 18, 20, 14);
-    outer->setSpacing(14);
+    auto* outer = makeFramelessShell(dialog, CSM_TR("Changelog"), QMargins(20, 16, 20, 14), 14);
 
     auto* viewer = new QTextBrowser(&dialog);
     viewer->setOpenExternalLinks(true);
@@ -359,9 +357,8 @@ QLabel#aboutFoot {
        Theme::surfaceAlt().name(), Theme::textSecondary().name(),
        Theme::textMuted().name()));
 
-    auto* outer = new QVBoxLayout(&dialog);
-    outer->setContentsMargins(22, 20, 22, 16);
-    outer->setSpacing(14);
+    auto* outer = makeFramelessShell(dialog, CSM_TR("About Circuit Master"),
+                                 QMargins(22, 18, 22, 16), 14);
 
     auto* top = new QHBoxLayout;
     top->setSpacing(16);
