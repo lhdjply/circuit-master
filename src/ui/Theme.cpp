@@ -268,6 +268,25 @@ void apply(QApplication& app)
 
     app.setPalette(palette);
 
+    // Fusion 画输入框边框的办法是「在底色上压一层半透明黑」，深色主题下压完
+    // 和底色几乎一样 —— 输入框看起来没有边。这里只给 QLineEdit 显式画一条；
+    // 下拉框、消息区那类控件保持原生画法，别一起改。
+    app.setStyleSheet(QStringLiteral(R"(
+QLineEdit {
+    border: 1px solid %1;
+    border-radius: 4px;
+    padding: 1px 6px;
+    background-color: %2;
+}
+QLineEdit:focus {
+    border-color: %3;
+}
+QLineEdit:disabled {
+    color: %4;
+}
+)").arg(border().name(), palette.color(QPalette::Base).name(), accent().name(),
+        disabledInk.name()));
+
     // 光设 QApplication 的调色板不够：已经 polish 过的菜单栏 / 工具栏 / 标签栏
     // 不会自动重新取色，运行中切主题时它们会保持旧颜色（实测：深色启动正常，
     // 但浅色启动后切深色，顶部那一条仍是白的）。给每个顶层窗口再显式设一遍，

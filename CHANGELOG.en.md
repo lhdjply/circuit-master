@@ -23,6 +23,10 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Fixed
 
+- **Invisible input borders in the dark theme**: the line edits in the property panel
+  had no visible edge at night — Fusion draws frames by darkening the background,
+  which is invisible on a dark fill. QLineEdit now gets an explicit
+  `Theme::border()` hairline; combo boxes and the rest are left alone.
 - **Custom dialog headers**: the save-changes prompt, Quick Start, About, Changelog, the
   settings window, the waveform monitor and the multimeter drop the system title bar for
   the same header the main window uses (centred title plus a close button, draggable).
