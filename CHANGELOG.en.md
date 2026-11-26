@@ -6,6 +6,14 @@ numbering follows [Semantic Versioning](https://semver.org/).
 The single source of truth for the version is the `VERSION` file at the
 repository root (same form as the tag, e.g. `v0.4.0`).
 
+## [Unreleased]
+
+### Fixed
+
+- **Fixed-size dialogs**: the save-changes prompt, Quick Start, About and Changelog
+  windows now size themselves to their content and cannot be resized (the settings
+  dialog stays resizable).
+
 ## [v0.5.1] - 2026-11-21
 
 This release adds autosave and crash recovery, customisable shortcuts, and an icon

@@ -26,6 +26,7 @@
 #include <QDataStream>
 #include <QImage>
 #include <QComboBox>
+#include "ui/Dialogs.h"
 #include <QDialog>
 #include <QKeyEvent>
 #include <QToolButton>
@@ -69,6 +70,8 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTimer>
+
+#include <memory>
 #include <QValueAxis>
 #include <QWidget>
 #include <cmath>
@@ -105,6 +108,7 @@ private slots:
     void conflictingShortcutWarnsAndRestores();
     void autosaveWritesRecoveryForDirtyDocuments();
     void autosaveSavesNamedDocumentsBackToDisk();
+    void infoDialogsCannotBeResized();
 
 private:
 
@@ -1268,6 +1272,65 @@ void UiPanelTest::autosaveSavesNamedDocumentsBackToDisk()
     QFile::remove(path);
     QDir(dataHome).removeRecursively();
     QFile::remove(QSettings().fileName());
+}
+
+
+void UiPanelTest::infoDialogsCannotBeResized()
+{
+    // 「保存更改 / 快速上手 / 关于 / 更新日志」这几个提示框内容固定，
+    // 不该让用户拖大小：最小尺寸与最大尺寸相等，拖动也改不掉。
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    // 提示框是模态的（exec 阻塞），只能靠定时器在它弹出后测量。
+    // 结果放进 shared_ptr：定时器的 lambda 活得比这个作用域长，
+    // 捕获局部变量的引用会在函数返回后写野指针。
+    struct Probe {
+        bool seen = false;
+        bool fixed = true;
+        QSize before;
+        QSize after;
+    };
+    const auto probe = std::make_shared<Probe>();
+    const auto arm = [probe] {
+        *probe = Probe{};
+        QTimer::singleShot(200, [probe] {
+            QWidget* dialog = QApplication::activeModalWidget();
+            if (!dialog)
+                return;
+            probe->seen = true;
+            probe->before = dialog->size();
+            probe->fixed = dialog->minimumSize() == dialog->maximumSize();
+            dialog->resize(probe->before + QSize(300, 200));   // 试着拖大
+            probe->after = dialog->size();
+            dialog->close();
+        });
+    };
+    const auto verify = [probe](const char* what) {
+        QVERIFY2(probe->seen, what);
+        QVERIFY2(probe->fixed, what);
+        QCOMPARE(probe->after, probe->before);
+    };
+
+    arm();
+    Dialogs::askSaveDiscardCancel(&window, QStringLiteral("保存更改"),
+                                  QStringLiteral("「未命名」有未保存的更改，是否保存？"));
+    verify("保存更改");
+
+    arm();
+    Dialogs::guide(&window, QStringLiteral("快速上手"),
+                   QStringLiteral("<b>三步完成一次仿真</b>"));
+    verify("快速上手");
+
+    arm();
+    Dialogs::about(&window, QStringLiteral("v0.5.1"));
+    verify("关于");
+
+    arm();
+    Dialogs::changelog(&window);
+    verify("更新日志");
 }
 
 #include "test_ui_panel.moc"

@@ -117,6 +117,18 @@ struct Choice {
 /// 短消息时会缩成一条、按钮却拉满整行，怎么调样式都不顺眼。
 /// 自己排版只有三件事 —— 图标、正文、按钮行 —— 反而好控制，
 /// 也能和「关于」窗口共用同一套观感。
+/// 提示框的内容是固定的，尺寸按内容算一次就锁死，不让用户拖。
+/// 先 adjustSize 再 setFixedSize：直接给布局加 SetFixedSize 约束的话，
+/// 带自动换行的 QLabel 会被压成很窄的一条。
+void fixDialogSize(QDialog& dialog)
+{
+    if (QLayout* layout = dialog.layout()) {
+        layout->activate();
+    }
+    dialog.adjustSize();
+    dialog.setFixedSize(dialog.size());
+}
+
 QMessageBox::StandardButton runMessage(QWidget* parent, const QPixmap& icon,
                                        const QString& title, const QString& text,
                                        const QVector<Choice>& choices,
@@ -179,6 +191,9 @@ QMessageBox::StandardButton runMessage(QWidget* parent, const QPixmap& icon,
         if (result == QMessageBox::NoButton)
             result = QMessageBox::Cancel;
     });
+
+    // 这类提示框的内容是固定的，尺寸按内容一次算好，不让用户拖
+    fixDialogSize(dialog);
 
     dialog.exec();
 
@@ -302,7 +317,8 @@ a { color: %5; }
     buttonRow->addWidget(close);
     outer->addLayout(buttonRow);
 
-    dialog.resize(660, 560);
+    // 正文很长、要滚动看，但窗口本身不必可调 —— 固定成这个大小
+    dialog.setFixedSize(660, 560);
     dialog.exec();
 }
 
@@ -416,6 +432,7 @@ QLabel#aboutFoot {
     outer->addLayout(buttonRow);
 
     dialog.setMinimumWidth(540);
+    fixDialogSize(dialog);
     dialog.exec();
 }
 
