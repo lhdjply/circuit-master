@@ -407,8 +407,14 @@ Problem buildProblem(const Circuit& circuit, const Netlist& net)
                 p.branchNodes.append(qMakePair(a, b));
                 ++p.nBranches;
             }
-            if (ok)
+            if (ok) {
                 p.windingBranches.insert(comp.id, branches);
+                // branchOf 只记一条：初级绕组。装配走上面的 windingBranches，
+                // 但「读这个元件的电流」全走 branchOf（报告、elementCurrents、
+                // 波形），不登记的话 I(T1) 永远是 0。
+                if (!branches.isEmpty())
+                    p.branchOf.insert(comp.id, branches.first());
+            }
             continue;
         }
         const bool needsBranch = comp.type == ComponentType::VoltageSource
@@ -440,6 +446,27 @@ Problem buildProblem(const Circuit& circuit, const Netlist& net)
         }
     }
     return p;
+}
+
+int currentSlotCount(const Problem& p, const Component& comp)
+{
+    if (comp.type != ComponentType::Transformer)
+        return 1;
+    // 变压器没登记上绕组时也占一路，保证采样向量与信号表的布局一致
+    const QVector<int> branches = p.windingBranches.value(comp.id);
+    return branches.isEmpty() ? 1 : branches.size();
+}
+
+QString currentLabel(const Component& comp, int slot)
+{
+    if (slot == 0)
+        return comp.refdes;
+    return QStringLiteral("%1.%2").arg(comp.refdes).arg(slot + 1);
+}
+
+QString currentSignalName(const Component& comp, int slot)
+{
+    return QStringLiteral("I(%1)").arg(currentLabel(comp, slot));
 }
 
 /// 逻辑门的输出电平：按回差判定每个输入是高还是低，再按门类型算布尔函数。
@@ -1023,13 +1050,29 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
             bool transient, double h, double t, const DiodeModel& dm, QVector<double>& out)
 {
     out.clear();
-    out.reserve(p.nNodes + p.elements.size());
+    out.reserve(p.nNodes + p.elements.size() + 2);
 
     for (int i = 1; i <= p.nNodes; ++i)
         out.append(p.voltage(x, i));
 
     for (const Component* cp : p.elements) {
         const Component& comp = *cp;
+
+        // 变压器一个绕组一路电流：初级是 I(T1)，其余 I(T1.2) / I(T1.3)。
+        // 每条绕组支路本身就是一个未知量，直接取即可。
+        if (comp.type == ComponentType::Transformer) {
+            const QVector<int> branches = p.windingBranches.value(comp.id);
+            if (branches.isEmpty()) {
+                out.append(0.0);   // 没登记上也要占一路，保持布局一致
+                continue;
+            }
+            for (int br : branches) {
+                const size_t idx = size_t(p.nNodes + br);
+                out.append(idx < x.size() ? x[idx] : 0.0);
+            }
+            continue;
+        }
+
         const int n1 = p.nodeOf(comp.id, 0);
         const int n2 = p.nodeOf(comp.id, 1);
         const double v = p.voltage(x, n1) - p.voltage(x, n2);
@@ -1177,8 +1220,11 @@ QVector<Signal> makeSignals(const Problem& p)
     list.reserve(p.nNodes + p.elements.size());
     for (int i = 1; i <= p.nNodes; ++i)
         list.append(Signal{QStringLiteral("V(%1)").arg(i), QStringLiteral("V"), {}, {}});
-    for (const Component* cp : p.elements)
-        list.append(Signal{QStringLiteral("I(%1)").arg(cp->refdes), QStringLiteral("A"), {}, {}});
+    for (const Component* cp : p.elements) {
+        const int count = currentSlotCount(p, *cp);   // slots 是 Qt 的关键字宏，别用它当变量名
+        for (int slot = 0; slot < count; ++slot)
+            list.append(Signal{currentSignalName(*cp, slot), QStringLiteral("A"), {}, {}});
+    }
 
     // 测试点可以指定参考地：非 GND 时补一条 V(a,b) 的差分信号
     for (const Component* cp : p.elements) {
@@ -1315,24 +1361,27 @@ QString buildReport(const Circuit& circuit, const Problem& p, const Netlist& net
     sample(p, x, st, false, 0.0, t, dm, currents);
     int idx = p.nNodes;
     for (const Component* cp : p.elements) {
-        if (idx >= currents.size())
+        const int count = currentSlotCount(p, *cp);
+        if (idx + count > currents.size())
             break;
         // 网络标签不是器件，不列电流
-        if (cp->type == ComponentType::NetLabel) {
-            ++idx;
-            continue;
+        if (cp->type != ComponentType::NetLabel) {
+            // 变压器一个绕组一行：T1 / T1.2 / T1.3
+            for (int slot = 0; slot < count; ++slot) {
+                lines << QStringLiteral("  %1 = %2")
+                             .arg(currentLabel(*cp, slot).leftJustified(8, QLatin1Char(' ')),
+                                  formatEng(currents.at(idx + slot), QStringLiteral("A"), 4));
+            }
         }
-        lines << QStringLiteral("  %1 = %2")
-                     .arg(cp->refdes.leftJustified(8, QLatin1Char(' ')),
-                          formatEng(currents.at(idx), QStringLiteral("A"), 4));
-        ++idx;
+        idx += count;
     }
 
     // 万用表读数：排在采样向量的最后一段（节点电压 + 元件电流 + 测试点差分之后），
     // 含义随档位变化（V / A / Ω）
     // 万用表读数在采样向量里排在最后：节点电压 + 元件电流 + 带参考地的测试点差分之后
-    int meterBase = int(p.nNodes + p.elements.size());
+    int meterBase = p.nNodes;
     for (const Component* cp : p.elements) {
+        meterBase += currentSlotCount(p, *cp);
         if (isVoltageTap(cp->type) && cp->groundKind != GroundKind::Gnd)
             ++meterBase;
     }
@@ -1614,8 +1663,11 @@ bool LiveTransient::start(const Circuit& circuit, double step, QString* error)
     d.names.clear();
     for (int i = 1; i <= d.problem.nNodes; ++i)
         d.names << QStringLiteral("V(%1)").arg(i);
-    for (const Component* comp : d.problem.elements)
-        d.names << QStringLiteral("I(%1)").arg(comp->refdes);
+    for (const Component* comp : d.problem.elements) {
+        const int count = currentSlotCount(d.problem, *comp);
+        for (int slot = 0; slot < count; ++slot)
+            d.names << currentSignalName(*comp, slot);
+    }
     // 带参考地的测试点：与 sample()/makeSignals() 一致，补一条差分信号
     for (const Component* comp : d.problem.elements) {
         if (!isVoltageTap(comp->type) || comp->groundKind == GroundKind::Gnd)
@@ -1683,8 +1735,11 @@ bool LiveTransient::updateCircuit(const Circuit& circuit, QString* error)
     d.names.clear();
     for (int i = 1; i <= d.problem.nNodes; ++i)
         d.names << QStringLiteral("V(%1)").arg(i);
-    for (const Component* comp : d.problem.elements)
-        d.names << QStringLiteral("I(%1)").arg(comp->refdes);
+    for (const Component* comp : d.problem.elements) {
+        const int count = currentSlotCount(d.problem, *comp);
+        for (int slot = 0; slot < count; ++slot)
+            d.names << currentSignalName(*comp, slot);
+    }
     // 带参考地的测试点：与 sample()/makeSignals() 一致，补一条差分信号
     for (const Component* comp : d.problem.elements) {
         if (!isVoltageTap(comp->type) || comp->groundKind == GroundKind::Gnd)
@@ -1810,11 +1865,15 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
 
         QVector<double> currents;
         sample(p, x, st, false, 0.0, 0.0, dm, currents);
-        for (int i = 0; i < p.elements.size(); ++i) {
-            const int idx = p.nNodes + i;
-            if (idx < currents.size())
-                result.elementCurrents.insert(
-                    QStringLiteral("I(%1)").arg(p.elements.at(i)->refdes), currents.at(idx));
+        int idx = p.nNodes;
+        for (const Component* cp : p.elements) {
+            const int count = currentSlotCount(p, *cp);
+            for (int slot = 0; slot < count; ++slot) {
+                if (idx + slot < currents.size())
+                    result.elementCurrents.insert(currentSignalName(*cp, slot),
+                                                  currents.at(idx + slot));
+            }
+            idx += count;
         }
         result.report = buildReport(circuit, p, net, x, st, dm, 0.0);
         result.elapsedMs = double(timer.nsecsElapsed()) / 1e6;

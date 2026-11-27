@@ -17,6 +17,22 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Fixed
 
+- **Test points read 0 V in the live scope**: after multi-winding currents were expanded
+  per winding, `LiveTransient` still built its name list one entry per element, so it was
+  off by the transformer's extra windings — every signal after it (including the `V(a,b)`
+  differential test points) read the wrong slot, and TP2 in the 220 V → 12 V example sat
+  at 0 V. The name list now uses the same per-slot rule.
+- **Multi-winding transformers report one current per winding**: `branchOf` can only hold
+  one entry per component, so a three-winding transformer only reported the primary. The
+  sampling vector and the signal list are now expanded per winding — `I(T1)`, `I(T1.2)`,
+  `I(T1.3)` (shown as `T1`, `T1.2`, `T1.3` in the report) — and the multimeter offsets in
+  that vector follow the new layout.
+- **Transformer current was always 0**: assembly registers one branch per winding
+  (`windingBranches`), but reading a component's current goes through `branchOf` — and
+  the transformer's `continue` came before that registration, so `I(T1)` was always 0:
+  the operating-point report, `elementCurrents` and the waveforms were all wrong even
+  though the circuit itself solved correctly. The primary winding is registered now, so
+  the reported T1 current matches the source current.
 - **Double-clicking a broken `.csm` no longer closes the program**: when a file passed on
   the command line failed to open, `main` used to `return 1`, so dismissing the error
   dialog took the whole window down. It now just reports the problem and keeps the

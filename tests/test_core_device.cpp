@@ -80,6 +80,8 @@ private slots:
     void primaryAuxTransformerWindings();
     void transformerThreeWindingsHaveOwnRatios();
     void transformerPolarityFlipsPhase();
+    void transformerCurrentIsReported();
+    void liveScopeSignalsLineUpWithValues();
     void ob2362DrivesGateByFeedback();
     void ob2362HasBiasClampAndUvlo();
     void switchingControllerSuggestsFineStep();
@@ -535,6 +537,205 @@ void CoreDeviceTest::transformerStepsVoltageByTurnsRatio()
     for (double y : s->y)
         m = std::max(m, std::abs(y));
     QVERIFY2(m > 4.3 && m < 5.6, qPrintable(QStringLiteral("1:0.5 次级 %1 V").arg(m)));
+}
+
+
+void CoreDeviceTest::transformerCurrentIsReported()
+{
+    // 变压器的装配走 windingBranches（每个绕组一条支路），但「读这个元件的电流」
+    // 走 branchOf。漏了登记的话 I(T1) 恒为 0 —— 工作点报告、elementCurrents、
+    // 波形全错，而电路本身算得没错。多绕组还要各占一路：I(T1) / I(T1.2) / I(T1.3)。
+    auto build = [](SourceFunction fn) {
+        Circuit c;
+        Component v;
+        v.id = 1;
+        v.type = ComponentType::VoltageSource;
+        v.pos = QPointF(100, 300);
+        v.rotation = 90;
+        v.refdes = QStringLiteral("V1");
+        v.function = fn;
+        v.dcValue = 12.0;
+        v.amplitude = 10.0 / std::sqrt(2.0);
+        v.frequency = 1000.0;
+        c.components.append(v);
+
+        Component t;
+        t.id = 2;
+        t.type = ComponentType::Transformer;
+        t.pos = QPointF(300, 300);
+        t.refdes = QStringLiteral("T1");
+        t.value = 1.0;
+        t.lpri = 1.0;
+        c.components.append(t);
+
+        Component r;
+        r.id = 3;
+        r.type = ComponentType::Resistor;
+        r.pos = QPointF(450, 300);
+        r.rotation = 90;
+        r.refdes = QStringLiteral("RL");
+        r.value = 1000.0;
+        c.components.append(r);
+
+        Component g;
+        g.id = 4;
+        g.type = ComponentType::Ground;
+        g.pos = QPointF(100, 400);
+        g.refdes = QStringLiteral("GND");
+        c.components.append(g);
+        int id = 5;
+        for (const QPointF& pos : {QPointF(270, 400), QPointF(330, 400), QPointF(450, 400)}) {
+            Component gg = g;
+            gg.id = id++;
+            gg.pos = pos;
+            c.components.append(gg);
+        }
+        // 初级：V+ → T1 初级+；初级− → 地；V− → 地
+        c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(270, 200),
+                             QPointF(270, 290)}});
+        c.wires.append(Wire{{QPointF(270, 310), QPointF(270, 400)}});
+        c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
+        // 次级：次级+ → RL → 地；次级− → 地
+        c.wires.append(Wire{{QPointF(330, 290), QPointF(450, 290), QPointF(450, 270)}});
+        c.wires.append(Wire{{QPointF(450, 330), QPointF(450, 400)}});
+        c.wires.append(Wire{{QPointF(330, 310), QPointF(330, 400)}});
+        return c;
+    };
+
+    // 工作点：初级与电源串联，电流必须相等；两路都得出现在 elementCurrents 里
+    SimulationOptions op;
+    op.kind = AnalysisKind::OperatingPoint;
+    const SimulationResult dc = Simulator::run(build(SourceFunction::Constant), op);
+    QVERIFY2(dc.ok, qPrintable(dc.error));
+
+    QVERIFY2(dc.elementCurrents.contains(QStringLiteral("I(T1)")), "报告里没有 I(T1)");
+    QVERIFY2(dc.elementCurrents.contains(QStringLiteral("I(T1.2)")), "报告里没有 I(T1.2)");
+    const double primary = dc.elementCurrents.value(QStringLiteral("I(T1)"));
+    const double source = dc.elementCurrents.value(QStringLiteral("I(V1)"));
+    QVERIFY2(std::abs(primary) > 1.0,
+             qPrintable(QStringLiteral("I(T1) 不该是 0：%1").arg(primary)));
+    QVERIFY2(std::abs(std::abs(primary) - std::abs(source)) < 0.5,
+             qPrintable(QStringLiteral("I(T1)=%1 与 I(V1)=%2 应当相等").arg(primary).arg(source)));
+
+    bool primaryLine = false;
+    bool secondLine = false;
+    for (const QString& line : dc.report.split(QLatin1Char('\n'))) {
+        const QString trimmed = line.trimmed();
+        if (trimmed.startsWith(QStringLiteral("T1 "))) {
+            primaryLine = true;
+            QVERIFY2(!line.contains(QStringLiteral("= 0 A")), qPrintable(line));
+        }
+        if (trimmed.startsWith(QStringLiteral("T1.2")))
+            secondLine = true;
+    }
+    QVERIFY2(primaryLine, "工作点报告里没有 T1 这一行");
+    QVERIFY2(secondLine, "工作点报告里没有 T1.2 这一行");
+
+    // 瞬态：两个绕组都该有实际电流（直流下次级没有感应电动势，所以要用正弦）
+    SimulationOptions tr;
+    tr.kind = AnalysisKind::Transient;
+    tr.tStop = 0.004;
+    tr.tStep = 1e-5;
+    const SimulationResult ac = Simulator::run(build(SourceFunction::Sine), tr);
+    QVERIFY2(ac.ok, qPrintable(ac.error));
+    auto peak = [&ac](const QString& name) {
+        const Signal* sig = ac.signal(name);
+        if (!sig)
+            return -1.0;
+        double m = 0.0;
+        for (double y : sig->y)
+            m = std::max(m, std::abs(y));
+        return m;
+    };
+    const double iPrimary = peak(QStringLiteral("I(T1)"));
+    const double iSecondary = peak(QStringLiteral("I(T1.2)"));
+    // 10 V 峰值 / 1 kΩ 负载 → 次级约 10 mA；初级还要加上励磁电流
+    QVERIFY2(iPrimary > 1e-3, qPrintable(QStringLiteral("I(T1) 峰值 %1").arg(iPrimary)));
+    QVERIFY2(iSecondary > 5e-3 && iSecondary < 15e-3,
+             qPrintable(QStringLiteral("I(T1.2) 峰值 %1").arg(iSecondary)));
+
+    // 三绕组：每个绕组各占一路信号，名字依次是 I(T1) / I(T1.2) / I(T1.3)
+    Circuit three = build(SourceFunction::Sine);
+    for (Component& comp : three.components) {
+        if (comp.type == ComponentType::Transformer)
+            comp.transformerKind = TransformerKind::PrimaryAuxSecondary;
+    }
+    const SimulationResult tri = Simulator::run(three, tr);
+    QVERIFY2(tri.ok, qPrintable(tri.error));
+    for (const char* name : {"I(T1)", "I(T1.2)", "I(T1.3)"})
+        QVERIFY2(tri.signal(QLatin1String(name)) != nullptr, name);
+}
+
+
+void CoreDeviceTest::liveScopeSignalsLineUpWithValues()
+{
+    // 动态示波器用 LiveTransient：signalNames() 与 values() 必须一一对应。
+    // 变压器的采样按绕组展开后，名字表也要跟着展开 —— 少一条就会让后面的
+    // 测试点差分信号整体错位，表现是示波器上某个测试点恒为 0 V。
+    Circuit c;
+    Component v;
+    v.id = 1;
+    v.type = ComponentType::VoltageSource;
+    v.pos = QPointF(100, 300);
+    v.rotation = 90;
+    v.refdes = QStringLiteral("V1");
+    v.function = SourceFunction::Sine;
+    v.amplitude = 10.0 / std::sqrt(2.0);
+    v.frequency = 1000.0;
+    c.components.append(v);
+
+    Component t;
+    t.id = 2;
+    t.type = ComponentType::Transformer;
+    t.pos = QPointF(300, 300);
+    t.refdes = QStringLiteral("T1");
+    t.value = 1.0;
+    t.lpri = 1.0;
+    c.components.append(t);
+
+    Component r;
+    r.id = 3;
+    r.type = ComponentType::Resistor;
+    r.pos = QPointF(450, 300);
+    r.rotation = 90;
+    r.refdes = QStringLiteral("RL");
+    r.value = 1000.0;
+    c.components.append(r);
+
+    Component g;
+    g.id = 4;
+    g.type = ComponentType::Ground;
+    g.pos = QPointF(100, 400);
+    g.refdes = QStringLiteral("GND");
+    c.components.append(g);
+    int id = 5;
+    for (const QPointF& pos : {QPointF(270, 400), QPointF(330, 400), QPointF(450, 400)}) {
+        Component gg = g;
+        gg.id = id++;
+        gg.pos = pos;
+        c.components.append(gg);
+    }
+    c.wires.append(Wire{{QPointF(100, 270), QPointF(100, 200), QPointF(270, 200),
+                         QPointF(270, 290)}});
+    c.wires.append(Wire{{QPointF(270, 310), QPointF(270, 400)}});
+    c.wires.append(Wire{{QPointF(100, 330), QPointF(100, 400)}});
+    c.wires.append(Wire{{QPointF(330, 290), QPointF(450, 290), QPointF(450, 270)}});
+    c.wires.append(Wire{{QPointF(450, 330), QPointF(450, 400)}});
+    c.wires.append(Wire{{QPointF(330, 310), QPointF(330, 400)}});
+
+    LiveTransient live;
+    QString error;
+    QVERIFY2(live.start(c, 1e-5, &error), qPrintable(error));
+    QVERIFY2(live.advance(1, &error), qPrintable(error));
+
+    const QStringList& names = live.signalNames();
+    const QVector<double> values = live.values();
+    QVERIFY2(!names.isEmpty(), "名字表是空的");
+    QCOMPARE(names.size(), values.size());
+
+    // 变压器的两个绕组各占一条名字
+    QVERIFY2(names.contains(QStringLiteral("I(T1)")), "缺少 I(T1)");
+    QVERIFY2(names.contains(QStringLiteral("I(T1.2)")), "缺少 I(T1.2)");
 }
 
 void CoreDeviceTest::primaryAuxTransformerWindings()
