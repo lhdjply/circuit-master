@@ -157,6 +157,12 @@ void PropertyPanel::buildUi()
     m_opIbias = makeEdit(CSM_TR("e.g. 100n"));
     m_opIbias->setToolTip(CSM_TR("Bias current flowing into each input terminal."));
     m_form->addRow(CSM_TR("Input bias current (A)"), m_opIbias);
+    m_opRin = makeEdit(CSM_TR("e.g. 2M"));
+    m_opRin->setToolTip(CSM_TR("Differential resistance between the + and − inputs."));
+    m_form->addRow(CSM_TR("Input resistance (Ω)"), m_opRin);
+    m_opRout = makeEdit(CSM_TR("e.g. 50"));
+    m_opRout->setToolTip(CSM_TR("Series resistance at the output; the output sags under load."));
+    m_form->addRow(CSM_TR("Output resistance (Ω)"), m_opRout);
 
     m_windings = new QComboBox(page);
     m_windings->addItem(CSM_TR("Single winding (1 primary + 1 secondary)"),
@@ -309,7 +315,8 @@ void PropertyPanel::buildUi()
     connect(m_vf, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_ctr, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_vceSat, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
-    for (QLineEdit* edit : {m_opVsatHigh, m_opVsatLow, m_opGbw, m_opSlew, m_opVos, m_opIbias})
+    for (QLineEdit* edit : {m_opVsatHigh, m_opVsatLow, m_opGbw, m_opSlew, m_opVos, m_opIbias,
+                            m_opRin, m_opRout})
         connect(edit, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_lpri, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_meterMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -427,6 +434,8 @@ void PropertyPanel::refreshFromItem()
     m_opSlew->setText(QString::number(c.slewRate / 1e6, 'g', 4));
     m_opVos->setText(quantityText(c.vos, UnitKind::Volt));
     m_opIbias->setText(quantityText(c.ibias, UnitKind::Ampere));
+    m_opRin->setText(quantityText(c.rin, UnitKind::Ohm));
+    m_opRout->setText(quantityText(c.rout, UnitKind::Ohm));
     m_windings->setCurrentIndex(m_windings->findData(int(c.transformerKind)));
     m_meterMode->setCurrentIndex(m_meterMode->findData(int(c.multimeterMode)));
     m_logicHigh->setText(quantityText(c.logicHigh, UnitKind::Volt));
@@ -489,7 +498,8 @@ void PropertyPanel::updateVisibility()
     m_form->setRowVisible(m_vceSat, c.type == ComponentType::Optocoupler);
     m_form->setRowVisible(m_lpri, c.type == ComponentType::Transformer);
     const bool opamp = (c.type == ComponentType::OpAmp);
-    for (QLineEdit* edit : {m_opVsatHigh, m_opVsatLow, m_opGbw, m_opSlew, m_opVos, m_opIbias})
+    for (QLineEdit* edit : {m_opVsatHigh, m_opVsatLow, m_opGbw, m_opSlew, m_opVos, m_opIbias,
+                            m_opRin, m_opRout})
         m_form->setRowVisible(edit, opamp);
     m_form->setRowVisible(m_logicHigh, c.type == ComponentType::LogicGate);
 
@@ -845,6 +855,10 @@ void PropertyPanel::applyValue()
         if (!read(m_opVos, UnitKind::Volt, 1.0, &c.vos))
             return;
         if (!read(m_opIbias, UnitKind::Ampere, 1.0, &c.ibias))
+            return;
+        if (!read(m_opRin, UnitKind::Ohm, 1.0, &c.rin))
+            return;
+        if (!read(m_opRout, UnitKind::Ohm, 1.0, &c.rout))
             return;
         // 上限必须大于下限，否则饱和函数没有意义
         if (c.vSatHigh <= c.vSatLow) {

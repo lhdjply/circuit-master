@@ -516,6 +516,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Detected a %1 build; will download: %2%3</translation>
     </message>
     <message>
+        <source>Differential resistance between the + and − inputs.</source>
+        <translation>Differential resistance between the + and − inputs.</translation>
+    </message>
+    <message>
         <source>Digital logic</source>
         <translation>Digital logic</translation>
     </message>
@@ -768,6 +772,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Input offset voltage: shifts the +/− input difference.</source>
         <translation>Input offset voltage: shifts the +/− input difference.</translation>
+    </message>
+    <message>
+        <source>Input resistance (Ω)</source>
+        <translation>Input resistance (Ω)</translation>
     </message>
     <message>
         <source>Install did not finish (exit code %1). Installer kept at: %2%3</source>
@@ -1076,6 +1084,10 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
     <message>
         <source>Output high level. Low level is fixed at 0 V; input threshold is half of it (5% hysteresis).</source>
         <translation>Output high level. Low level is fixed at 0 V; input threshold is half of it (5% hysteresis).</translation>
+    </message>
+    <message>
+        <source>Output resistance (Ω)</source>
+        <translation>Output resistance (Ω)</translation>
     </message>
     <message>
         <source>Output swing high (V)</source>
@@ -1398,6 +1410,10 @@ to edit its parameters</translation>
     <message>
         <source>Semiconductors</source>
         <translation>Semiconductors</translation>
+    </message>
+    <message>
+        <source>Series resistance at the output; the output sags under load.</source>
+        <translation>Series resistance at the output; the output sags under load.</translation>
     </message>
     <message>
         <source>Settings</source>
@@ -1918,6 +1934,10 @@ Checked: normally closed, opens while held.</translation>
         <translation>e.g. 220%1</translation>
     </message>
     <message>
+        <source>e.g. 2M</source>
+        <translation>e.g. 2M</translation>
+    </message>
+    <message>
         <source>e.g. 2m</source>
         <translation>e.g. 2m</translation>
     </message>
@@ -1936,6 +1956,10 @@ Checked: normally closed, opens while held.</translation>
     <message>
         <source>e.g. 5%1</source>
         <translation>e.g. 5%1</translation>
+    </message>
+    <message>
+        <source>e.g. 50</source>
+        <translation>e.g. 50</translation>
     </message>
     <message>
         <source>e.g. 50Hz</source>

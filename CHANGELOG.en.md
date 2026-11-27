@@ -10,12 +10,18 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Added
 
-- **The op-amp is no longer ideal**: the property panel gained six parameters — output
-  swing high / low, gain-bandwidth product, slew rate, input offset and input bias
-  current. Defaults match a general-purpose part (±15 V, 1 MHz, 0.5 V/µs); widen the
-  limits and zero the bandwidth and slew rate to get the old ideal model back. Without
+- **The op-amp is no longer ideal**: the property panel gained eight parameters — output
+  swing high / low, gain-bandwidth product, slew rate, input offset, input bias
+  current, input resistance and output resistance. Defaults match a general-purpose
+  part (±15 V, 1 MHz, 0.5 V/µs, 2 MΩ, 50 Ω); widen the limits, zero the bandwidth and
+  slew rate and raise the input resistance to get the old ideal model back. Without
   these, comparators, oscillators, clipping and loop stability cannot be simulated
-  correctly.
+  correctly. The input resistance is **per input terminal, to ground**: in a follower
+  the + and − inputs sit at almost the same potential, so a differential resistance
+  draws no current at all — only the common-mode resistance actually loads the source
+  (1 MΩ of source resistance against 1 MΩ of input resistance gives exactly half).
+  The output resistance is corrected by the loop in closed loop; to see it, look at an
+  open-loop or saturated stage (±5 V rail, 1 kΩ load, 500 Ω output resistance → 3.33 V).
 - **Save As can write a PNG**: the file type list gained "PNG image". Picking it
   renders the whole schematic (its item bounds, not the current viewport) at 2× pixels
   with the grid background, leaving selection highlights out. Exporting does not touch

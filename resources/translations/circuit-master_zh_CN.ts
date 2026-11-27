@@ -519,6 +519,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>检测到当前是%1运行，将下载：%2%3</translation>
     </message>
     <message>
+        <source>Differential resistance between the + and − inputs.</source>
+        <translation>接在 +/− 两个输入之间的差模电阻。</translation>
+    </message>
+    <message>
         <source>Digital logic</source>
         <translation>数字逻辑</translation>
     </message>
@@ -770,6 +774,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Input offset voltage: shifts the +/− input difference.</source>
         <translation>输入失调电压：等效成 +/− 输入之间的固定偏差。</translation>
+    </message>
+    <message>
+        <source>Input resistance (Ω)</source>
+        <translation>输入电阻 (Ω)</translation>
     </message>
     <message>
         <source>Install did not finish (exit code %1). Installer kept at: %2%3</source>
@@ -1078,6 +1086,10 @@ Place a voltage (TP) or current (IP) test point and run again</source>
     <message>
         <source>Output high level. Low level is fixed at 0 V; input threshold is half of it (5% hysteresis).</source>
         <translation>输出的高电平。低电平固定 0 V，输入阈值取它的一半（带 5% 回差）。</translation>
+    </message>
+    <message>
+        <source>Output resistance (Ω)</source>
+        <translation>输出电阻 (Ω)</translation>
     </message>
     <message>
         <source>Output swing high (V)</source>
@@ -1400,6 +1412,10 @@ to edit its parameters</source>
     <message>
         <source>Semiconductors</source>
         <translation>半导体</translation>
+    </message>
+    <message>
+        <source>Series resistance at the output; the output sags under load.</source>
+        <translation>输出端的等效串联电阻，带载时输出电压会掉。</translation>
     </message>
     <message>
         <source>Settings</source>
@@ -1920,6 +1936,10 @@ Checked: normally closed, opens while held.</source>
         <translation>例如 220%1</translation>
     </message>
     <message>
+        <source>e.g. 2M</source>
+        <translation>例如 2M</translation>
+    </message>
+    <message>
         <source>e.g. 2m</source>
         <translation>例如 2m</translation>
     </message>
@@ -1938,6 +1958,10 @@ Checked: normally closed, opens while held.</source>
     <message>
         <source>e.g. 5%1</source>
         <translation>例如 5%1</translation>
+    </message>
+    <message>
+        <source>e.g. 50</source>
+        <translation>例如 50</translation>
     </message>
     <message>
         <source>e.g. 50Hz</source>

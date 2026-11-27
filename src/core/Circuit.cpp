@@ -249,6 +249,8 @@ void writeComponentFields(QJsonObject& o, const Component& c)
         put("slewRate", c.slewRate);
         put("vos", c.vos);
         put("ibias", c.ibias);
+        put("rin", c.rin);
+        put("rout", c.rout);
         break;
 
     case ComponentType::Switch:
@@ -436,6 +438,8 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
         c.slewRate = o.value(QStringLiteral("slewRate")).toDouble(0.5e6);
         c.vos = o.value(QStringLiteral("vos")).toDouble(0.0);
         c.ibias = o.value(QStringLiteral("ibias")).toDouble(0.0);
+        c.rin = o.value(QStringLiteral("rin")).toDouble(2e6);
+        c.rout = o.value(QStringLiteral("rout")).toDouble(50.0);
         c.groundKind = static_cast<GroundKind>(o.value(QStringLiteral("groundKind")).toInt(0));
         c.multimeterMode = static_cast<MultimeterMode>(
             o.value(QStringLiteral("multimeterMode")).toInt(0));

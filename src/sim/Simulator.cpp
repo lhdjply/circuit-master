@@ -860,10 +860,17 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
             if (br < 0)
                 break;
             const double a0 = comp.value > 1.0 ? comp.value : 1e5;
-            addBranch(a, b, p, comp.id, 50.0, 0.0);
+            addBranch(a, b, p, comp.id, comp.rout > 0.0 ? comp.rout : 0.0, 0.0);
             const int ib = p.nNodes + br;
             const int inP = p.nodeOf(comp.id, 0);
             const int inM = p.nodeOf(comp.id, 1);
+
+            // 输入电阻：每个输入端对地各一个。跟随器里 +IN 与 −IN 几乎等电位，
+            // 差模电阻根本不取电流，只有共模（对地）电阻才会真正加载信号源
+            if (comp.rin > 0.0) {
+                addG(a, inP, 0, 1.0 / comp.rin);
+                addG(a, inM, 0, 1.0 / comp.rin);
+            }
 
             // 压摆率受限：本步输出被钉在「上一步 ± SR·h」上，与 vd 无关
             if (st.opampSlew.contains(comp.id)) {
@@ -1758,10 +1765,15 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
                 const double wp = 2.0 * kPi * comp.gbw / a0;
                 gain = Cx(a0, 0.0) / (Cx(1.0, 0.0) + Cx(0.0, omega / wp));
             }
-            addBranch(a, b, p, comp.id, Cx(50.0, 0.0), Cx(0.0, 0.0));
+            addBranch(a, b, p, comp.id,
+                      Cx(comp.rout > 0.0 ? comp.rout : 0.0, 0.0), Cx(0.0, 0.0));
             const int ib = p.nNodes + br;
             const int inP = p.nodeOf(comp.id, 0);
             const int inM = p.nodeOf(comp.id, 1);
+            if (comp.rin > 0.0) {
+                addG(a, inP, 0, Cx(1.0 / comp.rin, 0.0));
+                addG(a, inM, 0, Cx(1.0 / comp.rin, 0.0));
+            }
             if (inP > 0)
                 a(ib, inP - 1) -= gain;
             if (inM > 0)

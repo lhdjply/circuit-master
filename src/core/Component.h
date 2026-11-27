@@ -189,6 +189,11 @@ struct Component {
     double vos = 0.0;
     /// 输入偏置电流（A）：两个输入端各自流进器件的电流
     double ibias = 0.0;
+    /// 输入电阻（Ω）：每个输入端对地各一个。默认按通用型运放取 2 MΩ ——
+    /// 高阻信号源（MΩ 级）串在输入端时能看到明显的分压
+    double rin = 2e6;
+    /// 输出电阻（Ω）：输出端等效串联电阻，带载时输出电压会掉
+    double rout = 50.0;
 
     // 独立源参数
     SourceFunction function = SourceFunction::Constant;

@@ -109,6 +109,8 @@ private slots:
     void opAmpFollowerClipsAtRail();
     void suggestedStepRespectsSlewRate();
     void componentJsonOnlyHasItsOwnFields();
+    void opAmpInputResistanceLoadsSource();
+    void opAmpOutputResistanceSagsUnderLoad();
     void opAmpOffsetAndBiasShiftOutput();
     void opAmpParametersRoundTrip();
     void rcLowPassAc();
@@ -680,6 +682,133 @@ void CoreAnalysisTest::componentJsonOnlyHasItsOwnFields()
     QCOMPARE(back.components.at(2).type, ComponentType::Ground);
 }
 
+
+namespace {
+
+/// 跟随器：V1 经 Rs 驱动 +IN，−IN 接 OUT；可带对地负载
+Circuit followerStage(double rs, double rin, double rout, double load)
+{
+    Circuit c;
+    Component v = makeComp(ComponentType::VoltageSource, QPointF(100, 380), 0.0, 90);
+    v.function = SourceFunction::Constant;
+    v.dcValue = 1.0;
+    addComponent(c, v);
+
+    Component op = makeComp(ComponentType::OpAmp, QPointF(300, 300), 1e5);
+    op.rin = rin;
+    op.rout = rout;
+    addComponent(c, op);
+    addComponent(c, makeComp(ComponentType::Ground, QPointF(120, 410), 0.0));
+
+    if (rs > 0.0) {
+        addComponent(c, makeComp(ComponentType::Resistor, QPointF(160, 280), rs));
+        c.wires.append(Wire{{QPointF(100, 350), QPointF(100, 280), QPointF(130, 280)}});
+        c.wires.append(Wire{{QPointF(190, 280), QPointF(270, 280)}});
+    } else {
+        c.wires.append(Wire{{QPointF(100, 350), QPointF(100, 280), QPointF(270, 280)}});
+    }
+    c.wires.append(Wire{{QPointF(100, 410), QPointF(100, 440), QPointF(120, 440),
+                         QPointF(120, 410)}});
+    c.wires.append(Wire{{QPointF(270, 320), QPointF(240, 320), QPointF(240, 300),
+                         QPointF(330, 300)}});
+
+    if (load > 0.0) {
+        addComponent(c, makeComp(ComponentType::Resistor, QPointF(400, 340), load, 90));
+        addComponent(c, makeComp(ComponentType::Ground, QPointF(400, 400), 0.0));
+        c.wires.append(Wire{{QPointF(330, 300), QPointF(400, 300), QPointF(400, 310)}});
+        c.wires.append(Wire{{QPointF(400, 370), QPointF(400, 400)}});
+    }
+    return c;
+}
+
+/// 开环：+IN 接 2 V、−IN 接地，输出饱和在 ±vSat，可带对地负载
+Circuit openLoopStage(double rout, double load, double vSat)
+{
+    Circuit c;
+    Component v = makeComp(ComponentType::VoltageSource, QPointF(100, 380), 0.0, 90);
+    v.function = SourceFunction::Constant;
+    v.dcValue = 2.0;
+    addComponent(c, v);
+
+    Component op = makeComp(ComponentType::OpAmp, QPointF(300, 300), 1e5);
+    op.rout = rout;
+    op.rin = 1e9;
+    op.vSatHigh = vSat;
+    op.vSatLow = -vSat;
+    addComponent(c, op);
+    addComponent(c, makeComp(ComponentType::Ground, QPointF(120, 410), 0.0));
+    addComponent(c, makeComp(ComponentType::Ground, QPointF(240, 240), 0.0));
+
+    c.wires.append(Wire{{QPointF(100, 350), QPointF(100, 280), QPointF(270, 280)}});
+    c.wires.append(Wire{{QPointF(100, 410), QPointF(100, 440), QPointF(120, 440),
+                         QPointF(120, 410)}});
+    c.wires.append(Wire{{QPointF(270, 320), QPointF(240, 320), QPointF(240, 240)}});
+
+    if (load > 0.0) {
+        addComponent(c, makeComp(ComponentType::Resistor, QPointF(400, 340), load, 90));
+        addComponent(c, makeComp(ComponentType::Ground, QPointF(400, 400), 0.0));
+        c.wires.append(Wire{{QPointF(330, 300), QPointF(400, 300), QPointF(400, 310)}});
+        c.wires.append(Wire{{QPointF(400, 370), QPointF(400, 400)}});
+    }
+    return c;
+}
+
+double settledOutput(Circuit c, int opId = 2)
+{
+    const Netlist net = c.buildNetlist();
+    if (!net.valid)
+        return -999.0;
+    SimulationOptions tr;
+    tr.kind = AnalysisKind::Transient;
+    tr.tStop = 5e-3;
+    tr.tStep = 1e-6;
+    const SimulationResult r = Simulator::run(c, tr);
+    const Signal* s = r.signal(QStringLiteral("V(%1)").arg(net.nodeOf(opId, 2)));
+    return s && !s->y.isEmpty() ? s->y.last() : -999.0;
+}
+
+} // namespace
+
+void CoreAnalysisTest::opAmpInputResistanceLoadsSource()
+{
+    // 输入电阻是「每个输入端对地」的：跟随器里 +IN 与 −IN 几乎等电位，
+    // 差模电阻根本不取电流，只有对地的共模电阻才会真正加载信号源
+    const double half = settledOutput(followerStage(1e6, 1e6, 50.0, 0.0));
+    QVERIFY2(std::abs(half - 0.5) < 0.01,
+             qPrintable(QStringLiteral("1 MΩ 源内阻 + 1 MΩ 输入电阻 → %1 V").arg(half)));
+
+    const double full = settledOutput(followerStage(1e6, 1e9, 50.0, 0.0));
+    QVERIFY2(std::abs(full - 0.999) < 0.01,
+             qPrintable(QStringLiteral("输入电阻 1 GΩ → %1 V").arg(full)));
+
+    // 没有源内阻时输入电阻不影响结果
+    const double direct = settledOutput(followerStage(0.0, 1e6, 50.0, 0.0));
+    QVERIFY2(std::abs(direct - 1.0) < 0.01,
+             qPrintable(QStringLiteral("无源内阻 → %1 V").arg(direct)));
+}
+
+void CoreAnalysisTest::opAmpOutputResistanceSagsUnderLoad()
+{
+    // 闭环会把输出电阻补偿掉，要观察它得让运放饱和：轨 5 V + 1 kΩ 负载，
+    // 输出 = 5·Rl/(Rl + Rout)
+    const double noRout = settledOutput(openLoopStage(0.0, 1000.0, 5.0));
+    QVERIFY2(std::abs(noRout - 5.0) < 0.05,
+             qPrintable(QStringLiteral("Rout = 0 → %1 V").arg(noRout)));
+
+    const double with50 = settledOutput(openLoopStage(50.0, 1000.0, 5.0));
+    QVERIFY2(std::abs(with50 - 4.762) < 0.05,
+             qPrintable(QStringLiteral("Rout = 50 Ω → %1 V").arg(with50)));
+
+    const double with500 = settledOutput(openLoopStage(500.0, 1000.0, 5.0));
+    QVERIFY2(std::abs(with500 - 3.333) < 0.05,
+             qPrintable(QStringLiteral("Rout = 500 Ω → %1 V").arg(with500)));
+
+    // 空载时输出电阻不压降
+    const double noLoad = settledOutput(openLoopStage(500.0, 0.0, 5.0));
+    QVERIFY2(std::abs(noLoad - 5.0) < 0.05,
+             qPrintable(QStringLiteral("空载 → %1 V").arg(noLoad)));
+}
+
 void CoreAnalysisTest::opAmpOffsetAndBiasShiftOutput()
 {
     const double base = opAmpOutput(opAmpStage(0.0, 1e5, 1000.0, 0.0, 0.0, 0.0, 0.0));
@@ -706,6 +835,8 @@ void CoreAnalysisTest::opAmpParametersRoundTrip()
     op.slewRate = 3.3e6;
     op.vos = 0.004;
     op.ibias = 2e-7;
+    op.rin = 4.7e6;
+    op.rout = 75.0;
     addComponent(c, op);
 
     const Circuit back = Circuit::fromJson(c.toJson());
@@ -717,6 +848,8 @@ void CoreAnalysisTest::opAmpParametersRoundTrip()
     QCOMPARE(got.slewRate, 3.3e6);
     QCOMPARE(got.vos, 0.004);
     QCOMPARE(got.ibias, 2e-7);
+    QCOMPARE(got.rin, 4.7e6);
+    QCOMPARE(got.rout, 75.0);
 }
 
 void CoreAnalysisTest::opAmpInvertingAc()
