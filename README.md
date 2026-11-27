@@ -1,7 +1,9 @@
 # 电路仿真大师（Circuit Master）
 
-一款面向 Linux 的跨平台电路原理图编辑与仿真软件，使用 **Qt 6 + C++17 + CMake** 开发，
-目标是提供 Multisim 的核心工作流替代方案：**画原理图 → 点运行 → 看波形**。
+一款跨平台的电路原理图编辑与仿真软件（**Linux / Windows / macOS**），
+使用 **Qt 6 + C++17 + CMake** 开发，目标是提供 Multisim 的核心工作流替代方案：
+**画原理图 → 点运行 → 看波形**。Linux 侧提供 deb 与便携包，Windows 提供安装包与
+便携 zip，macOS 提供 dmg。
 
 ![主界面](docs/screenshots/main.png)
 
@@ -397,7 +399,7 @@ ctest --test-dir build --output-on-failure
 
 ## 已知限制与路线图
 
-当前版本是 **0.3.3**，聚焦于“可用且结果可信”的最小闭环。已知限制：
+当前版本是 **0.5.2**，聚焦于“可用且结果可信”的最小闭环。已知限制：
 
 - 导线中间拐点不能单独拖动（只能拖首尾端点，或拖动导线主体让它变形）
 - 二极管模型未包含串联电阻、结电容；开关为理想电阻模型
@@ -408,7 +410,7 @@ ctest --test-dir build --output-on-failure
 计划：
 
 - [ ] 导线拐点拖动、自动布线
-- [x] 对齐与分布（0.3.3 起）
+- [x] 对齐与分布
 - [x] 变压器、逻辑门、万用表、网络标签、测试点、测量探针、信号发生器
 - [ ] 受控源（VCVS / VCCS / CCVS / CCCS），运放饱和与带宽模型，IGBT 开关特性
 - [ ] 自适应步长瞬态、梯形法、SPICE `.model` 导入
@@ -417,7 +419,7 @@ ctest --test-dir build --output-on-failure
 
 ## 版本号
 
-版本号只有一个来源：仓库根目录的 `VERSION` 文件（写法与 git tag 一致，如 `v0.3.3`）。
+版本号只有一个来源：仓库根目录的 `VERSION` 文件（写法与 git tag 一致，如 `v0.5.2`）。
 
 - CMake 在配置阶段读取它，剥掉 `v` 前缀后交给 `project(VERSION ...)`，
   并生成 `csm_version.h`（`CSM_VERSION_STRING` / `CSM_VERSION_NUMBER`）供源码使用
@@ -427,7 +429,7 @@ ctest --test-dir build --output-on-failure
 
 ```bash
 ./build/CircuitMaster --version
-# 电路仿真大师 v0.3.3
+# 电路仿真大师 v0.5.2
 ```
 
 ## 持续集成
@@ -444,11 +446,11 @@ ctest --test-dir build --output-on-failure
 
 ```bash
 # 1. 改版本号（VERSION 与 debian/changelog 必须一致，CMake 会校验）
-echo "v0.3.3" > VERSION
-dch -v 0.3.3    # 或手工编辑 debian/changelog
-# 2. 在 CHANGELOG.md 写一节 "## [v0.3.3]"，Release 正文直接取这一节
+echo "v0.5.2" > VERSION
+dch -v 0.5.2    # 或手工编辑 debian/changelog
+# 2. 在 CHANGELOG.md 写一节 "## [v0.5.2]"，Release 正文直接取这一节
 # 3. 打 tag 触发发布
-git tag v0.3.3 && git push origin v0.3.3
+git tag v0.5.2 && git push origin v0.5.2
 ```
 
 > 未打 tag 的推送会生成 `continuous_build` 预发布，便于随时下载最新构建。
@@ -484,7 +486,7 @@ dpkg-buildpackage -us -uc -b
 打包相关约定：
 
 - 版本号：`debian/changelog` 是安装包的版本来源（dpkg 的硬约束），
-  与根目录 `VERSION` 不一致时 CMake 会给出警告，发版请用 `dch -v 0.3.3` 同步
+  与根目录 `VERSION` 不一致时 CMake 会给出警告，发版请用 `dch -v 0.5.2` 同步
 - 打包时传入 `-DCSM_BUILD_TESTS=OFF` 跳过单元测试（测试需要 Qt6::Test，与安装内容无关）
 - 安装内容全部由 CMake 的 install 规则提供：可执行文件、`.desktop`、SVG 图标、示例电路
 
@@ -498,7 +500,7 @@ Windows 侧产物：
 内含启动脚本（设置 `LD_LIBRARY_PATH` / `QT_PLUGIN_PATH`）、Qt 运行库、插件与内置示例：
 
 ```bash
-scripts/package-linux-tarball.sh --arch amd64 --from-deb ../circuit-master_0.3.3_amd64.deb
+scripts/package-linux-tarball.sh --arch amd64 --from-deb ../circuit-master_0.5.2_amd64.deb
 ```
 
 安装后的文件布局：
