@@ -35,6 +35,10 @@ class MainWindow : public QMainWindow {
 public:
     /// 直接打开指定路径（命令行参数、文件关联用），失败时返回 false 并已提示
     bool openPath(const QString& path);
+    /// 把整张原理图导出成 PNG（按所有元件的包围盒渲染，不是当前视口）。
+    /// 只导出，不动文档的路径、名字与「已修改」状态。
+    bool exportSchematicImage(const QString& path);
+
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override;
 

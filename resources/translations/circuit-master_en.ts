@@ -364,6 +364,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Circuit Master %1  —  Qt6 / MNA solver</translation>
     </message>
     <message>
+        <source>Circuit Master circuit (*.csm)</source>
+        <translation>Circuit Master circuit (*.csm)</translation>
+    </message>
+    <message>
         <source>Circuit Master circuit (*.csm);;All files (*)</source>
         <translation>Circuit Master circuit (*.csm);;All files (*)</translation>
     </message>
@@ -642,6 +646,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Export waveform data</source>
         <translation>Export waveform data</translation>
+    </message>
+    <message>
+        <source>Exported: %1</source>
+        <translation>Exported: %1</translation>
     </message>
     <message>
         <source>Fall time</source>
@@ -1050,6 +1058,10 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
     <message>
         <source>PGND (power)</source>
         <translation>PGND (power)</translation>
+    </message>
+    <message>
+        <source>PNG image (*.png)</source>
+        <translation>PNG image (*.png)</translation>
     </message>
     <message>
         <source>PNG images (*.png)</source>
@@ -1548,6 +1560,10 @@ Restore them?</translation>
     <message>
         <source>Theme</source>
         <translation>Theme</translation>
+    </message>
+    <message>
+        <source>There is nothing on the schematic to export.</source>
+        <translation>There is nothing on the schematic to export.</translation>
     </message>
     <message>
         <source>This mirror is too slow, switching</source>

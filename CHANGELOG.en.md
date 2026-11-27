@@ -8,6 +8,13 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ## [Unreleased]
 
+### Added
+
+- **Save As can write a PNG**: the file type list gained "PNG image". Picking it
+  renders the whole schematic (its item bounds, not the current viewport) at 2× pixels
+  with the grid background, leaving selection highlights out. Exporting does not touch
+  the document's path or its modified state.
+
 ### Fixed
 
 - **Saving no longer truncates first**: it uses QSaveFile now — a temp file in the same

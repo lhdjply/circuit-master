@@ -367,6 +367,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>电路仿真大师 %1  —  Qt6 / MNA 求解器</translation>
     </message>
     <message>
+        <source>Circuit Master circuit (*.csm)</source>
+        <translation>电路仿真大师电路 (*.csm)</translation>
+    </message>
+    <message>
         <source>Circuit Master circuit (*.csm);;All files (*)</source>
         <translation>电路仿真大师电路 (*.csm);;所有文件 (*)</translation>
     </message>
@@ -645,6 +649,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Export waveform data</source>
         <translation>导出波形数据</translation>
+    </message>
+    <message>
+        <source>Exported: %1</source>
+        <translation>已导出：%1</translation>
     </message>
     <message>
         <source>Fall time</source>
@@ -1053,6 +1061,10 @@ Place a voltage (TP) or current (IP) test point and run again</source>
     <message>
         <source>PGND (power)</source>
         <translation>PGND（功率地）</translation>
+    </message>
+    <message>
+        <source>PNG image (*.png)</source>
+        <translation>PNG 图片 (*.png)</translation>
     </message>
     <message>
         <source>PNG images (*.png)</source>
@@ -1551,6 +1563,10 @@ Restore them?</source>
     <message>
         <source>Theme</source>
         <translation>主题</translation>
+    </message>
+    <message>
+        <source>There is nothing on the schematic to export.</source>
+        <translation>原理图里没有可导出的内容。</translation>
     </message>
     <message>
         <source>This mirror is too slow, switching</source>

@@ -31,6 +31,8 @@
 #include <QResizeEvent>
 #include <QWindow>
 #include <QBoxLayout>
+#include <QImage>
+#include <cmath>
 #include <QAction>
 #include <QRegularExpression>
 #include <QComboBox>
@@ -2172,17 +2174,81 @@ bool MainWindow::saveCircuit()
 
 bool MainWindow::saveCircuitAs()
 {
-    QString path = QFileDialog::getSaveFileName(
-        this, CSM_TR("Save Circuit"), doc()->name + QStringLiteral(".csm"),
-        CSM_TR("Circuit Master circuit (*.csm);;All files (*)"));
-    if (path.isEmpty())
+    // 用 QFileDialog 实例而不是静态函数：需要知道用户选的是哪个过滤器，
+    // 否则「选了 PNG、却没输扩展名」会被当成另存 .csm
+    QFileDialog dialog(this, CSM_TR("Save Circuit"));
+    dialog.setAcceptMode(QFileDialog::AcceptSave);
+    dialog.setFileMode(QFileDialog::AnyFile);
+    dialog.setNameFilters({CSM_TR("Circuit Master circuit (*.csm)"),
+                           CSM_TR("PNG image (*.png)")});
+    dialog.selectFile(doc()->name + QStringLiteral(".csm"));
+    if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty())
         return false;
+
+    QString path = dialog.selectedFiles().constFirst();
+    const bool wantsPng = dialog.selectedNameFilter().contains(QLatin1String(".png"))
+                          || path.endsWith(QLatin1String(".png"), Qt::CaseInsensitive);
+    if (wantsPng) {
+        if (!path.endsWith(QLatin1String(".png"), Qt::CaseInsensitive)) {
+            // 默认名是 xxx.csm，换到 PNG 过滤器后别变成 xxx.csm.png
+            if (path.endsWith(QLatin1String(".csm"), Qt::CaseInsensitive))
+                path.chop(4);
+            path += QStringLiteral(".png");
+        }
+        return exportSchematicImage(path);
+    }
+
     if (!path.endsWith(QLatin1String(".csm"), Qt::CaseInsensitive))
         path += QStringLiteral(".csm");
 
     doc()->filePath = path;
     doc()->name = QFileInfo(path).fileName();
     return saveCircuit();
+}
+
+bool MainWindow::exportSchematicImage(const QString& path)
+{
+    // 按所有元件的包围盒算，不是当前视口 —— 缩放过 / 滚动过也不影响导出内容
+    QRectF bounds = m_scene->itemsBoundingRect();
+    if (bounds.isEmpty()) {
+        Dialogs::warn(this, CSM_TR("Export failed"),
+                      CSM_TR("There is nothing on the schematic to export."));
+        return false;
+    }
+    const qreal margin = 20.0;
+    bounds.adjust(-margin, -margin, margin, margin);
+
+    // 2 倍像素：默认 DPI 下文字和 1 px 的网格会糊
+    constexpr qreal kScale = 2.0;
+    QImage image(int(std::ceil(bounds.width() * kScale)),
+                 int(std::ceil(bounds.height() * kScale)),
+                 QImage::Format_ARGB32_Premultiplied);
+    if (image.isNull()) {
+        Dialogs::warn(this, CSM_TR("Export failed"), CSM_TR("Cannot write the image file."));
+        return false;
+    }
+    image.setDevicePixelRatio(kScale);
+    image.fill(Theme::canvas());
+
+    // 选中态带高亮框，导出时不该出现在图里
+    const QList<QGraphicsItem*> selected = m_scene->selectedItems();
+    m_scene->clearSelection();
+
+    QPainter painter(&image);
+    painter.setRenderHint(QPainter::Antialiasing);
+    painter.setRenderHint(QPainter::TextAntialiasing);
+    m_scene->render(&painter, QRectF(QPointF(0, 0), bounds.size()), bounds);
+    painter.end();
+
+    for (QGraphicsItem* item : selected)
+        item->setSelected(true);
+
+    if (!image.save(path, "PNG")) {
+        Dialogs::warn(this, CSM_TR("Export failed"), CSM_TR("Cannot write the image file."));
+        return false;
+    }
+    appendLog(CSM_TR("Exported: %1").arg(path));
+    return true;
 }
 
 void MainWindow::openCircuit()
