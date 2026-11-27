@@ -1478,10 +1478,6 @@ to edit its parameters</source>
         <translation>压摆率 (V/µs)</translation>
     </message>
     <message>
-        <source>Small-signal diode</source>
-        <translation>小信号二极管</translation>
-    </message>
-    <message>
         <source>Snap Wires to Grid</source>
         <translation>导线对齐网格</translation>
     </message>

@@ -6,6 +6,18 @@ numbering follows [Semantic Versioning](https://semver.org/).
 The single source of truth for the version is the `VERSION` file at the
 repository root (same form as the tag, e.g. `v0.4.0`).
 
+## [Unreleased]
+
+### Changed
+
+- **A diode's forward drop is now adjustable**: the property panel gained a
+  "Forward drop Vf" row (0.7 V by default) and the canvas label shows it too (it used
+  to be a hard-coded `1N4148`). The model calibrates the saturation current from the
+  drop at 20 mA and keeps the 1N4148 emission coefficient of 1.752 — changing the drop
+  shifts the whole I-V curve without changing its slope. Measured on a half-wave
+  rectifier: Vf of 0.3 / 0.7 / 1.2 / 3.0 V gives output peaks of
+  4.76 / 4.37 / 3.87 / 2.10 V.
+
 ## [v0.6.0] - 2026-11-27
 
 This release turns the op-amp from an ideal part into a usable model — saturation,

@@ -60,6 +60,9 @@ struct DiodeModel {
 /// 取 n = 2（LED 的典型发射系数），20 mA 时压降正好等于 Vf。
 constexpr double kLedRatedCurrent = 0.02;
 constexpr double kLedEmission = 2.0;
+/// 普通二极管：按 20 mA 时的压降标定，发射系数取 1N4148 的典型值
+constexpr double kDiodeRatedCurrent = 0.02;
+constexpr double kPnEmission = 1.752;
 
 DiodeModel ledModel(double vf, double vt)
 {
@@ -71,6 +74,30 @@ DiodeModel ledModel(double vf, double vt)
     const double target = std::max(vf, 0.8);
     dm.is = kLedRatedCurrent / (std::exp(target / nvt) - 1.0);
     return dm;
+}
+
+/// 普通二极管模型：同样由「额定电流下的正向压降」反推饱和电流。
+/// 发射系数沿用 1N4148 的 1.752，所以只改压降时 I-V 斜率不变、只是整条曲线平移。
+/// vmax 只比 vf 高 0.2 V：指数项要留余量让牛顿迭代有落点，但放太宽
+/// （比如 4 V）会让它在振荡时算出天文数字的电流。
+DiodeModel pnModel(double vf, double vt)
+{
+    DiodeModel dm;
+    dm.emission = kPnEmission;
+    dm.vt = vt;
+    const double target = std::clamp(vf, 0.05, 100.0);
+    dm.vmax = std::max(0.9, target + 0.2);
+    const double nvt = dm.nvt();
+    dm.is = kDiodeRatedCurrent / (std::exp(target / nvt) - 1.0);
+    return dm;
+}
+
+/// 取某个元件的二极管模型：普通二极管按 vf 反推，LED / 光耦用 LED 参数
+DiodeModel diodeModelFor(const Component& comp, double vt)
+{
+    if (comp.type == ComponentType::Diode)
+        return pnModel(comp.vf, vt);
+    return ledModel(comp.vf, vt);
 }
 
 /// 三极管 / MOSFET / IGBT 的工作点：电流 + 线性化后的跨导
@@ -660,10 +687,8 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
 
         case ComponentType::Diode:
         case ComponentType::Led: {
-            // LED 与普通二极管方程相同，只是模型参数按 Vf 反推
-            const DiodeModel model = comp.type == ComponentType::Led
-                ? ledModel(comp.vf, dm.vt)
-                : dm;
+            // 两者方程相同，模型参数都由「额定电流下的正向压降」反推
+            const DiodeModel model = diodeModelFor(comp, dm.vt);
             const double vd = st.diodeV.value(comp.id, 0.0);
             const double g = model.conductance(vd);
             const double id = model.current(vd);
@@ -1005,12 +1030,9 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
             const int n2 = p.nodeOf(cp->id, 1);
             const double vNew = p.voltage(x, n1) - p.voltage(x, n2);
             const double vOld = st.diodeV.value(cp->id, 0.0);
-            // LED / 光耦输入侧都用 LED 模型限幅：拿普通二极管的 0.9 V 上限去卡，
-            // 会和 stamp 里用的模型不一致，迭代收敛到错误工作点（表现为电流天文数字）
-            const DiodeModel model = (cp->type == ComponentType::Led
-                                      || cp->type == ComponentType::Optocoupler)
-                ? ledModel(cp->vf, dm.vt)
-                : dm;
+            // 限幅必须和 stamp 用同一个模型：拿普通二极管的 0.9 V 上限去卡 LED，
+            // 或者反过来，都会让迭代收敛到错误工作点（表现为电流天文数字）
+            const DiodeModel model = diodeModelFor(*cp, dm.vt);
             const double vLim = pnjlim(vNew, vOld, model.nvt(), model.vcrit(), model.vmax);
             diodeDelta = std::max(diodeDelta, std::abs(vLim - vOld));
             st.diodeV.insert(cp->id, vLim);
@@ -1224,9 +1246,7 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
             break;
         case ComponentType::Diode:
         case ComponentType::Led: {
-            const DiodeModel model = comp.type == ComponentType::Led
-                ? ledModel(comp.vf, dm.vt)
-                : dm;
+            const DiodeModel model = diodeModelFor(comp, dm.vt);
             current = model.current(v);
             break;
         }
@@ -1240,10 +1260,7 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
         }
 
         case ComponentType::Optocoupler: {
-            const DiodeModel model = (comp.type == ComponentType::Led
-                                      || comp.type == ComponentType::Optocoupler)
-                ? ledModel(comp.vf, dm.vt)
-                : dm;
+            const DiodeModel model = ledModel(comp.vf, dm.vt);
             current = model.current(v);
             break;
         }
@@ -1663,9 +1680,7 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
             break;
         case ComponentType::Diode:
         case ComponentType::Led: {
-            const DiodeModel model = comp.type == ComponentType::Led
-                ? ledModel(comp.vf, dm.vt)
-                : dm;
+            const DiodeModel model = diodeModelFor(comp, dm.vt);
             addG(a, n1, n2, Cx(model.conductance(st.diodeV.value(comp.id, 0.6)), 0.0));
             break;
         }

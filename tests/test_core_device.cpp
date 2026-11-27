@@ -92,6 +92,7 @@ private slots:
     void pmosConductsWithNegativeGate();
     void igbtConductsAboveThreshold();
     void diodeRectifier();
+    void diodeForwardDropIsAdjustable();
     void multimeterMeasuresVoltageCurrentResistance();
     void multimeterMeasuresAcRms();
     void groundKindsAreSeparateNets();
@@ -1829,6 +1830,52 @@ void CoreDeviceTest::diodeRectifier()
     // 正半周导通时输出约为输入减去二极管压降
     QVERIFY2(maxV > 3.8 && maxV < 5.05, qPrintable(QString::number(maxV)));
     QVERIFY2(minV > -0.2 && minV < 0.1, qPrintable(QString::number(minV)));
+}
+
+
+void CoreDeviceTest::diodeForwardDropIsAdjustable()
+{
+    // 半波整流：压降调大，输出峰值就该低一截
+    const auto peak = [](double vf) {
+        Circuit c = loopCircuit(ComponentType::Diode, 0.0,
+                                ComponentType::Resistor, 1000.0, 0.0);
+        Component& v = c.components[0];
+        v.function = SourceFunction::Sine;
+        v.amplitude = 5.0 / std::sqrt(2.0);   // 峰值 5 V
+        v.frequency = 50.0;
+        v.offset = 0.0;
+        for (Component& comp : c.components)
+            if (comp.type == ComponentType::Diode)
+                comp.vf = vf;
+
+        SimulationOptions opt;
+        opt.kind = AnalysisKind::Transient;
+        opt.tStop = 0.04;
+        opt.tStep = 2e-5;
+        const SimulationResult r = Simulator::run(c, opt);
+        if (!r.ok)
+            return -999.0;
+        const Signal* s = r.signal(QStringLiteral("V(2)"));
+        if (!s)
+            return -999.0;
+        double hi = -1e30;
+        for (double y : s->y)
+            hi = std::max(hi, y);
+        return hi;
+    };
+
+    const double low = peak(0.3);
+    const double mid = peak(0.7);
+    const double high = peak(1.5);
+    QVERIFY2(low > mid && mid > high,
+             qPrintable(QStringLiteral("压降越大输出越低：%1 / %2 / %3")
+                            .arg(low).arg(mid).arg(high)));
+    // 0.7 V 的管子，5 V 峰值输入下输出应在 4.2~4.6 V（20 mA 标定、实际电流更小）
+    QVERIFY2(mid > 4.2 && mid < 4.6,
+             qPrintable(QStringLiteral("vf = 0.7 时峰值 %1 V").arg(mid)));
+    // 压降大约按差值平移
+    QVERIFY2(std::abs((mid - high) - 0.8) < 0.35,
+             qPrintable(QStringLiteral("0.7→1.5 V 的落差只有 %1 V").arg(mid - high)));
 }
 
 void CoreDeviceTest::multimeterMeasuresVoltageCurrentResistance()

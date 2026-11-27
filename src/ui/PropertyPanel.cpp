@@ -40,6 +40,7 @@ UnitKind valueUnitFor(ComponentType type)
     case ComponentType::Resistor:  return UnitKind::Ohm;
     case ComponentType::Capacitor: return UnitKind::Farad;
     case ComponentType::Inductor:  return UnitKind::Henry;
+    case ComponentType::Diode:     return UnitKind::Volt;
     case ComponentType::VoltageSource: return UnitKind::Volt;
     case ComponentType::CurrentSource: return UnitKind::Ampere;
     default: return UnitKind::None;
@@ -396,6 +397,7 @@ void PropertyPanel::refreshFromItem()
 
     m_refdes->setText(c.refdes);
     switch (c.type) {
+    case ComponentType::Diode:
     case ComponentType::Led:
     case ComponentType::Optocoupler:
         m_value->setText(quantityText(c.vf, UnitKind::Volt));
@@ -483,7 +485,8 @@ void PropertyPanel::updateVisibility()
     const bool source = isSource(c.type) && !generator;
     const bool analog = c.type == ComponentType::Resistor || c.type == ComponentType::Capacitor
         || c.type == ComponentType::Inductor || c.type == ComponentType::OpAmp
-        || c.type == ComponentType::Led || c.type == ComponentType::Optocoupler
+        || c.type == ComponentType::Diode || c.type == ComponentType::Led
+        || c.type == ComponentType::Optocoupler
         || c.type == ComponentType::Tl431 || c.type == ComponentType::Transformer
         || isThreeTerminalDevice(c.type);
 
@@ -532,8 +535,9 @@ void PropertyPanel::updateVisibility()
             m_valueLabel->setText(CSM_TR("Threshold Vth"));
             m_value->setPlaceholderText(CSM_TR("e.g. 2"));
             break;
+        case ComponentType::Diode:
         case ComponentType::Led:
-            // LED 只暴露正向压降一个参数，见下面的 applyValue
+            // 二极管 / LED 只暴露正向压降一个参数，见下面的 applyValue
             m_valueLabel->setText(CSM_TR("Forward drop Vf"));
             m_value->setPlaceholderText(CSM_TR("e.g. 2"));
             break;
@@ -609,10 +613,7 @@ void PropertyPanel::updateSubtitle()
     if (!m_item)
         return;
     const Component& c = m_item->component();
-    QString text = c.displayValue();
-    if (c.type == ComponentType::Diode)
-        text = CSM_TR("Small-signal diode");
-    m_subtitle->setText(text);
+    m_subtitle->setText(c.displayValue());
 }
 
 void PropertyPanel::applyRefdes()
@@ -657,7 +658,8 @@ void PropertyPanel::applyValue()
         return;
     const ComponentType type = m_item->component().type;
 
-    if (type == ComponentType::Led || type == ComponentType::Optocoupler) {
+    if (type == ComponentType::Diode || type == ComponentType::Led
+        || type == ComponentType::Optocoupler) {
         QString reason;
         bool ok = false;
         const double vf = parseQuantity(m_value->text(), UnitKind::Volt, &ok, &reason);

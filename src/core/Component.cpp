@@ -454,7 +454,8 @@ QString Component::displayValue() const
     }
 
     case ComponentType::Diode:
-        return QStringLiteral("1N4148");
+        // 压降是可调的，画布上直接显示这个值（和 LED 一样带 Vf 前缀）
+        return QStringLiteral("Vf = ") + formatEng(vf, QStringLiteral("V"), 3);
 
     case ComponentType::OpAmp:
         return QStringLiteral("A = ") + formatEng(value, QString(), 3);

@@ -1476,10 +1476,6 @@ to edit its parameters</translation>
         <translation>Slew rate (V/µs)</translation>
     </message>
     <message>
-        <source>Small-signal diode</source>
-        <translation>Small-signal diode</translation>
-    </message>
-    <message>
         <source>Snap Wires to Grid</source>
         <translation>Snap Wires to Grid</translation>
     </message>
