@@ -220,6 +220,12 @@ QVBoxLayout* makeFramelessShell(QWidget& dialog, const QString& title,
 {
     dialog.setWindowFlag(Qt::FramelessWindowHint);
 
+    // 无边框之后，有些窗口管理器会把这类窗口当成普通窗口，在任务栏里再列一条。
+    // 对话框一律换成 Tool：任务栏不显示，模态行为不受影响（模态由 QDialog 自己管）。
+    // 不要求有父窗口 —— 那样等于让调用方「记得传 parent」才不会退化成普通窗口。
+    if (qobject_cast<QDialog*>(&dialog))
+        dialog.setWindowFlag(Qt::Tool, true);
+
     auto* shell = new QVBoxLayout(&dialog);
     shell->setContentsMargins(0, 0, 0, 0);
     shell->setSpacing(0);

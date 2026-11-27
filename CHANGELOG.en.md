@@ -10,6 +10,12 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Fixed
 
+- **Dialogs no longer add a taskbar entry**: after going frameless, some window
+  managers treated them as ordinary windows. They are Tool windows now (transient
+  children when they have a parent), so only the main window shows in the taskbar. The
+  multimeter and the waveform monitor are treated the same way — the former is a small
+  meter floating over the canvas, the latter is toggled from View / F6 — so neither needs
+  its own taskbar slot.
 - **The update dialog now uses the custom header too**: it was the last window with a
   system title bar. It is a fixed 640×600 now, with the notes scrolling inside.
 

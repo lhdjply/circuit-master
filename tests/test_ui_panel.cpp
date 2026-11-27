@@ -1298,6 +1298,7 @@ void UiPanelTest::infoDialogsCannotBeResized()
     struct Probe {
         bool seen = false;
         bool fixed = true;
+        int windowType = 0;
         QSize before;
         QSize after;
     };
@@ -1309,6 +1310,7 @@ void UiPanelTest::infoDialogsCannotBeResized()
             if (!dialog)
                 return;
             probe->seen = true;
+            probe->windowType = int(dialog->windowFlags() & Qt::WindowType_Mask);
             probe->before = dialog->size();
             probe->fixed = dialog->minimumSize() == dialog->maximumSize();
             dialog->resize(probe->before + QSize(300, 200));   // 试着拖大
@@ -1320,6 +1322,8 @@ void UiPanelTest::infoDialogsCannotBeResized()
         QVERIFY2(probe->seen, what);
         QVERIFY2(probe->fixed, what);
         QCOMPARE(probe->after, probe->before);
+        // Tool 类型：带父窗口时任务栏里不会再列一条
+        QCOMPARE(probe->windowType, int(Qt::Tool));
     };
 
     arm();
@@ -1464,6 +1468,8 @@ void UiPanelTest::waveMonitorUsesCustomHeader()
     QVERIFY2(monitor->windowFlags().testFlag(Qt::FramelessWindowHint), "波形监控应当无边框");
     QVERIFY(monitor->findChild<QWidget*>(QStringLiteral("dialogHeader")) != nullptr);
     QVERIFY(monitor->findChild<QWidget*>(QStringLiteral("dialogHeaderClose")) != nullptr);
+    // Tool：不在任务栏里单列，靠「波形监控 / F6」开关
+    QCOMPARE(int(monitor->windowFlags() & Qt::WindowType_Mask), int(Qt::Tool));
 
     monitor->close();
     settle();
@@ -1489,6 +1495,8 @@ void UiPanelTest::multimeterIsFramelessAndFixedSize()
     // 没有最大化位：窗口管理器不会提供最大化动作
     QVERIFY2(!meter.windowFlags().testFlag(Qt::WindowMaximizeButtonHint),
              "万用表不该有最大化按钮");
+    // Tool 类型：不在任务栏里单列一条
+    QCOMPARE(int(meter.windowFlags() & Qt::WindowType_Mask), int(Qt::Tool));
 
     meter.close();
 }

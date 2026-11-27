@@ -2423,6 +2423,8 @@ void MainWindow::createMonitorWindow()
     auto* windowLayout = makeFramelessShell(*m_waveWindow, CSM_TR("Waveform Monitor"),
                                             QMargins(0, 0, 0, 0), 0, true);
     new ResizeGrips(m_waveWindow);
+    // 和万用表、各个对话框一样不在任务栏里单列 —— 它由「波形监控 / F6」开关
+    m_waveWindow->setWindowFlag(Qt::Tool, true);
 
     m_waveTabs = new QTabWidget(m_waveWindow);
     m_wavePlot = new WaveformWindow(m_waveTabs);

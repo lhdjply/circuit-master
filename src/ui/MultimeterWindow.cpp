@@ -394,6 +394,8 @@ MultimeterWindow::MultimeterWindow(const QString& refdes, MultimeterMode mode, Q
 
     // 和主窗口一样自绘顶栏；表盘大小固定，所以不挂拖拽区，也不让它最大化
     auto* root = makeFramelessShell(*this, CSM_TR("Multimeter"), QMargins(10, 8, 10, 10), 0);
+    // 它就是个浮在画布上的小表盘，不在任务栏里单列一条（和各个对话框一致）
+    setWindowFlag(Qt::Tool, true);
 
     auto* header = new QHBoxLayout;
     header->setSpacing(8);
