@@ -108,6 +108,7 @@ private slots:
     void opAmpSlewRateLimitsStep();
     void opAmpFollowerClipsAtRail();
     void suggestedStepRespectsSlewRate();
+    void componentJsonOnlyHasItsOwnFields();
     void opAmpOffsetAndBiasShiftOutput();
     void opAmpParametersRoundTrip();
     void rcLowPassAc();
@@ -636,6 +637,47 @@ void CoreAnalysisTest::suggestedStepRespectsSlewRate()
     tr.tStep = step;
     const SimulationResult r = Simulator::run(c, tr);
     QVERIFY2(r.ok, qPrintable(r.error));
+}
+
+
+void CoreAnalysisTest::componentJsonOnlyHasItsOwnFields()
+{
+    // .csm 里每个元件只写自己用得到的参数：电阻不该带运放的 vos / gbw，
+    // 运放不该带脉冲源的 pulseWidth。以前是全量写 40 多个键，
+    // 一个两管小电路的文件就有十几 KB。
+    Circuit c;
+    addComponent(c, makeComp(ComponentType::Resistor, QPointF(100, 100), 1000.0));
+    Component op = makeComp(ComponentType::OpAmp, QPointF(300, 300), 1e5);
+    op.gbw = 2e6;
+    op.vos = 0.005;
+    addComponent(c, op);
+    Component g = makeComp(ComponentType::Ground, QPointF(100, 400), 0.0);
+    addComponent(c, g);
+
+    const QJsonArray comps = c.toJson().value(QStringLiteral("components")).toArray();
+    QCOMPARE(comps.size(), 3);
+
+    const QJsonObject resistor = comps.at(0).toObject();
+    QVERIFY(resistor.contains(QStringLiteral("value")));
+    QVERIFY2(!resistor.contains(QStringLiteral("vos")), "电阻不该有 vos");
+    QVERIFY2(!resistor.contains(QStringLiteral("gbw")), "电阻不该有 gbw");
+    QVERIFY2(!resistor.contains(QStringLiteral("pulseWidth")), "电阻不该有 pulseWidth");
+    QVERIFY2(!resistor.contains(QStringLiteral("beta")), "电阻不该有 beta");
+
+    const QJsonObject opamp = comps.at(1).toObject();
+    QVERIFY(opamp.contains(QStringLiteral("value")));
+    QVERIFY(opamp.contains(QStringLiteral("gbw")));
+    QVERIFY(opamp.contains(QStringLiteral("vos")));
+    QVERIFY2(!opamp.contains(QStringLiteral("beta")), "运放不该有 beta");
+    QVERIFY2(!opamp.contains(QStringLiteral("lpri")), "运放不该有 lpri");
+
+    // 读回来数值不能变
+    const Circuit back = Circuit::fromJson(c.toJson());
+    QCOMPARE(back.components.size(), 3);
+    QCOMPARE(back.components.at(0).value, 1000.0);
+    QCOMPARE(back.components.at(1).gbw, 2e6);
+    QCOMPARE(back.components.at(1).vos, 0.005);
+    QCOMPARE(back.components.at(2).type, ComponentType::Ground);
 }
 
 void CoreAnalysisTest::opAmpOffsetAndBiasShiftOutput()

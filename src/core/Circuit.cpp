@@ -169,61 +169,181 @@ Netlist Circuit::buildNetlist() const
     return Netlist::build(*this);
 }
 
+namespace {
+
+/// 把一个元件的「自己用得到的」参数写进 JSON。
+/// 只写相关的键：电阻不会有 vos，运放不会有 pulseWidth —— 之前每个元件都写
+/// 全量 40 多个字段，一个两管小电路的文件就有十几 KB，读的时候也全是噪音。
+/// 读那边一律按缺省值兜底，所以少写键不影响兼容（老文件照旧能读）。
+void writeComponentFields(QJsonObject& o, const Component& c)
+{
+    const auto put = [&o](const char* key, double v) {
+        o.insert(QLatin1String(key), v);
+    };
+
+    switch (c.type) {
+    case ComponentType::Resistor:
+    case ComponentType::Inductor:
+        put("value", c.value);
+        break;
+    case ComponentType::Capacitor:
+        put("value", c.value);
+        if (c.polarized)
+            o.insert(QStringLiteral("polarized"), true);
+        break;
+
+    case ComponentType::Diode:
+    case ComponentType::Led:
+        put("vf", c.vf);
+        break;
+
+    case ComponentType::Npn:
+    case ComponentType::Pnp:
+        put("beta", c.beta);
+        break;
+
+    case ComponentType::Nmos:
+    case ComponentType::Pmos:
+        put("vth", c.vth);
+        put("k", c.k);
+        break;
+    case ComponentType::Igbt:
+        put("vth", c.vth);
+        put("k", c.k);
+        put("vf", c.vf);
+        break;
+
+    case ComponentType::Optocoupler:
+        put("vf", c.vf);
+        put("ctr", c.ctr);
+        put("vceSat", c.vceSat);
+        break;
+
+    case ComponentType::Tl431:
+        put("value", c.value);
+        break;
+
+    case ComponentType::Transformer:
+        put("value", c.value);
+        put("lpri", c.lpri);
+        o.insert(QStringLiteral("transformerKind"),
+                 c.transformerKind == TransformerKind::PrimaryAuxSecondary
+                     ? QStringLiteral("primary-aux-secondary")
+                     : QStringLiteral("single"));
+        if (c.transformerKind == TransformerKind::PrimaryAuxSecondary) {
+            put("auxRatio", c.auxRatio);
+            o.insert(QStringLiteral("secondaryInverted"), c.secondaryInverted);
+        }
+        break;
+
+    case ComponentType::Ob2362:
+        put("value", c.value);      // CS 限流阈值
+        put("frequency", c.frequency);
+        break;
+
+    case ComponentType::OpAmp:
+        put("value", c.value);      // 开环增益
+        put("vSatHigh", c.vSatHigh);
+        put("vSatLow", c.vSatLow);
+        put("gbw", c.gbw);
+        put("slewRate", c.slewRate);
+        put("vos", c.vos);
+        put("ibias", c.ibias);
+        break;
+
+    case ComponentType::Switch:
+        o.insert(QStringLiteral("closed"), c.closed);
+        break;
+    case ComponentType::PushButton:
+        o.insert(QStringLiteral("closed"), c.closed);
+        o.insert(QStringLiteral("normallyClosed"), c.normallyClosed);
+        break;
+
+    case ComponentType::VoltageSource:
+    case ComponentType::CurrentSource:
+        o.insert(QStringLiteral("function"), functionToTag(c.function));
+        put("dcValue", c.dcValue);
+        switch (c.function) {
+        case SourceFunction::Sine:
+            put("amplitude", c.amplitude);
+            put("offset", c.offset);
+            put("frequency", c.frequency);
+            put("phaseDeg", c.phaseDeg);
+            put("delayTime", c.delayTime);
+            put("damping", c.damping);
+            break;
+        case SourceFunction::Pulse:
+            put("pulseV1", c.pulseV1);
+            put("pulseV2", c.pulseV2);
+            put("pulseRise", c.pulseRise);
+            put("pulseFall", c.pulseFall);
+            put("pulseWidth", c.pulseWidth);
+            put("pulsePeriod", c.pulsePeriod);
+            put("delayTime", c.delayTime);
+            break;
+        default:
+            break;
+        }
+        break;
+
+    case ComponentType::SignalGenerator:
+        o.insert(QStringLiteral("waveform"), waveformToTag(c.waveform));
+        put("amplitude", c.amplitude);
+        put("offset", c.offset);
+        put("frequency", c.frequency);
+        put("phaseDeg", c.phaseDeg);
+        if (c.waveform == Waveform::Square || c.waveform == Waveform::Triangle)
+            put("duty", c.duty);
+        break;
+
+    case ComponentType::LogicGate:
+        o.insert(QStringLiteral("gateKind"), int(c.gateKind));
+        put("logicHigh", c.logicHigh);
+        break;
+
+    case ComponentType::Multimeter:
+        o.insert(QStringLiteral("multimeterMode"), int(c.multimeterMode));
+        put("acFrequency", c.acFrequency);
+        break;
+
+    case ComponentType::Ground:
+    case ComponentType::Probe:
+    case ComponentType::MeasureProbe:
+        o.insert(QStringLiteral("groundKind"), int(c.groundKind));
+        break;
+
+    case ComponentType::NetLabel:
+        o.insert(QStringLiteral("netLabel"), c.netLabel);
+        break;
+
+    case ComponentType::CurrentProbe:
+        break;
+    }
+}
+
+} // namespace
+
 QJsonObject Circuit::toJson() const
 {
     QJsonArray compArray;
     for (const Component& c : components) {
         QJsonObject o;
+        // 公共部分：身份与摆放
         o.insert(QStringLiteral("id"), c.id);
         o.insert(QStringLiteral("type"), typeToTag(c.type));
         o.insert(QStringLiteral("x"), c.pos.x());
         o.insert(QStringLiteral("y"), c.pos.y());
-        o.insert(QStringLiteral("rotation"), c.rotation);
-        o.insert(QStringLiteral("mirrorX"), c.mirrorX);
-        o.insert(QStringLiteral("mirrorY"), c.mirrorY);
+        if (c.rotation != 0)
+            o.insert(QStringLiteral("rotation"), c.rotation);
+        if (c.mirrorX)
+            o.insert(QStringLiteral("mirrorX"), true);
+        if (c.mirrorY)
+            o.insert(QStringLiteral("mirrorY"), true);
         o.insert(QStringLiteral("refdes"), c.refdes);
-        o.insert(QStringLiteral("value"), c.value);
-        o.insert(QStringLiteral("function"), functionToTag(c.function));
-        o.insert(QStringLiteral("dcValue"), c.dcValue);
-        o.insert(QStringLiteral("amplitude"), c.amplitude);
-        o.insert(QStringLiteral("offset"), c.offset);
-        o.insert(QStringLiteral("frequency"), c.frequency);
-        o.insert(QStringLiteral("phaseDeg"), c.phaseDeg);
-        o.insert(QStringLiteral("delayTime"), c.delayTime);
-        o.insert(QStringLiteral("damping"), c.damping);
-        o.insert(QStringLiteral("pulseV1"), c.pulseV1);
-        o.insert(QStringLiteral("pulseV2"), c.pulseV2);
-        o.insert(QStringLiteral("pulseRise"), c.pulseRise);
-        o.insert(QStringLiteral("pulseFall"), c.pulseFall);
-        o.insert(QStringLiteral("pulseWidth"), c.pulseWidth);
-        o.insert(QStringLiteral("pulsePeriod"), c.pulsePeriod);
-        o.insert(QStringLiteral("waveform"), waveformToTag(c.waveform));
-        o.insert(QStringLiteral("duty"), c.duty);
-        o.insert(QStringLiteral("closed"), c.closed);
-        o.insert(QStringLiteral("polarized"), c.polarized);
-        o.insert(QStringLiteral("beta"), c.beta);
-        o.insert(QStringLiteral("vth"), c.vth);
-        o.insert(QStringLiteral("k"), c.k);
-        o.insert(QStringLiteral("vf"), c.vf);
-        o.insert(QStringLiteral("ctr"), c.ctr);
-        o.insert(QStringLiteral("vceSat"), c.vceSat);
-        o.insert(QStringLiteral("lpri"), c.lpri);
-        o.insert(QStringLiteral("secondaryInverted"), c.secondaryInverted);
-        o.insert(QStringLiteral("auxRatio"), c.auxRatio);
-        // 运放：不给这些键也能读，缺省就是理想化参数（见 Component.h）
-        o.insert(QStringLiteral("vSatHigh"), c.vSatHigh);
-        o.insert(QStringLiteral("vSatLow"), c.vSatLow);
-        o.insert(QStringLiteral("gbw"), c.gbw);
-        o.insert(QStringLiteral("slewRate"), c.slewRate);
-        o.insert(QStringLiteral("vos"), c.vos);
-        o.insert(QStringLiteral("ibias"), c.ibias);
-        o.insert(QStringLiteral("groundKind"), int(c.groundKind));
-        o.insert(QStringLiteral("multimeterMode"), int(c.multimeterMode));
-        o.insert(QStringLiteral("normallyClosed"), c.normallyClosed);
-        o.insert(QStringLiteral("gateKind"), int(c.gateKind));
-        o.insert(QStringLiteral("logicHigh"), c.logicHigh);
-        if (!c.netLabel.isEmpty())
-            o.insert(QStringLiteral("netLabel"), c.netLabel);
+
+        writeComponentFields(o, c);
+
+        // 画布上拖过的标签位置
         if (!c.refLabelOffset.isNull()) {
             o.insert(QStringLiteral("refLabelDx"), c.refLabelOffset.x());
             o.insert(QStringLiteral("refLabelDy"), c.refLabelOffset.y());
@@ -232,10 +352,6 @@ QJsonObject Circuit::toJson() const
             o.insert(QStringLiteral("valueLabelDx"), c.valueLabelOffset.x());
             o.insert(QStringLiteral("valueLabelDy"), c.valueLabelOffset.y());
         }
-        o.insert(QStringLiteral("transformerKind"),
-                 c.transformerKind == TransformerKind::PrimaryAuxSecondary
-                     ? QStringLiteral("primary-aux-secondary")
-                     : QStringLiteral("single"));
         compArray.append(o);
     }
 

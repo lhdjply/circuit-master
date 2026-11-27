@@ -21,6 +21,15 @@ repository root (same form as the tag, e.g. `v0.4.0`).
   with the grid background, leaving selection highlights out. Exporting does not touch
   the document's path or its modified state.
 
+### Changed
+
+- **`.csm` now stores only the fields a component actually uses**: every element used
+  to carry all 40-odd keys (a resistor had the op-amp's `vos` and `gbw`, an op-amp had
+  the pulse source's `pulseWidth`). Only the relevant keys are written now, and
+  `rotation: 0`, `mirror: false` and untouched label offsets are omitted too. The
+  sample file went from 12.9 KB to 3.9 KB. Old files still load (missing keys fall
+  back to their defaults).
+
 ### Fixed
 
 - **Switching the live scope time base made the waveform vanish**: at 2 µs/div
