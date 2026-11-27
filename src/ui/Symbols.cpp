@@ -356,6 +356,23 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         break;
     }
 
+    case ComponentType::Zener: {
+        // 与普通二极管相同，只是阴极横线两端折出稳压管的「Z」形
+        p->drawLine(QPointF(-30.0, 0.0), QPointF(-8.0, 0.0));
+        p->drawLine(QPointF(8.0, 0.0), QPointF(30.0, 0.0));
+        QPolygonF triangle;
+        triangle << QPointF(-8.0, -11.0) << QPointF(-8.0, 11.0) << QPointF(8.0, 0.0);
+        p->setBrush(color);
+        p->drawPolygon(triangle);
+        p->setBrush(Qt::NoBrush);
+        p->setPen(symbolPen(color, 2.8));
+        QPolygonF bar;
+        bar << QPointF(3.0, 11.0) << QPointF(8.0, 11.0) << QPointF(8.0, -11.0)
+            << QPointF(13.0, -11.0);
+        p->drawPolyline(bar);
+        break;
+    }
+
     case ComponentType::OpAmp: {
         p->drawLine(QPointF(-30.0, -20.0), QPointF(-18.0, -20.0));
         p->drawLine(QPointF(-30.0, 20.0), QPointF(-18.0, 20.0));

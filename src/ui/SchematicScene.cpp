@@ -390,6 +390,10 @@ ComponentItem* SchematicScene::placeComponent(ComponentType type, const QPointF&
     case ComponentType::OpAmp:
         comp.value = 1e5;
         break;
+    case ComponentType::Zener:
+        comp.value = 5.1;   // 常见档位：5.1 V
+        comp.vf = 0.7;
+        break;
     case ComponentType::Led:
         comp.vf = 2.0;
         break;

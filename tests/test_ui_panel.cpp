@@ -802,7 +802,7 @@ void UiPanelTest::libraryFiltersByCategory()
 
     // 分类按「器件性质」划分，同类元件数量不该悬殊
     QCOMPARE(counts.value(QStringLiteral("基础")), 4);        // R / C / L / 变压器
-    QCOMPARE(counts.value(QStringLiteral("半导体")), 7);      // 二极管、LED、三极管、MOS、IGBT
+    QCOMPARE(counts.value(QStringLiteral("半导体")), 8);      // 二极管、稳压管、LED、三极管、MOS、IGBT
     QCOMPARE(counts.value(QStringLiteral("模拟 IC")), 4);     // 运放 / TL431 / 光耦 / OB2362
     QCOMPARE(counts.value(QStringLiteral("数字逻辑")), 5);     // 与 / 或 / 非 / 异或 / 同或
     QCOMPARE(counts.value(QStringLiteral("电源")), 3);   // 电压源 / 电流源 / 信号发生器        // 电压源 / 电流源

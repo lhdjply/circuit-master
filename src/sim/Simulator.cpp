@@ -92,6 +92,27 @@ DiodeModel pnModel(double vf, double vt)
     return dm;
 }
 
+/// 稳压二极管：正向是普通 PN 结（压降 vf），反向在 Vz 处击穿。
+/// 反向量用一个「从阴极指向阳极、压降恰好是 Vz」的 PN 结来等效 ——
+/// 于是 v = −Vz 时它刚开始导通，再往负走电流指数上升。
+/// 拐点比真实稳压管软一些（发射系数 1.752），但和二极管共用一套限幅逻辑，
+/// 牛顿迭代稳。
+struct ZenerModel {
+    DiodeModel fwd;   // 正向（阳极 → 阴极）
+    DiodeModel rev;   // 反向击穿（阴极 → 阳极），forward drop = Vz
+
+    double current(double v) const { return fwd.current(v) - rev.current(-v); }
+    double conductance(double v) const { return fwd.conductance(v) + rev.conductance(-v); }
+};
+
+ZenerModel zenerModel(const Component& comp, double vt)
+{
+    ZenerModel m;
+    m.fwd = pnModel(comp.vf, vt);
+    m.rev = pnModel(std::max(comp.value, 0.5), vt);
+    return m;
+}
+
 /// 取某个元件的二极管模型：普通二极管按 vf 反推，LED / 光耦用 LED 参数
 DiodeModel diodeModelFor(const Component& comp, double vt)
 {
@@ -696,6 +717,15 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
             addI(b, n1, n2, id - g * vd);
             break;
         }
+        case ComponentType::Zener: {
+            const ZenerModel model = zenerModel(comp, dm.vt);
+            const double vd = st.diodeV.value(comp.id, 0.0);
+            const double g = model.conductance(vd);
+            const double id = model.current(vd);
+            addG(a, n1, n2, g);
+            addI(b, n1, n2, id - g * vd);
+            break;
+        }
         case ComponentType::Tl431: {
             // 引脚：0 = REF，1 = 阳极 A，2 = 阴极 K
             const int nr = n1;
@@ -1022,8 +1052,8 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
         bool hasDiode = false;
         double diodeDelta = 0.0;
         for (const Component* cp : p.elements) {
-            if (cp->type != ComponentType::Diode && cp->type != ComponentType::Led
-                && cp->type != ComponentType::Optocoupler)
+            if (cp->type != ComponentType::Diode && cp->type != ComponentType::Zener
+                && cp->type != ComponentType::Led && cp->type != ComponentType::Optocoupler)
                 continue;
             hasDiode = true;
             const int n1 = p.nodeOf(cp->id, 0);
@@ -1032,8 +1062,22 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
             const double vOld = st.diodeV.value(cp->id, 0.0);
             // 限幅必须和 stamp 用同一个模型：拿普通二极管的 0.9 V 上限去卡 LED，
             // 或者反过来，都会让迭代收敛到错误工作点（表现为电流天文数字）
-            const DiodeModel model = diodeModelFor(*cp, dm.vt);
-            const double vLim = pnjlim(vNew, vOld, model.nvt(), model.vcrit(), model.vmax);
+            double vLim = 0.0;
+            if (cp->type == ComponentType::Zener) {
+                // 正反两个结各限各的：正向按 vf、反向按 Vz
+                const ZenerModel zm = zenerModel(*cp, dm.vt);
+                if (vNew >= 0.0) {
+                    vLim = pnjlim(vNew, std::max(vOld, 0.0), zm.fwd.nvt(), zm.fwd.vcrit(),
+                                  zm.fwd.vmax);
+                } else {
+                    const double uNew = -vNew;
+                    const double uOld = std::max(-vOld, 0.0);
+                    vLim = -pnjlim(uNew, uOld, zm.rev.nvt(), zm.rev.vcrit(), zm.rev.vmax);
+                }
+            } else {
+                const DiodeModel model = diodeModelFor(*cp, dm.vt);
+                vLim = pnjlim(vNew, vOld, model.nvt(), model.vcrit(), model.vmax);
+            }
             diodeDelta = std::max(diodeDelta, std::abs(vLim - vOld));
             st.diodeV.insert(cp->id, vLim);
         }
@@ -1248,6 +1292,10 @@ void sample(const Problem& p, const std::vector<double>& x, const ElementState& 
         case ComponentType::Led: {
             const DiodeModel model = diodeModelFor(comp, dm.vt);
             current = model.current(v);
+            break;
+        }
+        case ComponentType::Zener: {
+            current = zenerModel(comp, dm.vt).current(v);
             break;
         }
         case ComponentType::Tl431: {
@@ -1682,6 +1730,11 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
         case ComponentType::Led: {
             const DiodeModel model = diodeModelFor(comp, dm.vt);
             addG(a, n1, n2, Cx(model.conductance(st.diodeV.value(comp.id, 0.6)), 0.0));
+            break;
+        }
+        case ComponentType::Zener: {
+            const ZenerModel model = zenerModel(comp, dm.vt);
+            addG(a, n1, n2, Cx(model.conductance(st.diodeV.value(comp.id, 0.0)), 0.0));
             break;
         }
 

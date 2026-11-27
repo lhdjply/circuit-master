@@ -93,6 +93,8 @@ private slots:
     void igbtConductsAboveThreshold();
     void diodeRectifier();
     void diodeForwardDropIsAdjustable();
+    void zenerClampsItsBreakdownVoltage();
+    void zenerFallbackIsForwardDiode();
     void multimeterMeasuresVoltageCurrentResistance();
     void multimeterMeasuresAcRms();
     void groundKindsAreSeparateNets();
@@ -1876,6 +1878,131 @@ void CoreDeviceTest::diodeForwardDropIsAdjustable()
     // 压降大约按差值平移
     QVERIFY2(std::abs((mid - high) - 0.8) < 0.35,
              qPrintable(QStringLiteral("0.7→1.5 V 的落差只有 %1 V").arg(mid - high)));
+}
+
+
+namespace {
+
+/// 稳压管反接：阴极经 1 kΩ 接 supply、阳极接地。返回阴极电压（= 稳压值）
+double zenerClampVoltage(double supply, double vz, double vf = 0.7)
+{
+    Circuit c;
+    Component v;
+    v.type = ComponentType::VoltageSource;
+    v.pos = QPointF(100, 380);
+    v.rotation = 90;
+    v.function = SourceFunction::Constant;
+    v.dcValue = supply;
+    addComponent(c, v);
+
+    Component z;
+    z.type = ComponentType::Zener;
+    z.pos = QPointF(300, 300);
+    z.value = vz;
+    z.vf = vf;
+    addComponent(c, z);
+
+    addComponent(c, makeComp(ComponentType::Resistor, QPointF(200, 200), 1000.0));
+    addComponent(c, makeComp(ComponentType::Ground, QPointF(100, 410), 0.0));
+
+    // 引脚 0 = 阳极（左，接地），1 = 阴极（右，经电阻接正）
+    c.wires.append(Wire{{QPointF(100, 350), QPointF(100, 200), QPointF(170, 200)}});
+    c.wires.append(Wire{{QPointF(230, 200), QPointF(280, 200), QPointF(280, 300),
+                         QPointF(330, 300)}});
+    c.wires.append(Wire{{QPointF(270, 300), QPointF(240, 300), QPointF(240, 420),
+                         QPointF(100, 420), QPointF(100, 410)}});
+
+    const Netlist net = c.buildNetlist();
+    if (!net.valid)
+        return -999.0;
+    SimulationOptions opt;
+    opt.kind = AnalysisKind::Transient;
+    opt.tStop = 1e-4;
+    opt.tStep = 1e-6;
+    const SimulationResult r = Simulator::run(c, opt);
+    if (!r.ok)
+        return -999.0;
+    const Signal* k = r.signal(QStringLiteral("V(%1)").arg(net.nodeOf(2, 1)));
+    return k && !k->y.isEmpty() ? k->y.last() : -999.0;
+}
+
+/// 稳压管正接：阳极经 1 kΩ 接 5 V、阴极接地。返回阳极电压（= 正向压降）
+double zenerForwardVoltage(double vz, double vf)
+{
+    Circuit c;
+    Component v;
+    v.type = ComponentType::VoltageSource;
+    v.pos = QPointF(100, 380);
+    v.rotation = 90;
+    v.function = SourceFunction::Constant;
+    v.dcValue = 5.0;
+    addComponent(c, v);
+
+    Component z;
+    z.type = ComponentType::Zener;
+    z.pos = QPointF(300, 300);
+    z.value = vz;
+    z.vf = vf;
+    addComponent(c, z);
+
+    addComponent(c, makeComp(ComponentType::Resistor, QPointF(200, 200), 1000.0));
+    addComponent(c, makeComp(ComponentType::Ground, QPointF(100, 410), 0.0));
+
+    c.wires.append(Wire{{QPointF(100, 350), QPointF(100, 200), QPointF(170, 200)}});
+    c.wires.append(Wire{{QPointF(230, 200), QPointF(280, 200), QPointF(280, 300),
+                         QPointF(270, 300)}});
+    c.wires.append(Wire{{QPointF(330, 300), QPointF(360, 300), QPointF(360, 420),
+                         QPointF(100, 420), QPointF(100, 410)}});
+
+    const Netlist net = c.buildNetlist();
+    if (!net.valid)
+        return -999.0;
+    SimulationOptions opt;
+    opt.kind = AnalysisKind::Transient;
+    opt.tStop = 1e-4;
+    opt.tStep = 1e-6;
+    const SimulationResult r = Simulator::run(c, opt);
+    if (!r.ok)
+        return -999.0;
+    const Signal* a = r.signal(QStringLiteral("V(%1)").arg(net.nodeOf(2, 0)));
+    return a && !a->y.isEmpty() ? a->y.last() : -999.0;
+}
+
+} // namespace
+
+void CoreDeviceTest::zenerClampsItsBreakdownVoltage()
+{
+    // 没到击穿电压：原样通过
+    const double below = zenerClampVoltage(3.0, 5.1);
+    QVERIFY2(std::abs(below - 3.0) < 0.05,
+             qPrintable(QStringLiteral("3 V 输入 → %1 V").arg(below)));
+
+    // 远超击穿电压：稳在 Vz 附近（软拐点，会略高于 Vz）
+    const double clamped = zenerClampVoltage(20.0, 5.1);
+    QVERIFY2(clamped > 5.0 && clamped < 5.3,
+             qPrintable(QStringLiteral("20 V 输入、Vz=5.1 → %1 V").arg(clamped)));
+
+    // 换档位：3.3 V / 12 V
+    const double low = zenerClampVoltage(20.0, 3.3);
+    QVERIFY2(low > 3.2 && low < 3.5,
+             qPrintable(QStringLiteral("Vz=3.3 → %1 V").arg(low)));
+    const double high = zenerClampVoltage(30.0, 12.0);
+    QVERIFY2(high > 11.8 && high < 12.3,
+             qPrintable(QStringLiteral("Vz=12 → %1 V").arg(high)));
+}
+
+void CoreDeviceTest::zenerFallbackIsForwardDiode()
+{
+    // 正接时就是一个普通二极管：压降由 vf 决定，与 Vz 无关
+    const double thin = zenerForwardVoltage(5.1, 0.3);
+    const double normal = zenerForwardVoltage(5.1, 0.7);
+    QVERIFY2(normal > thin, qPrintable(QStringLiteral("%1 / %2").arg(thin).arg(normal)));
+    QVERIFY2(normal > 0.55 && normal < 0.75,
+             qPrintable(QStringLiteral("vf=0.7 时正向压降 %1 V").arg(normal)));
+
+    // Vz 不影响正向
+    const double other = zenerForwardVoltage(1.0, 0.7);
+    QVERIFY2(std::abs(other - normal) < 0.02, "正向压降不该随 Vz 变");
 }
 
 void CoreDeviceTest::multimeterMeasuresVoltageCurrentResistance()

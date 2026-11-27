@@ -1501,6 +1501,7 @@ void MainWindow::buildLibrary()
         {ComponentType::Transformer, CSM_TR("Transformer"), CSM_TR("Basic")},
 
         {ComponentType::Diode, CSM_TR("Diode"), CSM_TR("Semiconductors")},
+        {ComponentType::Zener, CSM_TR("Zener diode"), CSM_TR("Semiconductors")},
         {ComponentType::Led, CSM_TR("LED"), CSM_TR("Semiconductors")},
         {ComponentType::Npn, CSM_TR("NPN transistor"), CSM_TR("Semiconductors")},
         {ComponentType::Pnp, CSM_TR("PNP transistor"), CSM_TR("Semiconductors")},

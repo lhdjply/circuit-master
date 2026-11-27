@@ -11,6 +11,7 @@ enum class ComponentType {
     Capacitor,
     Inductor,
     Diode,
+    Zener,       ///< 稳压二极管：正向同普通二极管，反向在 value（Vz）处击穿导通
     Led,
     Npn,
     Pnp,

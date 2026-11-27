@@ -139,6 +139,7 @@ QString typeName(ComponentType type)
     case ComponentType::Capacitor:     return CSM_TR("Capacitor");
     case ComponentType::Inductor:      return CSM_TR("Inductor");
     case ComponentType::Diode:         return CSM_TR("Diode");
+    case ComponentType::Zener:         return CSM_TR("Zener diode");
     case ComponentType::OpAmp:         return CSM_TR("Op-amp");
     case ComponentType::Led:           return CSM_TR("LED");
     case ComponentType::Npn:           return CSM_TR("NPN transistor");
@@ -174,6 +175,7 @@ QString typeSymbol(ComponentType type)
     case ComponentType::Capacitor:     return QStringLiteral("C");
     case ComponentType::Inductor:      return QStringLiteral("L");
     case ComponentType::Diode:         return QStringLiteral("D");
+    case ComponentType::Zener:         return QStringLiteral("DZ");
     case ComponentType::OpAmp:         return QStringLiteral("U");
     case ComponentType::Led:           return QStringLiteral("D");
     case ComponentType::Npn:           return QStringLiteral("Q");
@@ -405,6 +407,7 @@ QString Component::unitName() const
     case ComponentType::CurrentSource: return QStringLiteral("A");
     case ComponentType::SignalGenerator: return QStringLiteral("V");
     case ComponentType::Diode:         return QStringLiteral("A");
+    case ComponentType::Zener:         return QStringLiteral("V");
     case ComponentType::OpAmp:         return QString();
     case ComponentType::Led:           return QStringLiteral("V");
     case ComponentType::Npn:
@@ -456,6 +459,9 @@ QString Component::displayValue() const
     case ComponentType::Diode:
         // 压降是可调的，画布上直接显示这个值（和 LED 一样带 Vf 前缀）
         return QStringLiteral("Vf = ") + formatEng(vf, QStringLiteral("V"), 3);
+
+    case ComponentType::Zener:
+        return formatEng(value, QStringLiteral("V"), 3);
 
     case ComponentType::OpAmp:
         return QStringLiteral("A = ") + formatEng(value, QString(), 3);

@@ -23,6 +23,7 @@ QString typeToTag(ComponentType type)
     case ComponentType::Capacitor:     return QStringLiteral("C");
     case ComponentType::Inductor:      return QStringLiteral("L");
     case ComponentType::Diode:         return QStringLiteral("D");
+    case ComponentType::Zener:         return QStringLiteral("DZ");
     case ComponentType::OpAmp:         return QStringLiteral("U");
     case ComponentType::Led:           return QStringLiteral("LED");
     case ComponentType::Optocoupler:   return QStringLiteral("OPTO");
@@ -55,6 +56,7 @@ ComponentType tagToType(const QString& tag)
     if (tag == QLatin1String("C")) return ComponentType::Capacitor;
     if (tag == QLatin1String("L")) return ComponentType::Inductor;
     if (tag == QLatin1String("D")) return ComponentType::Diode;
+    if (tag == QLatin1String("DZ")) return ComponentType::Zener;
     if (tag == QLatin1String("U")) return ComponentType::OpAmp;
     if (tag == QLatin1String("LED")) return ComponentType::Led;
     if (tag == QLatin1String("OPTO")) return ComponentType::Optocoupler;
@@ -195,6 +197,11 @@ void writeComponentFields(QJsonObject& o, const Component& c)
     case ComponentType::Diode:
     case ComponentType::Led:
         put("vf", c.vf);
+        break;
+
+    case ComponentType::Zener:
+        put("value", c.value);   // 击穿电压 Vz
+        put("vf", c.vf);         // 正向压降
         break;
 
     case ComponentType::Npn:

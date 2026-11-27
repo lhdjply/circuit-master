@@ -41,6 +41,7 @@ UnitKind valueUnitFor(ComponentType type)
     case ComponentType::Capacitor: return UnitKind::Farad;
     case ComponentType::Inductor:  return UnitKind::Henry;
     case ComponentType::Diode:     return UnitKind::Volt;
+    case ComponentType::Zener:     return UnitKind::Volt;
     case ComponentType::VoltageSource: return UnitKind::Volt;
     case ComponentType::CurrentSource: return UnitKind::Ampere;
     default: return UnitKind::None;
@@ -485,7 +486,8 @@ void PropertyPanel::updateVisibility()
     const bool source = isSource(c.type) && !generator;
     const bool analog = c.type == ComponentType::Resistor || c.type == ComponentType::Capacitor
         || c.type == ComponentType::Inductor || c.type == ComponentType::OpAmp
-        || c.type == ComponentType::Diode || c.type == ComponentType::Led
+        || c.type == ComponentType::Diode || c.type == ComponentType::Zener
+        || c.type == ComponentType::Led
         || c.type == ComponentType::Optocoupler
         || c.type == ComponentType::Tl431 || c.type == ComponentType::Transformer
         || isThreeTerminalDevice(c.type);
@@ -495,6 +497,7 @@ void PropertyPanel::updateVisibility()
     m_form->setRowVisible(m_polarized, c.type == ComponentType::Capacitor);
     m_form->setRowVisible(m_k, isMos);
     m_form->setRowVisible(m_vf, c.type == ComponentType::Igbt
+                                      || c.type == ComponentType::Zener
                                       || c.type == ComponentType::Led
                                       || c.type == ComponentType::Optocoupler);
     m_form->setRowVisible(m_ctr, c.type == ComponentType::Optocoupler);
@@ -534,6 +537,10 @@ void PropertyPanel::updateVisibility()
         case ComponentType::Igbt:
             m_valueLabel->setText(CSM_TR("Threshold Vth"));
             m_value->setPlaceholderText(CSM_TR("e.g. 2"));
+            break;
+        case ComponentType::Zener:
+            m_valueLabel->setText(CSM_TR("Breakdown Vz"));
+            m_value->setPlaceholderText(CSM_TR("e.g. 5.1"));
             break;
         case ComponentType::Diode:
         case ComponentType::Led:
@@ -657,6 +664,30 @@ void PropertyPanel::applyValue()
     if (!m_item || m_updating)
         return;
     const ComponentType type = m_item->component().type;
+
+    if (type == ComponentType::Zener) {
+        Component c = m_item->component();
+        QString reason;
+        bool ok = false;
+        const double vz = parseQuantity(m_value->text(), UnitKind::Volt, &ok, &reason);
+        if (!ok) {
+            markInvalid(m_value, reason);
+            return;
+        }
+        markValid(m_value);
+        const double vf = parseQuantity(m_vf->text(), UnitKind::Volt, &ok, &reason);
+        if (!ok) {
+            markInvalid(m_vf, reason);
+            return;
+        }
+        markValid(m_vf);
+        c.value = std::max(vz, 0.5);
+        c.vf = std::max(vf, 0.05);
+        m_item->setComponent(c);
+        updateSubtitle();
+        emit changed();
+        return;
+    }
 
     if (type == ComponentType::Diode || type == ComponentType::Led
         || type == ComponentType::Optocoupler) {

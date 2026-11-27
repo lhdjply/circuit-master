@@ -270,6 +270,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Both pins of %1 are shorted together.</translation>
     </message>
     <message>
+        <source>Breakdown Vz</source>
+        <translation>Breakdown Vz</translation>
+    </message>
+    <message>
         <source>Built with Qt6 / C++17 / CMake　·　GPL-3.0 free software, a replacement for Multisim on Linux</source>
         <translation>Built with Qt6 / C++17 / CMake　·　GPL-3.0 free software, a replacement for Multisim on Linux</translation>
     </message>
@@ -1838,6 +1842,10 @@ Checked: normally closed, opens while held.</translation>
         <translation>XOR gate</translation>
     </message>
     <message>
+        <source>Zener diode</source>
+        <translation>Zener diode</translation>
+    </message>
+    <message>
         <source>Zoom In</source>
         <translation>Zoom In</translation>
     </message>
@@ -1952,6 +1960,10 @@ Checked: normally closed, opens while held.</translation>
     <message>
         <source>e.g. 5%1</source>
         <translation>e.g. 5%1</translation>
+    </message>
+    <message>
+        <source>e.g. 5.1</source>
+        <translation>e.g. 5.1</translation>
     </message>
     <message>
         <source>e.g. 50</source>

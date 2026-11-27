@@ -273,6 +273,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>%1 的两个引脚被短接在一起。</translation>
     </message>
     <message>
+        <source>Breakdown Vz</source>
+        <translation>击穿电压 Vz</translation>
+    </message>
+    <message>
         <source>Built with Qt6 / C++17 / CMake　·　GPL-3.0 free software, a replacement for Multisim on Linux</source>
         <translation>基于 Qt6 / C++17 / CMake　·　GPL-3.0 自由软件，可作为 Multisim 在 Linux 上的替代方案</translation>
     </message>
@@ -1840,6 +1844,10 @@ Checked: normally closed, opens while held.</source>
         <translation>异或门</translation>
     </message>
     <message>
+        <source>Zener diode</source>
+        <translation>稳压二极管</translation>
+    </message>
+    <message>
         <source>Zoom In</source>
         <translation>放大</translation>
     </message>
@@ -1954,6 +1962,10 @@ Checked: normally closed, opens while held.</source>
     <message>
         <source>e.g. 5%1</source>
         <translation>例如 5%1</translation>
+    </message>
+    <message>
+        <source>e.g. 5.1</source>
+        <translation>例如 5.1</translation>
     </message>
     <message>
         <source>e.g. 50</source>

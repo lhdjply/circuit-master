@@ -8,6 +8,15 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ## [Unreleased]
 
+### Added
+
+- **Zener diode**: the Semiconductors category gained a DZ part. Forward it behaves like
+  an ordinary diode (with an adjustable drop); reverse-biased it conducts at its
+  breakdown voltage and clamps there. The property panel takes the breakdown voltage Vz
+  (5.1 V by default). Measured with Vz = 5.1 V and a 1 kΩ series resistor: a 20 V supply
+  clamps at 5.09 V, a 3 V supply (below breakdown) passes 3.00 V unchanged, and the
+  3.3 V / 12 V parts line up too.
+
 ### Changed
 
 - **A diode's forward drop is now adjustable**: the property panel gained a
