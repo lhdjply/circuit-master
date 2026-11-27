@@ -4,23 +4,18 @@
 #include "ui/Theme.h"
 #include "ui/DialogFrame.h"
 
-#include <QAbstractButton>
 #include <QApplication>
 #include <QDialog>
-#include <QDialogButtonBox>
 #include <QFile>
 #include <QFont>
 #include <QHBoxLayout>
-#include <QKeyEvent>
 #include <QLabel>
 #include <QPainter>
 #include <QPixmap>
 #include <QPushButton>
 #include <QTextBrowser>
 #include <QTextCursor>
-#include <QTextDocument>
 #include <QVBoxLayout>
-#include <QWindow>
 
 #include <cmath>
 

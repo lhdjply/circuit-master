@@ -12,7 +12,6 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QPainter>
-#include <QVBoxLayout>
 
 #include <algorithm>
 #include <limits>

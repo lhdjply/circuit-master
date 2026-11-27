@@ -8,7 +8,6 @@
 #include <QGraphicsItem>
 #include <QPointer>
 #include <QTimer>
-#include <QGraphicsSceneMouseEvent>
 #include <QHash>
 #include <QSet>
 #include <QLineF>

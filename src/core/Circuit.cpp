@@ -8,7 +8,6 @@
 #include <QJsonArray>
 #include <QLineF>
 #include <QSet>
-#include <QStringList>
 #include <QtMath>
 
 #include <cmath>

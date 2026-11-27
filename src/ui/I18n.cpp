@@ -3,7 +3,6 @@
 #include "core/Language.h"
 
 #include <QCoreApplication>
-#include <QDir>
 #include <QLibraryInfo>
 #include <QLocale>
 #include <QTranslator>

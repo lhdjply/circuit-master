@@ -4,7 +4,6 @@
 #include "csm_version.h"
 #include "sim/Simulator.h"
 
-#include <QDebug>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>

@@ -2,7 +2,6 @@
 
 #include "ui/Symbols.h"
 
-#include <QGraphicsScene>
 #include <QGraphicsSceneMouseEvent>
 #include <QLineF>
 #include <QPainter>

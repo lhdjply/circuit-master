@@ -30,7 +30,6 @@
 #include <QDateTime>
 #include <QResizeEvent>
 #include <QWindow>
-#include <QBoxLayout>
 #include <QImage>
 #include <cmath>
 #include <QAction>
@@ -40,18 +39,14 @@
 #include <QApplication>
 #include <QCloseEvent>
 #include <QDialog>
-#include <QDialogButtonBox>
 #include <QDockWidget>
 #include <QFile>
 #include <QFileDialog>
 #include <QSaveFile>
 #include <QFileInfo>
-#include <QFontDatabase>
 #include <QGraphicsItem>
 #include <QGraphicsScene>
 #include <QGuiApplication>
-#include <QDesktopServices>
-#include <QScreen>
 #include <QSet>
 
 #include <limits>
@@ -66,14 +61,11 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QPlainTextEdit>
-#include <QPushButton>
 #include <QScrollArea>
 #include <QStatusBar>
 #include <QStyle>
-#include <QTextStream>
 #include <QTimer>
 #include <QToolBar>
-#include <QToolButton>
 #include <QVBoxLayout>
 
 #include <algorithm>

@@ -3,8 +3,6 @@
 #include "core/Circuit.h"
 
 #include <QGraphicsScene>
-#include <QHash>
-#include <QPoint>
 
 namespace csm {
 

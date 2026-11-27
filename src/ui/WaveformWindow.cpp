@@ -10,7 +10,6 @@
 
 #include <QChart>
 #include <QCloseEvent>
-#include <QCheckBox>
 #include <QComboBox>
 #include <QChartView>
 #include <QFontDatabase>
@@ -24,8 +23,6 @@
 #include <QLineSeries>
 #include <QListWidget>
 #include <QCategoryAxis>
-#include <QLogValueAxis>
-#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPixmap>

@@ -6,15 +6,11 @@
 #include "csm_version.h"
 #include "sim/Simulator.h"
 
-#include <QDebug>
 #include <QDir>
 #include <QJsonArray>
 #include <QSettings>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSignalSpy>
-#include <QTcpServer>
-#include <QTcpSocket>
 #include <QTest>
 #include <cmath>
 

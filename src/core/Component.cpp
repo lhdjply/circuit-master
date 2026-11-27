@@ -3,7 +3,6 @@
 
 #include "core/Units.h"
 
-#include <QStringList>
 #include <QtMath>
 
 #include <cmath>

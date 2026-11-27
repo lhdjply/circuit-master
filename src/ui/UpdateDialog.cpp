@@ -15,7 +15,6 @@
 #include <QTimer>
 #include <QDesktopServices>
 #include <QDir>
-#include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -28,7 +27,6 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QTextBrowser>
-#include <QVBoxLayout>
 
 namespace csm {
 namespace {

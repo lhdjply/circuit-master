@@ -16,8 +16,6 @@
 
 #include <QFont>
 #include <QIcon>
-#include <QPalette>
-#include <QStyleFactory>
 
 namespace {
 

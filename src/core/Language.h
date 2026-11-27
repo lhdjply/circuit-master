@@ -14,7 +14,6 @@
 
 #include <QCoreApplication>
 #include <QString>
-#include <QTranslator>
 
 namespace csm {
 
