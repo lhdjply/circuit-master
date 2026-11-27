@@ -123,6 +123,7 @@ add_library(csm_core OBJECT
     src/core/Netlist.cpp
     src/core/Circuit.cpp
     src/core/Shortcuts.cpp
+    src/core/SafeWrite.cpp
     src/core/Autosave.cpp
     src/core/UpdateChecker.cpp
     src/sim/Simulator.cpp
@@ -136,6 +137,7 @@ set(CSM_UI_SOURCES
     src/ui/I18n.cpp
     src/ui/Dialogs.cpp
     src/ui/DialogFrame.cpp
+    src/ui/SafeWrite.cpp
     src/ui/SingleInstance.cpp
     src/ui/Symbols.cpp
     src/ui/SettingsDialog.cpp

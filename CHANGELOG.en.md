@@ -17,11 +17,13 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Fixed
 
-- **Saving no longer truncates first**: it uses QSaveFile now — a temp file in the same
-  directory is written and then swapped in atomically by `commit()`. `QFile::open(WriteOnly)`
-  used to empty the `.csm` first, so a crash, power cut or full disk halfway through left a
-  half-written file. A failed save now leaves the original untouched and keeps the `*`;
-  recovery copies are written the same way.
+- **User files are no longer truncated before writing**: saving a `.csm`, recovery copies,
+  waveform CSV, waveform images and the schematic PNG all go through the new `SafeWrite`
+  (`core/SafeWrite` for bytes and text, `ui/SafeWrite` for images; QSaveFile underneath) —
+  a temp file in the same directory is written first and swapped in atomically. `QFile::open(WriteOnly)`
+  used to empty the target, so a crash, power cut or full disk halfway through left a
+  half-written file and destroyed the previous one. A failed write now leaves the original
+  untouched, keeps the `*`, and reports QSaveFile's own message (e.g. "Permission denied").
 - **Dialogs no longer add a taskbar entry**: after going frameless, some window
   managers treated them as ordinary windows. They are Tool windows now (transient
   children when they have a parent), so only the main window shows in the taskbar. The

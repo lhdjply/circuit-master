@@ -324,6 +324,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Cannot start the live simulation: %1</translation>
     </message>
     <message>
+        <source>Cannot write the file.</source>
+        <translation>Cannot write the file.</translation>
+    </message>
+    <message>
         <source>Cannot write the image file.</source>
         <translation>Cannot write the image file.</translation>
     </message>

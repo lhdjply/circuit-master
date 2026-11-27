@@ -21,6 +21,7 @@
 #include "ui/Theme.h"
 #include "ui/TitleBar.h"
 #include "ui/DialogFrame.h"
+#include "ui/SafeWrite.h"
 #include "ui/UpdateDialog.h"
 #include "ui/WaveformWindow.h"
 #include "ui/Dialogs.h"
@@ -42,7 +43,6 @@
 #include <QDockWidget>
 #include <QFile>
 #include <QFileDialog>
-#include <QSaveFile>
 #include <QFileInfo>
 #include <QGraphicsItem>
 #include <QGraphicsScene>
@@ -2116,28 +2116,12 @@ bool MainWindow::writeDocumentToDisk(Document* document, QString* error)
     root.insert(QStringLiteral("analysis"), analysisToJson(document->options));
     const QByteArray data = QJsonDocument(root).toJson(QJsonDocument::Indented);
 
-    // 用 QSaveFile 而不是 QFile：它先写同目录下的临时文件，commit() 时才原子地
-    // 替换目标。直接 QFile::open(WriteOnly) 会先把目标截成 0 字节，之后写到一半
-    // 崩溃、断电或磁盘满，用户的 .csm 就只剩半截了。
-    QSaveFile file(document->filePath);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    // 原子写：先写同目录的临时文件，成功才替换目标。直接用 QFile 的话会先把
+    // .csm 截成 0 字节，写到一半崩溃、断电或磁盘满就只剩半截。
+    QString writeError;
+    if (!SafeWrite::bytes(document->filePath, data, &writeError)) {
         if (error)
-            *error = file.errorString();
-        return false;
-    }
-    // write() 的返回值不能不看：磁盘满时它会少写，commit() 之前就该发现
-    if (file.write(data) != qint64(data.size())) {
-        if (error)
-            *error = file.errorString();
-        file.cancelWriting();
-        return false;
-    }
-    if (!file.commit()) {
-        if (error) {
-            *error = file.errorString();
-            if (error->isEmpty())
-                *error = CSM_TR("Unknown error");
-        }
+            *error = writeError.isEmpty() ? CSM_TR("Unknown error") : writeError;
         return false;
     }
 
@@ -2235,8 +2219,10 @@ bool MainWindow::exportSchematicImage(const QString& path)
     for (QGraphicsItem* item : selected)
         item->setSelected(true);
 
-    if (!image.save(path, "PNG")) {
-        Dialogs::warn(this, CSM_TR("Export failed"), CSM_TR("Cannot write the image file."));
+    QString writeError;
+    if (!SafeWrite::image(image, path, &writeError)) {
+        Dialogs::warn(this, CSM_TR("Export failed"),
+                      writeError.isEmpty() ? CSM_TR("Cannot write the image file.") : writeError);
         return false;
     }
     appendLog(CSM_TR("Exported: %1").arg(path));

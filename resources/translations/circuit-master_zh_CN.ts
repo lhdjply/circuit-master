@@ -327,6 +327,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>无法启动实时仿真：%1</translation>
     </message>
     <message>
+        <source>Cannot write the file.</source>
+        <translation>无法写入文件。</translation>
+    </message>
+    <message>
         <source>Cannot write the image file.</source>
         <translation>无法写入图片文件。</translation>
     </message>

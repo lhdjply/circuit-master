@@ -1,6 +1,7 @@
 #include "ui/WaveformWindow.h"
 #include "core/Language.h"
 
+#include "ui/SafeWrite.h"
 #include "ui/Theme.h"
 
 #include "core/Circuit.h"
@@ -1430,12 +1431,9 @@ void WaveformWindow::exportCsv()
     if (path.isEmpty())
         return;
 
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        Dialogs::warn(this, CSM_TR("Export failed"), file.errorString());
-        return;
-    }
-    QTextStream out(&file);
+    // 先攒进字符串再原子落盘：直接写文件的话，写到一半失败就把原来那份也毁了
+    QString csv;
+    QTextStream out(&csv);
     out << "x";
     for (int index : selected)
         out << "," << m_result.waves.at(index).name;
@@ -1450,7 +1448,12 @@ void WaveformWindow::exportCsv()
         }
         out << "\n";
     }
-    file.close();
+    out.flush();
+
+    QString error;
+    if (!SafeWrite::text(path, csv, &error))
+        Dialogs::warn(this, CSM_TR("Export failed"),
+                      error.isEmpty() ? CSM_TR("Cannot write the file.") : error);
 }
 
 void WaveformWindow::exportImage()
@@ -1461,8 +1464,10 @@ void WaveformWindow::exportImage()
     if (path.isEmpty())
         return;
     const QPixmap shot = m_view->grab();
-    if (!shot.save(path))
-        Dialogs::warn(this, CSM_TR("Export failed"), CSM_TR("Cannot write the image file."));
+    QString error;
+    if (!SafeWrite::image(shot.toImage(), path, &error))
+        Dialogs::warn(this, CSM_TR("Export failed"),
+                      error.isEmpty() ? CSM_TR("Cannot write the image file.") : error);
 }
 
 } // namespace csm
