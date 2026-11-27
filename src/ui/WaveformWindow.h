@@ -97,6 +97,8 @@ private:
     QStackedWidget* m_stack = nullptr;      // 图表 / 工作点报告二选一
     QPlainTextEdit* m_report = nullptr;     // 直流工作点报告（没有时间序列时显示）
     QListWidget* m_list = nullptr;
+    QPushButton* m_allButton = nullptr;
+    QPushButton* m_noneButton = nullptr;
     QLabel* m_info = nullptr;
     QPushButton* m_liveAutoButton = nullptr; // 动态示波器的「自动缩放」
     QWidget* m_analysisBar = nullptr;
@@ -149,6 +151,8 @@ private:
     bool m_liveScaleLocked = false;
 
     void updateLiveDecimation();
+    /// 实时页：按勾选状态显示/隐藏曲线
+    void updateLiveVisibility();
     void restartLiveEngine();
     /// 按电路里最快的信号自动挑时基（默认 500 µs/格 看不清 1 MHz 的波形）
     void autoPickLiveTimeBase();

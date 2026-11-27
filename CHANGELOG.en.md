@@ -38,6 +38,14 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Fixed
 
+- **Clicking Select All / Clear in the live scope crashed the app**: those buttons call
+  the static page's `rebuild()`, which does `removeAllSeries()` and deletes the live
+  page's curves and axes while `m_liveSeries` / `m_liveAxisX` still point at them — the
+  next refresh segfaults (exit code 139 in a headless run). The live page now only
+  toggles curve visibility and leaves the chart structure alone.
+- **The live scope's test-point list had no checkboxes**: it used to list names only and
+  always draw every probe. It now matches the static page — each test point has a
+  checkbox, unticking hides that curve, and Select All / Clear work too.
 - **Switching the live scope time base made the waveform vanish**: at 2 µs/div
   (a 20 µs window) the integration step widened to 40 ns, and an op-amp with a
   50 V/µs slew rate plus saturation simply does not converge at 40 ns, so the live

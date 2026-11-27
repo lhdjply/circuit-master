@@ -156,10 +156,10 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     sideLayout->addWidget(m_list, 1);
 
     auto* buttons = new QHBoxLayout();
-    auto* allButton = new QPushButton(CSM_TR("Select All"), side);
-    auto* noneButton = new QPushButton(CSM_TR("Clear"), side);
-    buttons->addWidget(allButton);
-    buttons->addWidget(noneButton);
+    m_allButton = new QPushButton(CSM_TR("Select All"), side);
+    m_noneButton = new QPushButton(CSM_TR("Clear"), side);
+    buttons->addWidget(m_allButton);
+    buttons->addWidget(m_noneButton);
     sideLayout->addLayout(buttons);
 
     m_info = new QLabel(side);
@@ -342,7 +342,8 @@ WaveformWindow::WaveformWindow(QWidget* parent)
 
     connect(m_liveWindowBox, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this] {
-                m_liveDiv = m_liveWindowBox->currentData().toDouble();
+                updateLiveVisibility();
+    m_liveDiv = m_liveWindowBox->currentData().toDouble();
                 m_liveWindow = m_liveDiv * 10.0;
                 if (!m_liveAutoPicking) {
                     m_liveTimeLocked = true;   // 手动选的时基要留住
@@ -394,15 +395,21 @@ WaveformWindow::WaveformWindow(QWidget* parent)
     splitter->setStretchFactor(1, 1);
     splitter->setSizes({240, 800});
 
-    connect(allButton, &QPushButton::clicked, this, [this] { selectAll(true); });
-    connect(noneButton, &QPushButton::clicked, this, [this] { selectAll(false); });
+    connect(m_allButton, &QPushButton::clicked, this, [this] { selectAll(true); });
+    connect(m_noneButton, &QPushButton::clicked, this, [this] { selectAll(false); });
     connect(m_liveAutoButton, &QPushButton::clicked, this, &WaveformWindow::autoScale);
     connect(csvButton, &QPushButton::clicked, this, &WaveformWindow::exportCsv);
     connect(pngButton, &QPushButton::clicked, this, &WaveformWindow::exportImage);
     m_view->installEventFilter(this);
 
     connect(m_list, &QListWidget::itemChanged, this, [this](QListWidgetItem*) {
-        if (!m_building)
+        if (m_building)
+            return;
+        // 实时页的曲线与坐标轴由 startLive 自己管，走 rebuild() 会把它们删掉
+        // （m_liveSeries / m_liveAxisX 变成野指针，下一次刷新就闪退）
+        if (isLive())
+            updateLiveVisibility();
+        else
             rebuild();
     });
 }
@@ -630,6 +637,11 @@ void WaveformWindow::populateList()
 void WaveformWindow::rebuild()
 {
     if (!m_chart)
+        return;
+
+    // 实时页的曲线与坐标轴由 startLive / liveTick 自己管，这里再 removeAllSeries
+    // 会把 m_liveSeries 与 m_liveAxisX/Y 变成野指针 —— 点「全选」就闪退
+    if (isLive())
         return;
 
     m_chart->removeAllSeries();
@@ -1004,6 +1016,17 @@ void WaveformWindow::restartLiveEngine()
         series->clear();
 }
 
+void WaveformWindow::updateLiveVisibility()
+{
+    if (!m_live)
+        return;
+    for (int i = 0; i < m_liveSeries.size() && i < m_list->count(); ++i) {
+        const bool on = m_list->item(i)->checkState() == Qt::Checked;
+        if (m_liveSeries.at(i))
+            m_liveSeries.at(i)->setVisible(on);
+    }
+}
+
 void WaveformWindow::updateLiveDecimation()
 {
     const double h = m_live ? m_live->step() : 1e-5;
@@ -1043,7 +1066,8 @@ void WaveformWindow::startLive(const Circuit& circuit,
     m_list->clear();
     for (int i = 0; i < probes.size(); ++i) {
         auto* item = new QListWidgetItem(swatch(colorFor(i)), probes.at(i).first);
-        item->setFlags(Qt::ItemIsEnabled);
+        item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsUserCheckable);
+        item->setCheckState(Qt::Checked);
         m_list->addItem(item);
     }
     m_building = false;
@@ -1108,6 +1132,7 @@ void WaveformWindow::startLive(const Circuit& circuit,
         m_liveSeries.append(series);
     }
 
+    updateLiveVisibility();
     m_liveDiv = m_liveWindowBox->currentData().toDouble();
     m_liveWindow = m_liveDiv * 10.0;
     m_liveAxisX->setRange(0.0, m_liveWindow);
@@ -1451,7 +1476,10 @@ void WaveformWindow::selectAll(bool on)
     for (int i = 0; i < m_list->count(); ++i)
         m_list->item(i)->setCheckState(on ? Qt::Checked : Qt::Unchecked);
     m_building = false;
-    rebuild();
+    if (isLive())
+        updateLiveVisibility();
+    else
+        rebuild();
 }
 
 void WaveformWindow::exportCsv()
