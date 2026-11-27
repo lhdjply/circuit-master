@@ -1,6 +1,7 @@
 #include "ui/UpdateDialog.h"
 #include "core/Language.h"
 
+#include "ui/DialogFrame.h"
 #include "ui/Theme.h"
 
 #include "csm_version.h"
@@ -86,11 +87,11 @@ UpdateDialog::UpdateDialog(const ReleaseInfo& release, QWidget* parent)
     m_asset = UpdateChecker::pickAssetForHost(release);
     setWindowTitle(CSM_TR("New version available"));
     setModal(true);
-    setMinimumSize(620, 560);
 
-    auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(20, 18, 20, 16);
-    root->setSpacing(12);
+    // 和其它窗口一样自绘顶栏；正文在浏览器里滚动，窗口尺寸固定
+    auto* root = makeFramelessShell(*this, CSM_TR("New version available"),
+                                    QMargins(20, 16, 20, 16), 12);
+    setFixedSize(640, 600);
 
     auto* heading = new QLabel(CSM_TR("Version %1 has been released").arg(release.tagName), this);
     heading->setStyleSheet(QStringLiteral("font-size: 17px; font-weight: 600;"));

@@ -6,6 +6,13 @@ numbering follows [Semantic Versioning](https://semver.org/).
 The single source of truth for the version is the `VERSION` file at the
 repository root (same form as the tag, e.g. `v0.4.0`).
 
+## [Unreleased]
+
+### Fixed
+
+- **The update dialog now uses the custom header too**: it was the last window with a
+  system title bar. It is a fixed 640×600 now, with the notes scrolling inside.
+
 ## [v0.5.2] - 2026-11-26
 
 Every window now draws its own title bar, plus a couple of small fixes.
