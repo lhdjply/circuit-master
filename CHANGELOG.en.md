@@ -6,114 +6,52 @@ numbering follows [Semantic Versioning](https://semver.org/).
 The single source of truth for the version is the `VERSION` file at the
 repository root (same form as the tag, e.g. `v0.4.0`).
 
-## [Unreleased]
+## [v0.6.0] - 2026-11-27
+
+This release turns the op-amp from an ideal part into a usable model — saturation,
+bandwidth, slew rate, offset, bias current and both port resistances are adjustable —
+and halves the size of `.csm` files, plus a batch of transformer, optocoupler and
+live-scope fixes.
 
 ### Added
 
 - **The op-amp is no longer ideal**: the property panel gained eight parameters — output
-  swing high / low, gain-bandwidth product, slew rate, input offset, input bias
-  current, input resistance and output resistance. Defaults match a general-purpose
-  part (±15 V, 1 MHz, 0.5 V/µs, 2 MΩ, 50 Ω); widen the limits, zero the bandwidth and
-  slew rate and raise the input resistance to get the old ideal model back. Without
-  these, comparators, oscillators, clipping and loop stability cannot be simulated
-  correctly. The input resistance is **per input terminal, to ground**: in a follower
-  the + and − inputs sit at almost the same potential, so a differential resistance
-  draws no current at all — only the common-mode resistance actually loads the source
-  (1 MΩ of source resistance against 1 MΩ of input resistance gives exactly half).
-  The output resistance is corrected by the loop in closed loop; to see it, look at an
-  open-loop or saturated stage (±5 V rail, 1 kΩ load, 500 Ω output resistance → 3.33 V).
-- **Save As can write a PNG**: the file type list gained "PNG image". Picking it
-  renders the whole schematic (its item bounds, not the current viewport) at 2× pixels
-  with the grid background, leaving selection highlights out. Exporting does not touch
-  the document's path or its modified state.
+  swing high / low, gain-bandwidth product, slew rate, input offset, input bias current,
+  input resistance and output resistance. Defaults match a general-purpose part; leave
+  them alone and you get the old ideal model back. Without these, comparators,
+  oscillators, clipping and loop stability cannot be simulated correctly.
+- **Save As can write a PNG**: it renders the whole schematic (not just the viewport)
+  at 2× pixels with the grid background.
 
 ### Changed
 
-- **`.csm` now stores only the fields a component actually uses**: every element used
-  to carry all 40-odd keys (a resistor had the op-amp's `vos` and `gbw`, an op-amp had
-  the pulse source's `pulseWidth`). Only the relevant keys are written now, and
-  `rotation: 0`, `mirror: false` and untouched label offsets are omitted too. The
-  sample file went from 12.9 KB to 3.9 KB. Old files still load (missing keys fall
-  back to their defaults).
+- **`.csm` only stores the parameters a component actually uses**: every element used to
+  record all forty-odd fields (a resistor carried the op-amp's offset voltage), now only
+  its own. Zero rotation, no mirroring and untouched labels are left out too. The sample
+  file went from 12.9 KB to 3.9 KB; old files still load.
 
 ### Fixed
 
-- **Clicking Select All / Clear in the live scope crashed the app**: those buttons call
-  the static page's `rebuild()`, which does `removeAllSeries()` and deletes the live
-  page's curves and axes while `m_liveSeries` / `m_liveAxisX` still point at them — the
-  next refresh segfaults (exit code 139 in a headless run). The live page now only
-  toggles curve visibility and leaves the chart structure alone.
-- **The live scope's test-point list had no checkboxes**: it used to list names only and
-  always draw every probe. It now matches the static page — each test point has a
-  checkbox, unticking hides that curve, and Select All / Clear work too.
-- **Switching the live scope time base made the waveform vanish**: at 2 µs/div
-  (a 20 µs window) the integration step widened to 40 ns, and an op-amp with a
-  50 V/µs slew rate plus saturation simply does not converge at 40 ns, so the live
-  simulation aborted. `suggestedMaxStep()` now also limits the step by the op-amp
-  slew rate — one step covers at most 1/20 of the output swing (±5 V at 50 V/µs
-  gives 10 ns) — so any time base stays stable.
-- **The live scope was a solid block of ink on fast circuits**: the default time base
-  is 500 µs/div (a 5 ms window), so a 1 MHz circuit packed 5000 cycles onto one screen
-  and looked like a broken waveform. Starting the live simulation now picks a time base
-  from the fastest signal in the circuit (about 10 cycles across the screen); a time
-  base the user already chose that is fine enough is left alone.
-- **Op-amps produced kilovolts once they hit their output limit**: the slew-rate path
-  fed the *internal* value (A0·vd, tens of kilovolts before saturation) straight into
-  the matrix as the output voltage, and it compared that same internal value against
-  SR·h — so the limiter stayed on permanently and the output never moved. Both the
-  comparison and the pinned value are the **output voltage** now (volts against volts),
-  the internal state is recovered by inverting the saturation curve, and the
-  linearisation point is damped by averaging the current iterate with the last
-  committed value so Newton no longer bounces between the two rails.
-- **A tight output limit left the op-amp stuck at the rail**: once saturated the
-  internal value `A0·vd` climbed to hundreds of kilovolts, and with a 16 ms dominant
-  pole each step only walked back a fraction of a volt — recovery took tens of
-  milliseconds, so the whole waveform sat on the rail. The internal value is now
-  clamped to roughly the rail range (±one full swing), so it leaves saturation in one
-  step. Measured with a ±5 V limit and a 7.07 V peak input: the output is a proper
-  ±5 V clipped wave again.
-- **The optocoupler had two different models**: the output saturation was
-  `Ic = CTR·If·x/(1+x)` (x = Vce/VceSat) in transient and the operating point, but
-  `1−e^(−x)` in the AC small-signal path. The two differ by 10–30% for x ≈ 1…10, and
-  their derivatives (the output conductance) by orders of magnitude — so an AC sweep of
-  a flyback loop came out systematically wrong. Both paths now share one function and
-  one derivative.
-- **Test points read 0 V in the live scope**: after multi-winding currents were expanded
-  per winding, `LiveTransient` still built its name list one entry per element, so it was
-  off by the transformer's extra windings — every signal after it (including the `V(a,b)`
-  differential test points) read the wrong slot, and TP2 in the 220 V → 12 V example sat
-  at 0 V. The name list now uses the same per-slot rule.
-- **Multi-winding transformers report one current per winding**: `branchOf` can only hold
-  one entry per component, so a three-winding transformer only reported the primary. The
-  sampling vector and the signal list are now expanded per winding — `I(T1)`, `I(T1.2)`,
-  `I(T1.3)` (shown as `T1`, `T1.2`, `T1.3` in the report) — and the multimeter offsets in
-  that vector follow the new layout.
-- **Transformer current was always 0**: assembly registers one branch per winding
-  (`windingBranches`), but reading a component's current goes through `branchOf` — and
-  the transformer's `continue` came before that registration, so `I(T1)` was always 0:
-  the operating-point report, `elementCurrents` and the waveforms were all wrong even
-  though the circuit itself solved correctly. The primary winding is registered now, so
-  the reported T1 current matches the source current.
-- **Double-clicking a broken `.csm` no longer closes the program**: when a file passed on
-  the command line failed to open, `main` used to `return 1`, so dismissing the error
-  dialog took the whole window down. It now just reports the problem and keeps the
-  window open on an empty document, ready for File → Open or an example; with several
-  files it carries on to the next one.
-- **User files are no longer truncated before writing**: saving a `.csm`, recovery copies,
-  waveform CSV, waveform images and the schematic PNG all go through the new `SafeWrite`
-  (`core/SafeWrite` for bytes and text, `ui/SafeWrite` for images; QSaveFile underneath) —
-  a temp file in the same directory is written first and swapped in atomically. `QFile::open(WriteOnly)`
-  used to empty the target, so a crash, power cut or full disk halfway through left a
-  half-written file and destroyed the previous one. A failed write now leaves the original
-  untouched, keeps the `*`, and reports QSaveFile's own message (e.g. "Permission denied").
-- **Dialogs no longer add a taskbar entry**: after going frameless, some window
-  managers treated them as ordinary windows. They are Tool windows now (transient
-  children when they have a parent), so only the main window shows in the taskbar. The
-  multimeter and the waveform monitor are treated the same way — the former is a small
-  meter floating over the canvas, the latter is toggled from View / F6 — so neither needs
-  its own taskbar slot.
-- **The update dialog now uses the custom header too**: it was the last window with a
-  system title bar. It is a fixed 640×600 now, with the notes scrolling inside.
+- **Op-amp outputs were wrong at the limit**: a follower with a ±7 V limit produced
+  thousands of volts, and a tight limit could leave the output stuck on the rail. It now
+  sits firmly on the rail and leaves saturation in a single step.
+- **Transformer currents read as 0**: the report and the waveforms showed `I(T1)` as
+  zero even though the circuit solved correctly. Multi-winding transformers now get one
+  current per winding.
+- **Live-scope test points read 0 V**: in circuits with a transformer, every test point
+  after it was shifted.
+- **The optocoupler's AC analysis disagreed with the transient**: flyback loop sweeps
+  came out systematically low; both now use the same model.
+- **Live scope**: clicking Select All / Clear crashed the app; the test-point list gained
+  checkboxes; the time base is picked from the fastest signal in the circuit (a 1 MHz
+  circuit no longer packs into a solid block of ink); and switching the time base no
+  longer aborts the run.
+- **Double-clicking a broken `.csm` no longer closes the app**: it shows the reason and
+  keeps the window open.
+- **Saving is safer**: a failed write leaves the original file untouched (it used to be
+  emptied first).
+- **Dialogs no longer take an extra taskbar slot**, and the update checker uses the same
+  self-drawn title bar as everything else.
 
 ## [v0.5.2] - 2026-11-26
 
