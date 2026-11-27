@@ -17,6 +17,11 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Fixed
 
+- **Double-clicking a broken `.csm` no longer closes the program**: when a file passed on
+  the command line failed to open, `main` used to `return 1`, so dismissing the error
+  dialog took the whole window down. It now just reports the problem and keeps the
+  window open on an empty document, ready for File → Open or an example; with several
+  files it carries on to the next one.
 - **User files are no longer truncated before writing**: saving a `.csm`, recovery copies,
   waveform CSV, waveform images and the schematic PNG all go through the new `SafeWrite`
   (`core/SafeWrite` for bytes and text, `ui/SafeWrite` for images; QSaveFile underneath) —

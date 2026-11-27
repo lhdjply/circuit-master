@@ -117,11 +117,12 @@ int main(int argc, char* argv[])
                          window.activateWindow();
                      });
 
-    // 双击 .csm（文件关联）或 `CircuitMaster 电路.csm` 时直接打开
-    for (const QString& file : startupFiles) {
-        if (!window.openPath(file))
-            return 1;
-    }
+    // 双击 .csm（文件关联）或 `CircuitMaster 电路.csm` 时直接打开。
+    // 打开失败时 openPath 自己会弹框说明原因，这里不退出 —— 双击一个坏文件
+    // 不该把整个界面关掉，用户还要能接着「文件 → 打开」或载入示例。
+    // 有多个参数时也继续试下一个，不因为第一个坏掉就放弃。
+    for (const QString& file : startupFiles)
+        window.openPath(file);
 
     return app.exec();
 }
