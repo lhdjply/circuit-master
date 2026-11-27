@@ -1516,12 +1516,17 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
             const int ne = p.nodeOf(comp.id, 3);
             const double ctr = std::max(comp.ctr, 0.0);
             const double vceSat = std::max(comp.vceSat, 1e-3);
-            // 工作点落在饱和区时，小信号里多一条输出电导
+            // 饱和收窄必须与瞬态/工作点用同一个函数：Ic = CTR·If·x/(1+x)，
+            // x = Vce/VceSat。原来这里用的是 1−exp(−x)，在 x≈1…10 的区间与小信号
+            // 增益都差 10–30%（反激环路里就是几十个百分点的幅值偏差），
+            // 两边各算一套等于同一个器件有两个模型。
             const double vce = st.optoVce.value(comp.id, 0.0);
-            const double df = vce > 0.0 ? std::exp(-vce / vceSat) / vceSat : 0.0;
+            const double vcePos = std::max(vce, 0.0);
+            const double x = vcePos / vceSat;
+            const double fSmall = x / (1.0 + x);
+            const double df = 1.0 / ((1.0 + x) * (1.0 + x) * vceSat);
 
             addG(a, n1, n2, Cx(g, 0.0));
-            const double fSmall = 1.0 - std::exp(-std::max(vce, 0.0) / vceSat);
             addVccs(a, nc, ne, n1, n2, Cx(ctr * fSmall * g, 0.0));
             addG(a, nc, ne, Cx(ctr * if0 * df + 1e-9, 0.0));
             break;

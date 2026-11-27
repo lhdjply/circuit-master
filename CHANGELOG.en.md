@@ -17,6 +17,12 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Fixed
 
+- **The optocoupler had two different models**: the output saturation was
+  `Ic = CTR·If·x/(1+x)` (x = Vce/VceSat) in transient and the operating point, but
+  `1−e^(−x)` in the AC small-signal path. The two differ by 10–30% for x ≈ 1…10, and
+  their derivatives (the output conductance) by orders of magnitude — so an AC sweep of
+  a flyback loop came out systematically wrong. Both paths now share one function and
+  one derivative.
 - **Test points read 0 V in the live scope**: after multi-winding currents were expanded
   per winding, `LiveTransient` still built its name list one entry per element, so it was
   off by the transformer's extra windings — every signal after it (including the `V(a,b)`
