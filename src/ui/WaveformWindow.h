@@ -150,6 +150,8 @@ private:
 
     void updateLiveDecimation();
     void restartLiveEngine();
+    /// 按电路里最快的信号自动挑时基（默认 500 µs/格 看不清 1 MHz 的波形）
+    void autoPickLiveTimeBase();
     void applyLiveScales();
     void autoPickLiveScales();
     /// 从当前缓冲里估信号周期（找不到返回 0）

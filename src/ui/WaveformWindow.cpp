@@ -934,6 +934,47 @@ void WaveformWindow::autoPickLiveScales()
     applyLiveScales();
 }
 
+void WaveformWindow::autoPickLiveTimeBase()
+{
+    // 时基默认 500 µs/格 = 5 ms 窗口。碰上 1 MHz 的电路就是 5000 个周期挤在
+    // 一屏里 —— 画出来是一整块墨，看着像「波形不对」。这里按电路里最快的
+    // 信号自动挑一个能看清的档位：屏幕上大约 10 个周期。
+    if (!m_liveWindowBox || m_liveWindowBox->count() == 0)
+        return;
+
+    double fmax = 0.0;
+    for (const Component& comp : m_liveCircuit.components) {
+        if (!isSource(comp.type))
+            continue;
+        if (comp.function == SourceFunction::Sine && comp.frequency > 0.0)
+            fmax = std::max(fmax, comp.frequency);
+        else if (comp.function == SourceFunction::Pulse && comp.pulsePeriod > 0.0)
+            fmax = std::max(fmax, 1.0 / comp.pulsePeriod);
+    }
+    if (fmax <= 0.0)
+        return;
+
+    const double wantDiv = 1.0 / fmax;            // 窗口 = 10 格 ≈ 10 个周期
+    const double currentDiv = m_liveWindowBox->currentData().toDouble();
+    if (currentDiv <= wantDiv * 4.0)
+        return;                                    // 已经够细，不动用户的选择
+
+    int best = 0;
+    double bestErr = 1e30;
+    for (int i = 0; i < m_liveWindowBox->count(); ++i) {
+        const double div = m_liveWindowBox->itemData(i).toDouble();
+        if (div <= 0.0)
+            continue;
+        const double err = std::abs(std::log(div / wantDiv));
+        if (err < bestErr) {
+            bestErr = err;
+            best = i;
+        }
+    }
+    QSignalBlocker blocker(m_liveWindowBox);
+    m_liveWindowBox->setCurrentIndex(best);
+}
+
 void WaveformWindow::restartLiveEngine()
 {
     m_live = std::make_unique<LiveTransient>();
@@ -984,6 +1025,7 @@ void WaveformWindow::startLive(const Circuit& circuit,
     m_restartingLive = false;
     m_probes = probes;
     m_liveCircuit = circuit;
+    autoPickLiveTimeBase();
 
     if (!m_liveTimer)
         return;

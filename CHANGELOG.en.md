@@ -29,6 +29,11 @@ repository root (same form as the tag, e.g. `v0.4.0`).
   simulation aborted. `suggestedMaxStep()` now also limits the step by the op-amp
   slew rate — one step covers at most 1/20 of the output swing (±5 V at 50 V/µs
   gives 10 ns) — so any time base stays stable.
+- **The live scope was a solid block of ink on fast circuits**: the default time base
+  is 500 µs/div (a 5 ms window), so a 1 MHz circuit packed 5000 cycles onto one screen
+  and looked like a broken waveform. Starting the live simulation now picks a time base
+  from the fastest signal in the circuit (about 10 cycles across the screen); a time
+  base the user already chose that is fine enough is left alone.
 - **Op-amps produced kilovolts once they hit their output limit**: the slew-rate path
   fed the *internal* value (A0·vd, tens of kilovolts before saturation) straight into
   the matrix as the output voltage, and it compared that same internal value against
