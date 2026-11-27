@@ -10,6 +10,12 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Added
 
+- **The op-amp is no longer ideal**: the property panel gained six parameters — output
+  swing high / low, gain-bandwidth product, slew rate, input offset and input bias
+  current. Defaults match a general-purpose part (±15 V, 1 MHz, 0.5 V/µs); widen the
+  limits and zero the bandwidth and slew rate to get the old ideal model back. Without
+  these, comparators, oscillators, clipping and loop stability cannot be simulated
+  correctly.
 - **Save As can write a PNG**: the file type list gained "PNG image". Picking it
   renders the whole schematic (its item bounds, not the current viewport) at 2× pixels
   with the grid background, leaving selection highlights out. Exporting does not touch
@@ -17,6 +23,27 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Fixed
 
+- **Switching the live scope time base made the waveform vanish**: at 2 µs/div
+  (a 20 µs window) the integration step widened to 40 ns, and an op-amp with a
+  50 V/µs slew rate plus saturation simply does not converge at 40 ns, so the live
+  simulation aborted. `suggestedMaxStep()` now also limits the step by the op-amp
+  slew rate — one step covers at most 1/20 of the output swing (±5 V at 50 V/µs
+  gives 10 ns) — so any time base stays stable.
+- **Op-amps produced kilovolts once they hit their output limit**: the slew-rate path
+  fed the *internal* value (A0·vd, tens of kilovolts before saturation) straight into
+  the matrix as the output voltage, and it compared that same internal value against
+  SR·h — so the limiter stayed on permanently and the output never moved. Both the
+  comparison and the pinned value are the **output voltage** now (volts against volts),
+  the internal state is recovered by inverting the saturation curve, and the
+  linearisation point is damped by averaging the current iterate with the last
+  committed value so Newton no longer bounces between the two rails.
+- **A tight output limit left the op-amp stuck at the rail**: once saturated the
+  internal value `A0·vd` climbed to hundreds of kilovolts, and with a 16 ms dominant
+  pole each step only walked back a fraction of a volt — recovery took tens of
+  milliseconds, so the whole waveform sat on the rail. The internal value is now
+  clamped to roughly the rail range (±one full swing), so it leaves saturation in one
+  step. Measured with a ±5 V limit and a 7.07 V peak input: the output is a proper
+  ±5 V clipped wave again.
 - **The optocoupler had two different models**: the output saturation was
   `Ic = CTR·If·x/(1+x)` (x = Vce/VceSat) in transient and the operating point, but
   `1−e^(−x)` in the AC small-signal path. The two differ by 10–30% for x ≈ 1…10, and

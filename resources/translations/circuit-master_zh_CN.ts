@@ -265,6 +265,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>基础</translation>
     </message>
     <message>
+        <source>Bias current flowing into each input terminal.</source>
+        <translation>两个输入端各自流进器件的电流。</translation>
+    </message>
+    <message>
         <source>Both pins of %1 are shorted together.</source>
         <translation>%1 的两个引脚被短接在一起。</translation>
     </message>
@@ -703,6 +707,15 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>GND（主地）</translation>
     </message>
     <message>
+        <source>Gain-bandwidth (Hz)</source>
+        <translation>增益带宽积 (Hz)</translation>
+    </message>
+    <message>
+        <source>Gain-bandwidth product. The dominant pole sits at GBW / A0;
+0 means no bandwidth limit (ideal).</source>
+        <translation>增益带宽积。主极点位于 GBW / A0；填 0 表示不限带宽（理想）。</translation>
+    </message>
+    <message>
         <source>Giving up on %1: received %2 bytes in %3 ms</source>
         <translation>放弃当前地址（%1）：已收 %2 字节，用时 %3 ms</translation>
     </message>
@@ -745,6 +758,18 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Initial value</source>
         <translation>初始值</translation>
+    </message>
+    <message>
+        <source>Input bias current (A)</source>
+        <translation>输入偏置电流 (A)</translation>
+    </message>
+    <message>
+        <source>Input offset (V)</source>
+        <translation>输入失调 (V)</translation>
+    </message>
+    <message>
+        <source>Input offset voltage: shifts the +/− input difference.</source>
+        <translation>输入失调电压：等效成 +/− 输入之间的固定偏差。</translation>
     </message>
     <message>
         <source>Install did not finish (exit code %1). Installer kept at: %2%3</source>
@@ -1053,6 +1078,14 @@ Place a voltage (TP) or current (IP) test point and run again</source>
     <message>
         <source>Output high level. Low level is fixed at 0 V; input threshold is half of it (5% hysteresis).</source>
         <translation>输出的高电平。低电平固定 0 V，输入阈值取它的一半（带 5% 回差）。</translation>
+    </message>
+    <message>
+        <source>Output swing high (V)</source>
+        <translation>输出上限 (V)</translation>
+    </message>
+    <message>
+        <source>Output swing low (V)</source>
+        <translation>输出下限 (V)</translation>
     </message>
     <message>
         <source>P-MOSFET</source>
@@ -1425,6 +1458,10 @@ to edit its parameters</source>
         <translation>线性方程组奇异（第 %1 行主元过小）</translation>
     </message>
     <message>
+        <source>Slew rate (V/µs)</source>
+        <translation>压摆率 (V/µs)</translation>
+    </message>
+    <message>
         <source>Small-signal diode</source>
         <translation>小信号二极管</translation>
     </message>
@@ -1747,6 +1784,10 @@ Checked: normally closed, opens while held.</source>
         <translation>电压源</translation>
     </message>
     <message>
+        <source>Volts per microsecond. 0 means unlimited.</source>
+        <translation>单位 V/µs；0 表示不限速。</translation>
+    </message>
+    <message>
         <source>Waveform</source>
         <translation>波形</translation>
     </message>
@@ -1795,12 +1836,20 @@ Checked: normally closed, opens while held.</source>
         <translation>缩小</translation>
     </message>
     <message>
+        <source>e.g. -15</source>
+        <translation>例如 -15</translation>
+    </message>
+    <message>
         <source>e.g. 0%1</source>
         <translation>例如 0%1</translation>
     </message>
     <message>
         <source>e.g. 0.2</source>
         <translation>例如 0.2</translation>
+    </message>
+    <message>
+        <source>e.g. 0.5</source>
+        <translation>例如 0.5</translation>
     </message>
     <message>
         <source>e.g. 0.7</source>
@@ -1823,6 +1872,10 @@ Checked: normally closed, opens while held.</source>
         <translation>例如 100k</translation>
     </message>
     <message>
+        <source>e.g. 100n</source>
+        <translation>例如 100n</translation>
+    </message>
+    <message>
         <source>e.g. 100nF / 1µF</source>
         <translation>例如 100nF / 1µF</translation>
     </message>
@@ -1837,6 +1890,14 @@ Checked: normally closed, opens while held.</source>
     <message>
         <source>e.g. 10mH</source>
         <translation>例如 10mH</translation>
+    </message>
+    <message>
+        <source>e.g. 15</source>
+        <translation>例如 15</translation>
+    </message>
+    <message>
+        <source>e.g. 1M</source>
+        <translation>例如 1M</translation>
     </message>
     <message>
         <source>e.g. 1kHz</source>

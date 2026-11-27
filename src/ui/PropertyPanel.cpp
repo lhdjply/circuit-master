@@ -138,6 +138,26 @@ void PropertyPanel::buildUi()
     m_lpri = makeEdit(CSM_TR("e.g. 1"));
     m_form->addRow(CSM_TR("Primary inductance L1"), m_lpri);
 
+    // 运放：只暴露真正影响结果的那几个参数。默认值按通用型运放
+    //（±15 V、1 MHz、0.5 V/µs）给，不动这些框就是「能用」的模型
+    m_opVsatHigh = makeEdit(CSM_TR("e.g. 15"));
+    m_form->addRow(CSM_TR("Output swing high (V)"), m_opVsatHigh);
+    m_opVsatLow = makeEdit(CSM_TR("e.g. -15"));
+    m_form->addRow(CSM_TR("Output swing low (V)"), m_opVsatLow);
+    m_opGbw = makeEdit(CSM_TR("e.g. 1M"));
+    m_opGbw->setToolTip(CSM_TR("Gain-bandwidth product. The dominant pole sits at GBW / A0;\n"
+                               "0 means no bandwidth limit (ideal)."));
+    m_form->addRow(CSM_TR("Gain-bandwidth (Hz)"), m_opGbw);
+    m_opSlew = makeEdit(CSM_TR("e.g. 0.5"));
+    m_opSlew->setToolTip(CSM_TR("Volts per microsecond. 0 means unlimited."));
+    m_form->addRow(CSM_TR("Slew rate (V/µs)"), m_opSlew);
+    m_opVos = makeEdit(CSM_TR("e.g. 2m"));
+    m_opVos->setToolTip(CSM_TR("Input offset voltage: shifts the +/− input difference."));
+    m_form->addRow(CSM_TR("Input offset (V)"), m_opVos);
+    m_opIbias = makeEdit(CSM_TR("e.g. 100n"));
+    m_opIbias->setToolTip(CSM_TR("Bias current flowing into each input terminal."));
+    m_form->addRow(CSM_TR("Input bias current (A)"), m_opIbias);
+
     m_windings = new QComboBox(page);
     m_windings->addItem(CSM_TR("Single winding (1 primary + 1 secondary)"),
                         int(TransformerKind::Single));
@@ -289,6 +309,8 @@ void PropertyPanel::buildUi()
     connect(m_vf, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_ctr, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_vceSat, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
+    for (QLineEdit* edit : {m_opVsatHigh, m_opVsatLow, m_opGbw, m_opSlew, m_opVos, m_opIbias})
+        connect(edit, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_lpri, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_meterMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &PropertyPanel::applyValue);
@@ -399,6 +421,12 @@ void PropertyPanel::refreshFromItem()
     m_ctr->setText(QString::number(c.ctr, 'g', 4));
     m_vceSat->setText(quantityText(c.vceSat, UnitKind::Volt));
     m_lpri->setText(quantityText(c.lpri, UnitKind::Henry));
+    m_opVsatHigh->setText(quantityText(c.vSatHigh, UnitKind::Volt));
+    m_opVsatLow->setText(quantityText(c.vSatLow, UnitKind::Volt));
+    m_opGbw->setText(quantityText(c.gbw, UnitKind::Hertz));
+    m_opSlew->setText(QString::number(c.slewRate / 1e6, 'g', 4));
+    m_opVos->setText(quantityText(c.vos, UnitKind::Volt));
+    m_opIbias->setText(quantityText(c.ibias, UnitKind::Ampere));
     m_windings->setCurrentIndex(m_windings->findData(int(c.transformerKind)));
     m_meterMode->setCurrentIndex(m_meterMode->findData(int(c.multimeterMode)));
     m_logicHigh->setText(quantityText(c.logicHigh, UnitKind::Volt));
@@ -460,6 +488,9 @@ void PropertyPanel::updateVisibility()
     m_form->setRowVisible(m_ctr, c.type == ComponentType::Optocoupler);
     m_form->setRowVisible(m_vceSat, c.type == ComponentType::Optocoupler);
     m_form->setRowVisible(m_lpri, c.type == ComponentType::Transformer);
+    const bool opamp = (c.type == ComponentType::OpAmp);
+    for (QLineEdit* edit : {m_opVsatHigh, m_opVsatLow, m_opGbw, m_opSlew, m_opVos, m_opIbias})
+        m_form->setRowVisible(edit, opamp);
     m_form->setRowVisible(m_logicHigh, c.type == ComponentType::LogicGate);
 
     if (m_valueLabel) {
@@ -780,6 +811,47 @@ void PropertyPanel::applyValue()
             c.vf = vf;
         }
 
+        m_item->setComponent(c);
+        updateSubtitle();
+        emit changed();
+        return;
+    }
+
+    // 运放：一次要把七个参数都读一遍（任何一个编辑框改完都会走到这里）
+    if (type == ComponentType::OpAmp) {
+        Component c = m_item->component();
+        QString reason;
+        bool ok = false;
+        const auto read = [&](QLineEdit* edit, UnitKind unit, double scale, double* out) {
+            const double parsed = parseQuantity(edit->text(), unit, &ok, &reason);
+            if (!ok) {
+                markInvalid(edit, reason);
+                return false;
+            }
+            markValid(edit);
+            *out = parsed * scale;
+            return true;
+        };
+        if (!read(m_value, UnitKind::None, 1.0, &c.value))
+            return;
+        if (!read(m_opVsatHigh, UnitKind::Volt, 1.0, &c.vSatHigh))
+            return;
+        if (!read(m_opVsatLow, UnitKind::Volt, 1.0, &c.vSatLow))
+            return;
+        if (!read(m_opGbw, UnitKind::Hertz, 1.0, &c.gbw))
+            return;
+        if (!read(m_opSlew, UnitKind::None, 1e6, &c.slewRate))   // V/µs → V/s
+            return;
+        if (!read(m_opVos, UnitKind::Volt, 1.0, &c.vos))
+            return;
+        if (!read(m_opIbias, UnitKind::Ampere, 1.0, &c.ibias))
+            return;
+        // 上限必须大于下限，否则饱和函数没有意义
+        if (c.vSatHigh <= c.vSatLow) {
+            const double t = c.vSatHigh;
+            c.vSatHigh = c.vSatLow;
+            c.vSatLow = t;
+        }
         m_item->setComponent(c);
         updateSubtitle();
         emit changed();

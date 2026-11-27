@@ -262,6 +262,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Basic</translation>
     </message>
     <message>
+        <source>Bias current flowing into each input terminal.</source>
+        <translation>Bias current flowing into each input terminal.</translation>
+    </message>
+    <message>
         <source>Both pins of %1 are shorted together.</source>
         <translation>Both pins of %1 are shorted together.</translation>
     </message>
@@ -700,6 +704,16 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>GND (main)</translation>
     </message>
     <message>
+        <source>Gain-bandwidth (Hz)</source>
+        <translation>Gain-bandwidth (Hz)</translation>
+    </message>
+    <message>
+        <source>Gain-bandwidth product. The dominant pole sits at GBW / A0;
+0 means no bandwidth limit (ideal).</source>
+        <translation>Gain-bandwidth product. The dominant pole sits at GBW / A0;
+0 means no bandwidth limit (ideal).</translation>
+    </message>
+    <message>
         <source>Giving up on %1: received %2 bytes in %3 ms</source>
         <translation>Giving up on %1: received %2 bytes in %3 ms</translation>
     </message>
@@ -742,6 +756,18 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Initial value</source>
         <translation>Initial value</translation>
+    </message>
+    <message>
+        <source>Input bias current (A)</source>
+        <translation>Input bias current (A)</translation>
+    </message>
+    <message>
+        <source>Input offset (V)</source>
+        <translation>Input offset (V)</translation>
+    </message>
+    <message>
+        <source>Input offset voltage: shifts the +/− input difference.</source>
+        <translation>Input offset voltage: shifts the +/− input difference.</translation>
     </message>
     <message>
         <source>Install did not finish (exit code %1). Installer kept at: %2%3</source>
@@ -1050,6 +1076,14 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
     <message>
         <source>Output high level. Low level is fixed at 0 V; input threshold is half of it (5% hysteresis).</source>
         <translation>Output high level. Low level is fixed at 0 V; input threshold is half of it (5% hysteresis).</translation>
+    </message>
+    <message>
+        <source>Output swing high (V)</source>
+        <translation>Output swing high (V)</translation>
+    </message>
+    <message>
+        <source>Output swing low (V)</source>
+        <translation>Output swing low (V)</translation>
     </message>
     <message>
         <source>P-MOSFET</source>
@@ -1422,6 +1456,10 @@ to edit its parameters</translation>
         <translation>Singular linear system (tiny pivot at row %1)</translation>
     </message>
     <message>
+        <source>Slew rate (V/µs)</source>
+        <translation>Slew rate (V/µs)</translation>
+    </message>
+    <message>
         <source>Small-signal diode</source>
         <translation>Small-signal diode</translation>
     </message>
@@ -1744,6 +1782,10 @@ Checked: normally closed, opens while held.</translation>
         <translation>Voltage source</translation>
     </message>
     <message>
+        <source>Volts per microsecond. 0 means unlimited.</source>
+        <translation>Volts per microsecond. 0 means unlimited.</translation>
+    </message>
+    <message>
         <source>Waveform</source>
         <translation>Waveform</translation>
     </message>
@@ -1792,12 +1834,20 @@ Checked: normally closed, opens while held.</translation>
         <translation>Zoom Out</translation>
     </message>
     <message>
+        <source>e.g. -15</source>
+        <translation>e.g. -15</translation>
+    </message>
+    <message>
         <source>e.g. 0%1</source>
         <translation>e.g. 0%1</translation>
     </message>
     <message>
         <source>e.g. 0.2</source>
         <translation>e.g. 0.2</translation>
+    </message>
+    <message>
+        <source>e.g. 0.5</source>
+        <translation>e.g. 0.5</translation>
     </message>
     <message>
         <source>e.g. 0.7</source>
@@ -1820,6 +1870,10 @@ Checked: normally closed, opens while held.</translation>
         <translation>e.g. 100k</translation>
     </message>
     <message>
+        <source>e.g. 100n</source>
+        <translation>e.g. 100n</translation>
+    </message>
+    <message>
         <source>e.g. 100nF / 1µF</source>
         <translation>e.g. 100nF / 1µF</translation>
     </message>
@@ -1834,6 +1888,14 @@ Checked: normally closed, opens while held.</translation>
     <message>
         <source>e.g. 10mH</source>
         <translation>e.g. 10mH</translation>
+    </message>
+    <message>
+        <source>e.g. 15</source>
+        <translation>e.g. 15</translation>
+    </message>
+    <message>
+        <source>e.g. 1M</source>
+        <translation>e.g. 1M</translation>
     </message>
     <message>
         <source>e.g. 1kHz</source>

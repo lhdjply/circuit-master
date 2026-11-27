@@ -210,6 +210,13 @@ QJsonObject Circuit::toJson() const
         o.insert(QStringLiteral("lpri"), c.lpri);
         o.insert(QStringLiteral("secondaryInverted"), c.secondaryInverted);
         o.insert(QStringLiteral("auxRatio"), c.auxRatio);
+        // 运放：不给这些键也能读，缺省就是理想化参数（见 Component.h）
+        o.insert(QStringLiteral("vSatHigh"), c.vSatHigh);
+        o.insert(QStringLiteral("vSatLow"), c.vSatLow);
+        o.insert(QStringLiteral("gbw"), c.gbw);
+        o.insert(QStringLiteral("slewRate"), c.slewRate);
+        o.insert(QStringLiteral("vos"), c.vos);
+        o.insert(QStringLiteral("ibias"), c.ibias);
         o.insert(QStringLiteral("groundKind"), int(c.groundKind));
         o.insert(QStringLiteral("multimeterMode"), int(c.multimeterMode));
         o.insert(QStringLiteral("normallyClosed"), c.normallyClosed);
@@ -307,6 +314,12 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
         c.lpri = o.value(QStringLiteral("lpri")).toDouble(1.0);
         c.secondaryInverted = o.value(QStringLiteral("secondaryInverted")).toBool(false);
         c.auxRatio = o.value(QStringLiteral("auxRatio")).toDouble(1.0);
+        c.vSatHigh = o.value(QStringLiteral("vSatHigh")).toDouble(15.0);
+        c.vSatLow = o.value(QStringLiteral("vSatLow")).toDouble(-15.0);
+        c.gbw = o.value(QStringLiteral("gbw")).toDouble(1e6);
+        c.slewRate = o.value(QStringLiteral("slewRate")).toDouble(0.5e6);
+        c.vos = o.value(QStringLiteral("vos")).toDouble(0.0);
+        c.ibias = o.value(QStringLiteral("ibias")).toDouble(0.0);
         c.groundKind = static_cast<GroundKind>(o.value(QStringLiteral("groundKind")).toInt(0));
         c.multimeterMode = static_cast<MultimeterMode>(
             o.value(QStringLiteral("multimeterMode")).toInt(0));
@@ -381,6 +394,18 @@ double Circuit::suggestedMaxStep() const
         step = 1.0 / (fmax * 20.0); // 每个周期至少 20 个采样点
     if (widthStep > 0.0)
         step = step > 0.0 ? std::min(step, widthStep) : widthStep;
+
+    // 运放：压摆率给出另一个上限。一步最多走输出量程的 1/20 ——
+    // 压摆限速和饱和是「继电器型」非线性，步子太粗时牛顿会在两个轨之间
+    // 来回跳（实测 ±5 V 限幅、50 V/µs 的运放，40 ns 就发散，20 ns 正常）。
+    for (const Component& comp : components) {
+        if (comp.type != ComponentType::OpAmp || comp.slewRate <= 0.0)
+            continue;
+        const double span = std::max(comp.vSatHigh - comp.vSatLow, 1.0);
+        const double slewStep = 0.05 * span / comp.slewRate;
+        if (slewStep > 0.0)
+            step = step > 0.0 ? std::min(step, slewStep) : slewStep;
+    }
     return step;
 }
 

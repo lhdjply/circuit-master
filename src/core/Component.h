@@ -176,6 +176,20 @@ struct Component {
     /// 辅助绕组的匝数比（相对初级）；三绕组变压器才有意义
     double auxRatio = 1.0;
 
+    // 运放（OpAmp）：value 是开环增益 A0，其余是让它不再「理想」的参数
+    /// 输出上限 / 下限（V）。真实运放撞到电源轨就压不动了
+    double vSatHigh = 15.0;
+    double vSatLow = -15.0;
+    /// 增益带宽积（Hz）：主极点 ωp = 2π·GBW / A0，交流增益随频率滚降。
+    /// 0 表示不限带宽（理想）
+    double gbw = 1e6;
+    /// 压摆率（V/s）：输出最多按这个速率变化。0 表示不限
+    double slewRate = 0.5e6;
+    /// 输入失调电压（V）：等效成 v+ − v− 上的固定偏差
+    double vos = 0.0;
+    /// 输入偏置电流（A）：两个输入端各自流进器件的电流
+    double ibias = 0.0;
+
     // 独立源参数
     SourceFunction function = SourceFunction::Constant;
     double dcValue = 0.0;

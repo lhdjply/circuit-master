@@ -109,6 +109,16 @@ struct ElementState {
     /// 逻辑门：上一轮迭代决定的输出电平（0 或 logicHigh）。
     /// 输入按阈值 + 回差判定，输出用戴维南等效（源内阻 kGateRout）打进矩阵。
     QHash<int, double> gateLevel;
+    /// 运放：内部（未饱和）输出状态，一步结束时提交。一阶极点以它为初值，
+    /// 压摆率也按它限速。
+    QHash<int, double> opampY;
+    /// 运放：本轮牛顿迭代的线性化点。饱和的斜率与常数项都取自它 ——
+    /// 与 opampY 分开是必须的：若迭代里直接改 opampY，极点的不动点会退化成
+    /// 直流解（y = A0·vd），带宽就不起作用了。
+    QHash<int, double> opampYIter;
+    /// 运放：本步被压摆率限住的，值为这一步允许到达的内部输出（固定值）。
+    /// 受限时支路方程退化成「恒压源」，见装配处。
+    QHash<int, double> opampSlew;
 
     /// 万用表交流档的滑动窗口：存「正好一个周期」的采样，算交流有效值。
     /// 窗口样本数 = round(period / (decim·h))，所以窗口跨度正好是一个整周期，
@@ -446,6 +456,24 @@ Problem buildProblem(const Circuit& circuit, const Netlist& net)
         }
     }
     return p;
+}
+
+/// 运放输出的软饱和区间：mid ± half（上下限填反了也能用）
+void opampSatRange(const Component& comp, double* mid, double* half)
+{
+    const double vHi = std::max(comp.vSatHigh, comp.vSatLow);
+    const double vLo = std::min(comp.vSatHigh, comp.vSatLow);
+    *mid = 0.5 * (vHi + vLo);
+    *half = std::max(0.5 * (vHi - vLo), 1e-6);
+}
+
+/// 运放输出的软饱和：mid + half·tanh((y−mid)/half)
+double opampSat(const Component& comp, double y)
+{
+    double mid = 0.0;
+    double half = 1.0;
+    opampSatRange(comp, &mid, &half);
+    return mid + half * std::tanh((y - mid) / half);
 }
 
 int currentSlotCount(const Problem& p, const Component& comp)
@@ -823,19 +851,69 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
         }
 
         case ComponentType::OpAmp: {
-            // 三端理想运放：v_out - Rout·i_out = A·(v+ - v-)
+            // 三端运放：v_out − Rout·i_out = sat(y)
+            //   y 是「内部」输出：一阶极点与压摆率作用在它上面，饱和只发生在它之后。
+            //   直流：  y = A0·vd
+            //   瞬态：  y = (y_prev + (h/τ)·A0·vd) / (1 + h/τ)，τ = A0/(2π·GBW)
+            //   饱和：  sat(y) = mid + half·tanh((y−mid)/half)，处处可导、单调
             const int br = p.branchOf.value(comp.id, -1);
             if (br < 0)
                 break;
-            const double gain = comp.value > 1.0 ? comp.value : 1e5;
+            const double a0 = comp.value > 1.0 ? comp.value : 1e5;
             addBranch(a, b, p, comp.id, 50.0, 0.0);
             const int ib = p.nNodes + br;
             const int inP = p.nodeOf(comp.id, 0);
             const int inM = p.nodeOf(comp.id, 1);
+
+            // 压摆率受限：本步输出被钉在「上一步 ± SR·h」上，与 vd 无关
+            if (st.opampSlew.contains(comp.id)) {
+                // opampSlew 存的就是「输出电压」（已经限速、已经饱和），直接写
+                b[size_t(ib)] += st.opampSlew.value(comp.id);
+                if (comp.ibias != 0.0) {
+                    addI(b, inP, 0, comp.ibias);
+                    addI(b, inM, 0, comp.ibias);
+                }
+                break;
+            }
+
+            // 一阶极点：把 y 写成 vd 的线性函数 y = α·A0·vd + β
+            double alpha = 1.0;
+            double beta = 0.0;
+            if (transient && comp.gbw > 0.0) {
+                const double tau = a0 / (2.0 * kPi * comp.gbw);
+                const double hOverTau = h / std::max(tau, 1e-18);
+                alpha = hOverTau / (1.0 + hOverTau);
+                beta = st.opampY.value(comp.id, 0.0) / (1.0 + hOverTau);   // 上一步提交值
+            }
+
+            // 饱和：在上一次迭代的 y 处线性化
+            const double vHi = std::max(comp.vSatHigh, comp.vSatLow);
+            const double vLo = std::min(comp.vSatHigh, comp.vSatLow);
+            const double mid = 0.5 * (vHi + vLo);
+            const double half = std::max(0.5 * (vHi - vLo), 1e-6);
+            // 线性化点取「本轮迭代值」与「上一步提交值」的中点：撞轨那一刻
+            // 两者可能相差很大，直接取迭代值会让牛顿在两个轨之间反复跳，
+            // 各取一半相当于对迭代做阻尼
+            const double yIter = st.opampYIter.value(comp.id, st.opampY.value(comp.id, 0.0));
+            const double yCommit = st.opampY.value(comp.id, 0.0);
+            const double yPrev = 0.5 * (yIter + yCommit);
+            const double th = std::tanh((yPrev - mid) / half);
+            const double slope = 1.0 - th * th;              // d sat / dy
+            const double offset = mid + half * th - slope * yPrev;
+
+            // 支路方程：V(out) − Rout·i − K·(V+ − V−) = slope·β + offset − K·vos
+            const double k = slope * alpha * a0;
             if (inP > 0)
-                a(ib, inP - 1) -= gain;
+                a(ib, inP - 1) -= k;
             if (inM > 0)
-                a(ib, inM - 1) += gain;
+                a(ib, inM - 1) += k;
+            b[size_t(ib)] += slope * beta + offset - k * comp.vos;
+
+            // 输入偏置电流：两个输入端各自流进器件
+            if (comp.ibias != 0.0) {
+                addI(b, inP, 0, comp.ibias);
+                addI(b, inM, 0, comp.ibias);
+            }
             break;
         }
         case ComponentType::Switch:
@@ -949,6 +1027,29 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
             diodeDelta = std::max({diodeDelta, std::abs(vbe - vbeOld), std::abs(vbc - vbcOld)});
             st.bjtVbe.insert(cp->id, vbe);
             st.bjtVbc.insert(cp->id, vbc);
+        }
+
+        // 运放：内部输出 y 每轮迭代推进一次，饱和的线性化点跟着走。
+        // 这里不加压摆率 —— 限速是「每个时间步」的约束，放进迭代里会让解每轮
+        // 只能挪 SR·h，大信号永远追不上。
+        for (const Component* cp : p.elements) {
+            if (cp->type != ComponentType::OpAmp)
+                continue;
+            hasDiode = true;
+            const double a0 = cp->value > 1.0 ? cp->value : 1e5;
+            const double vd = p.voltage(x, p.nodeOf(cp->id, 0))
+                              - p.voltage(x, p.nodeOf(cp->id, 1)) - cp->vos;
+            const double yOld = st.opampYIter.value(cp->id, st.opampY.value(cp->id, 0.0));
+            double y = a0 * vd;
+            if (transient && cp->gbw > 0.0) {
+                const double tau = a0 / (2.0 * kPi * cp->gbw);
+                const double hOverTau = h / std::max(tau, 1e-18);
+                const double yPrev = st.opampY.value(cp->id, 0.0);
+                y = (yPrev + hOverTau * a0 * vd) / (1.0 + hOverTau);
+            }
+            // 归一化到「伏特」量级再比，免得 A0 很大时这个判据压过别的
+            diodeDelta = std::max(diodeDelta, std::abs(y - yOld) / std::max(a0, 1.0));
+            st.opampYIter.insert(cp->id, y);
         }
 
         // TL431：记录参考端电压（相对阳极）与阴极-阳极电压
@@ -1268,7 +1369,49 @@ void updateAcMeters(const Problem& p, ElementState& st, const std::vector<double
     }
 }
 
-void updateState(const Problem& p, ElementState& st, const std::vector<double>& x)
+/// 检查这一步有没有运放的内部输出「走得太快」。有的话把它们记进
+/// st.opampSlew（值 = 上一步 ± SR·h），调用方重解一次即可按恒压源处理。
+/// 返回是否发生了限速。
+bool applySlewLimit(const Problem& p, ElementState& st, const std::vector<double>& x,
+                    bool transient, double h)
+{
+    st.opampSlew.clear();
+    if (!transient || h <= 0.0)
+        return false;
+
+    bool limited = false;
+    for (const Component* cp : p.elements) {
+        if (cp->type != ComponentType::OpAmp || cp->slewRate <= 0.0)
+            continue;
+        const double a0 = cp->value > 1.0 ? cp->value : 1e5;
+        const double vd = p.voltage(x, p.nodeOf(cp->id, 0))
+                          - p.voltage(x, p.nodeOf(cp->id, 1)) - cp->vos;
+        // 这一步本来想去的值（极点之后的内部输出）
+        double want = a0 * vd;
+        if (cp->gbw > 0.0) {
+            const double tau = a0 / (2.0 * kPi * cp->gbw);
+            const double hOverTau = h / std::max(tau, 1e-18);
+            want = (st.opampY.value(cp->id, 0.0) + hOverTau * a0 * vd) / (1.0 + hOverTau);
+        }
+        // 比较和钉住的都必须是「输出电压」：opampY 是内部值（A0·vd，可能是几万伏），
+        // 拿它跟 SR·h 比会永远成立，限速器一直开着、输出爬不动
+        double mid = 0.0;
+        double half = 1.0;
+        opampSatRange(*cp, &mid, &half);
+        const double yPrev = st.opampY.value(cp->id, 0.0);
+        const double outPrev = opampSat(*cp, yPrev);
+        const double wantOut = opampSat(*cp, want);
+        const double maxStep = cp->slewRate * h;
+        if (std::abs(wantOut - outPrev) > maxStep) {
+            st.opampSlew.insert(cp->id, outPrev + (wantOut > outPrev ? maxStep : -maxStep));
+            limited = true;
+        }
+    }
+    return limited;
+}
+
+void updateState(const Problem& p, ElementState& st, const std::vector<double>& x,
+                 bool transient = false, double h = 0.0)
 {
     for (const Component* cp : p.elements) {
         const int n1 = p.nodeOf(cp->id, 0);
@@ -1280,6 +1423,32 @@ void updateState(const Problem& p, ElementState& st, const std::vector<double>& 
             const int br = p.branchOf.value(cp->id, -1);
             if (br >= 0)
                 st.indI.insert(cp->id, x[size_t(p.nNodes + br)]);
+        } else if (cp->type == ComponentType::OpAmp) {
+            // 极点已经在牛顿迭代里推进过（存于 opampYIter），这里只补「每步」的
+            // 压摆率限速，然后提交成下一步的初值。
+            const double yPrev = st.opampY.value(cp->id, 0.0);
+            // opampY 一律存「内部」值（饱和之前）。被限速时把钉住的输出电压
+            // 反解成内部值（sat 的反函数），保证 sat(opampY) == 钉住的输出
+            double y = st.opampYIter.value(cp->id, yPrev);
+            if (st.opampSlew.contains(cp->id)) {
+                double mid = 0.0;
+                double half = 1.0;
+                opampSatRange(*cp, &mid, &half);
+                const double arg = std::clamp((st.opampSlew.value(cp->id) - mid) / half,
+                                              -0.9999, 0.9999);
+                y = mid + half * std::atanh(arg);
+            }
+            // 内部值必须钳在「轨附近」：饱和时 A0·vd 会一路涨到几十万伏，而极点
+            // 时间常数是 16 ms —— 每一步只挪回零点几伏，退出饱和要十几毫秒，
+            // 波形就卡在轨上不动了（±5 V 限幅、±7 V 输入时实测如此）
+            {
+                const double vHi = std::max(cp->vSatHigh, cp->vSatLow);
+                const double vLo = std::min(cp->vSatHigh, cp->vSatLow);
+                const double margin = std::max(vHi - vLo, 1.0);
+                y = std::clamp(y, vLo - margin, vHi + margin);
+            }
+            st.opampY.insert(cp->id, y);
+            st.opampYIter.insert(cp->id, y);
         } else if (cp->type == ComponentType::Ob2362) {
             st.obFb.insert(cp->id, p.voltage(x, p.nodeOf(cp->id, 1)));  // FB
             st.obCs.insert(cp->id, p.voltage(x, p.nodeOf(cp->id, 3)));  // CS
@@ -1581,15 +1750,22 @@ void assembleAc(const Problem& p, const ElementState& st, double omega, Matrix<C
             const int br = p.branchOf.value(comp.id, -1);
             if (br < 0)
                 break;
-            const double gain = comp.value > 1.0 ? comp.value : 1e5;
+            const double a0 = comp.value > 1.0 ? comp.value : 1e5;
+            // 主极点：A(jω) = A0 / (1 + jω/ωp)，ωp = 2π·GBW / A0。
+            // 与瞬态那条一阶极点用的是同一个 τ，两边滚降点一致。
+            Cx gain(a0, 0.0);
+            if (comp.gbw > 0.0) {
+                const double wp = 2.0 * kPi * comp.gbw / a0;
+                gain = Cx(a0, 0.0) / (Cx(1.0, 0.0) + Cx(0.0, omega / wp));
+            }
             addBranch(a, b, p, comp.id, Cx(50.0, 0.0), Cx(0.0, 0.0));
             const int ib = p.nNodes + br;
             const int inP = p.nodeOf(comp.id, 0);
             const int inM = p.nodeOf(comp.id, 1);
             if (inP > 0)
-                a(ib, inP - 1) -= Cx(gain, 0.0);
+                a(ib, inP - 1) -= gain;
             if (inM > 0)
-                a(ib, inM - 1) += Cx(gain, 0.0);
+                a(ib, inM - 1) += gain;
             break;
         }
         case ComponentType::Switch:
@@ -1772,7 +1948,10 @@ bool LiveTransient::advance(int steps, QString* error)
         d.t += d.h;
         if (!newtonSolve(d.problem, d.state, true, d.h, d.t, d.x, d.diode, error))
             return false;
-        updateState(d.problem, d.state, d.x);
+        if (applySlewLimit(d.problem, d.state, d.x, true, d.h)
+            && !newtonSolve(d.problem, d.state, true, d.h, d.t, d.x, d.diode, error))
+            return false;
+        updateState(d.problem, d.state, d.x, true, d.h);
         updateAcMeters(d.problem, d.state, d.x, d.h);
         trackReverseCaps(d.problem, d.x, d.worstReverse);
     }
@@ -1941,10 +2120,18 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
                 result.waves.clear();
                 return result;
             }
+            // 有运放这一步走得太快就按恒压源重解一次（压摆率限制）
+            if (applySlewLimit(p, st, x, true, h)
+                && !newtonSolve(p, st, true, h, t, x, dm, &error)) {
+                result.error = CSM_TR("Transient failed at t = %1: %2")
+                                   .arg(formatEng(t, QStringLiteral("s"), 4), error);
+                result.waves.clear();
+                return result;
+            }
             updateAcMeters(p, st, x, h);
             sample(p, x, st, true, h, t, dm, values);
             appendPoint(t);
-            updateState(p, st, x);
+            updateState(p, st, x, true, h);
             trackReverseCaps(p, x, worstReverse);
         }
 

@@ -103,6 +103,13 @@ private slots:
     void rcCharging();
     void opAmpInvertingDc();
     void opAmpInvertingAc();
+    void opAmpOutputSaturates();
+    void opAmpGainBandwidthRollsOff();
+    void opAmpSlewRateLimitsStep();
+    void opAmpFollowerClipsAtRail();
+    void suggestedStepRespectsSlewRate();
+    void opAmpOffsetAndBiasShiftOutput();
+    void opAmpParametersRoundTrip();
     void rcLowPassAc();
     void probeMapsToNodeWithoutAffectingResult();
     void currentProbeMeasuresBranch();
@@ -352,6 +359,322 @@ void CoreAnalysisTest::opAmpInvertingDc()
     QVERIFY2(error.isEmpty(), qPrintable(error));
     QVERIFY(loaded.find(op->id));
     QCOMPARE(loaded.find(op->id)->type, ComponentType::OpAmp);
+}
+
+
+namespace {
+
+/// 反相放大器，可指定运放的全部参数；返回 (电路, 输出节点号)
+QPair<Circuit, int> opAmpStage(double inputVolts, double a0, double vSat, double gbw,
+                               double slew, double vos, double ibias)
+{
+    Circuit circuit;
+    Component v = makeComp(ComponentType::VoltageSource, QPointF(100, 380), 0.0, 90);
+    v.function = SourceFunction::Constant;
+    v.dcValue = inputVolts;
+    addComponent(circuit, v);
+
+    addComponent(circuit, makeComp(ComponentType::Resistor, QPointF(180, 320), 1000.0));
+    addComponent(circuit, makeComp(ComponentType::Resistor, QPointF(300, 420), 10000.0));
+
+    Component op = makeComp(ComponentType::OpAmp, QPointF(300, 300), a0);
+    op.vSatHigh = vSat;
+    op.vSatLow = -vSat;
+    op.gbw = gbw;
+    op.slewRate = slew;
+    op.vos = vos;
+    op.ibias = ibias;
+    addComponent(circuit, op);
+
+    addComponent(circuit, makeComp(ComponentType::Ground, QPointF(100, 410), 0.0));
+    addComponent(circuit, makeComp(ComponentType::Ground, QPointF(220, 240), 0.0));
+
+    circuit.wires.append(Wire{{QPointF(100, 350), QPointF(100, 320), QPointF(150, 320)}});
+    circuit.wires.append(Wire{{QPointF(210, 320), QPointF(270, 320)}});
+    circuit.wires.append(Wire{{QPointF(270, 320), QPointF(270, 420)}});
+    circuit.wires.append(Wire{{QPointF(330, 420), QPointF(330, 300)}});
+    circuit.wires.append(Wire{{QPointF(270, 280), QPointF(270, 240), QPointF(220, 240)}});
+
+    const Netlist net = circuit.buildNetlist();
+    return qMakePair(circuit, net.nodeOf(4, 2));   // 第 4 个元件是运放，引脚 2 = 输出
+}
+
+double opAmpOutput(const QPair<Circuit, int>& stage)
+{
+    // 工作点分析不产生时间序列（waves 为空），所以跑一小段瞬态取末值；
+    // 电路是纯电阻反馈，几个时间常数之后就稳定了
+    SimulationOptions tr;
+    tr.kind = AnalysisKind::Transient;
+    tr.tStop = 20e-6;
+    tr.tStep = 0.2e-6;
+    const SimulationResult r = Simulator::run(stage.first, tr);
+    const Signal* v = r.signal(QStringLiteral("V(%1)").arg(stage.second));
+    return v && !v->y.isEmpty() ? v->y.last() : -999.0;
+}
+
+} // namespace
+
+void CoreAnalysisTest::opAmpOutputSaturates()
+{
+    // 反相 −10 倍、输入 2 V：理想运放会给 −20 V，±15 V 供电应当压在 −15 V 附近
+    const double limited = opAmpOutput(opAmpStage(2.0, 1e5, 15.0, 0.0, 0.0, 0.0, 0.0));
+    QVERIFY2(limited < -14.0 && limited > -15.5,
+             qPrintable(QStringLiteral("限幅后 %1 V").arg(limited)));
+
+    // 把上限放到 ±1000 V 就回到理想值 −20 V
+    const double ideal = opAmpOutput(opAmpStage(2.0, 1e5, 1000.0, 0.0, 0.0, 0.0, 0.0));
+    QVERIFY2(ideal < -19.5 && ideal > -20.5,
+             qPrintable(QStringLiteral("不限幅 %1 V").arg(ideal)));
+}
+
+void CoreAnalysisTest::opAmpGainBandwidthRollsOff()
+{
+    // 闭环 −10 倍、GBW 1 MHz → 闭环 −3 dB 点在 100 kHz 上下
+    const auto gainAt = [](double gbw, double freq) {
+        const QPair<Circuit, int> stage = opAmpStage(0.0, 1e5, 1000.0, gbw, 0.0, 0.0, 0.0);
+        SimulationOptions ac;
+        ac.kind = AnalysisKind::AC;
+        ac.fStart = freq;
+        ac.fStop = freq;
+        ac.acPoints = 1;
+        const SimulationResult r = Simulator::run(stage.first, ac);
+        const Signal* v = r.signal(QStringLiteral("V(%1)").arg(stage.second));
+        return v && !v->y.isEmpty() ? v->y.first() : -999.0;
+    };
+
+    const double low = gainAt(1e6, 100.0);
+    const double mid = gainAt(1e6, 100e3);
+    const double high = gainAt(1e6, 1e6);
+    QVERIFY2(low > 19.5 && low < 20.5, qPrintable(QString::number(low)));   // 20 dB
+    QVERIFY2(mid < low - 1.5, qPrintable(QStringLiteral("100 kHz 应当开始滚降：%1 dB").arg(mid)));
+    QVERIFY2(high < low - 10.0, qPrintable(QStringLiteral("1 MHz 应当降很多：%1 dB").arg(high)));
+
+    // GBW = 0 表示不限带宽：三个频率上增益一样
+    const double flatLow = gainAt(0.0, 100.0);
+    const double flatHigh = gainAt(0.0, 1e6);
+    QVERIFY2(std::abs(flatLow - flatHigh) < 0.1,
+             qPrintable(QStringLiteral("不限带宽时应当平坦：%1 vs %2").arg(flatLow).arg(flatHigh)));
+}
+
+void CoreAnalysisTest::opAmpSlewRateLimitsStep()
+{
+    // 跟随器，输入 0→10 V 阶跃，压摆率 1 V/µs → 走完 8 V（10%→90%）约 8 µs
+    const auto riseTime = [](double slew) {
+        Circuit c;
+        Component v = makeComp(ComponentType::VoltageSource, QPointF(100, 380), 0.0, 90);
+        v.function = SourceFunction::Pulse;
+        v.pulseV1 = 0.0;
+        v.pulseV2 = 10.0;
+        v.pulseRise = 1e-9;
+        v.pulseWidth = 1.0;
+        v.pulsePeriod = 2.0;
+        addComponent(c, v);
+
+        Component op = makeComp(ComponentType::OpAmp, QPointF(300, 300), 1e5);
+        op.vSatHigh = 15.0;
+        op.vSatLow = -15.0;
+        op.gbw = 0.0;          // 只留压摆率，避免带宽把边沿也拖慢
+        op.slewRate = slew;
+        addComponent(c, op);
+        addComponent(c, makeComp(ComponentType::Ground, QPointF(120, 410), 0.0));
+
+        c.wires.append(Wire{{QPointF(100, 350), QPointF(100, 280), QPointF(270, 280)}});
+        c.wires.append(Wire{{QPointF(100, 410), QPointF(100, 440), QPointF(120, 440),
+                             QPointF(120, 410)}});
+        c.wires.append(Wire{{QPointF(270, 320), QPointF(240, 320), QPointF(240, 300),
+                             QPointF(330, 300)}});
+
+        SimulationOptions tr;
+        tr.kind = AnalysisKind::Transient;
+        tr.tStop = 30e-6;
+        tr.tStep = 0.1e-6;
+        const Netlist net = c.buildNetlist();
+        const SimulationResult r = Simulator::run(c, tr);
+        const Signal* out = r.signal(QStringLiteral("V(%1)").arg(net.nodeOf(2, 2)));
+        if (!out)
+            return -1.0;
+        double t10 = -1.0;
+        double t90 = -1.0;
+        for (int i = 0; i < out->y.size(); ++i) {
+            if (t10 < 0.0 && out->y.at(i) >= 1.0)
+                t10 = out->x.at(i);
+            if (t90 < 0.0 && out->y.at(i) >= 9.0)
+                t90 = out->x.at(i);
+        }
+        return (t10 >= 0.0 && t90 > t10) ? (t90 - t10) : -1.0;
+    };
+
+    const double slow = riseTime(1e6);    // 1 V/µs
+    const double fast = riseTime(10e6);   // 10 V/µs
+    QVERIFY2(slow > 6e-6 && slow < 12e-6, qPrintable(QStringLiteral("1 V/µs → %1 s").arg(slow)));
+    QVERIFY2(fast > 0.4e-6 && fast < 1.6e-6, qPrintable(QStringLiteral("10 V/µs → %1 s").arg(fast)));
+    QVERIFY2(slow > fast * 3.0, "压摆率调大十倍，边沿应当明显变陡");
+}
+
+
+void CoreAnalysisTest::opAmpFollowerClipsAtRail()
+{
+    // 跟随器 + 输出限幅：输入峰值 7.07 V、运放限幅 ±7 V，输出应当是「削顶」的正弦。
+    // 这条用例守的是一个真实的坑：撞轨时压摆率那条路径曾把未饱和的内部值
+    // （A0·vd，几十万伏）直接当成输出电压，波形跑到几千伏。
+    Circuit c;
+    Component v = makeComp(ComponentType::VoltageSource, QPointF(100, 380), 0.0, 90);
+    v.function = SourceFunction::Sine;
+    v.amplitude = 5.0;          // 有效值 5 A → 峰值 7.07 V
+    v.frequency = 1000.0;
+    addComponent(c, v);
+
+    Component op = makeComp(ComponentType::OpAmp, QPointF(300, 300), 1e5);
+    op.vSatHigh = 7.0;
+    op.vSatLow = -7.0;
+    addComponent(c, op);
+    addComponent(c, makeComp(ComponentType::Ground, QPointF(120, 410), 0.0));
+
+    // +IN ← 输入；−IN ← OUT（跟随器）
+    c.wires.append(Wire{{QPointF(100, 350), QPointF(100, 280), QPointF(270, 280)}});
+    c.wires.append(Wire{{QPointF(100, 410), QPointF(100, 440), QPointF(120, 440),
+                         QPointF(120, 410)}});
+    c.wires.append(Wire{{QPointF(270, 320), QPointF(240, 320), QPointF(240, 300),
+                         QPointF(330, 300)}});
+
+    const Netlist net = c.buildNetlist();
+    QVERIFY(net.valid);
+
+    SimulationOptions tr;
+    tr.kind = AnalysisKind::Transient;
+    tr.tStop = 3e-3;
+    tr.tStep = 1e-5;
+    const SimulationResult r = Simulator::run(c, tr);
+    QVERIFY2(r.ok, qPrintable(r.error));
+
+    const Signal* out = r.signal(QStringLiteral("V(%1)").arg(net.nodeOf(2, 2)));
+    QVERIFY(out);
+    double lo = 1e30;
+    double hi = -1e30;
+    for (double y : out->y) {
+        lo = std::min(lo, y);
+        hi = std::max(hi, y);
+    }
+    // 削顶：既不越界太多，也要真的顶到轨（±7）
+    QVERIFY2(hi < 7.3 && lo > -7.3,
+             qPrintable(QStringLiteral("输出越界：%1 … %2").arg(lo).arg(hi)));
+    QVERIFY2(hi > 6.9 && lo < -6.9,
+             qPrintable(QStringLiteral("没有顶到轨：%1 … %2").arg(lo).arg(hi)));
+
+    // 限幅压到 ±5 V（输入峰值 7.07 V）时不能卡在轨上不动：饱和时内部值
+    // A0·vd 会涨到几十万伏，而极点时间常数 16 ms，退出饱和要十几毫秒 ——
+    // 内部值必须钳在轨附近，输出才回得来
+    Circuit tight;
+    Component v2 = makeComp(ComponentType::VoltageSource, QPointF(100, 380), 0.0, 90);
+    v2.function = SourceFunction::Sine;
+    v2.amplitude = 5.0;
+    v2.frequency = 1000.0;
+    addComponent(tight, v2);
+    Component op2 = makeComp(ComponentType::OpAmp, QPointF(300, 300), 1e5);
+    op2.vSatHigh = 5.0;
+    op2.vSatLow = -5.0;
+    addComponent(tight, op2);
+    addComponent(tight, makeComp(ComponentType::Ground, QPointF(120, 410), 0.0));
+    tight.wires.append(Wire{{QPointF(100, 350), QPointF(100, 280), QPointF(270, 280)}});
+    tight.wires.append(Wire{{QPointF(100, 410), QPointF(100, 440), QPointF(120, 440),
+                             QPointF(120, 410)}});
+    tight.wires.append(Wire{{QPointF(270, 320), QPointF(240, 320), QPointF(240, 300),
+                             QPointF(330, 300)}});
+
+    const Netlist tightNet = tight.buildNetlist();
+    QVERIFY(tightNet.valid);
+    const SimulationResult tightRun = Simulator::run(tight, tr);
+    QVERIFY2(tightRun.ok, qPrintable(tightRun.error));
+    const Signal* out2 = tightRun.signal(QStringLiteral("V(%1)").arg(tightNet.nodeOf(2, 2)));
+    QVERIFY(out2);
+    double lo2 = 1e30;
+    double hi2 = -1e30;
+    for (double y : out2->y) {
+        lo2 = std::min(lo2, y);
+        hi2 = std::max(hi2, y);
+    }
+    QVERIFY2(hi2 < 5.3 && lo2 > -5.3,
+             qPrintable(QStringLiteral("±5 V 越界：%1 … %2").arg(lo2).arg(hi2)));
+    // 关键：必须能回到负轨（卡在 +5 就是没退出饱和）
+    QVERIFY2(lo2 < -4.0, qPrintable(QStringLiteral("卡在正轨没下来：%1").arg(lo2)));
+}
+
+
+void CoreAnalysisTest::suggestedStepRespectsSlewRate()
+{
+    // 运放：一步最多走输出量程的 1/20。不设这个上限时，±5 V 限幅 + 50 V/µs
+    // 的运放配 1 MHz 正弦，建议步长是 50 ns（只按周期算的 1/20），
+    // 实测 40 ns 起牛顿就不收敛 —— 动态示波器切到 2 µs/格时波形整个消失。
+    Circuit c;
+    Component v = makeComp(ComponentType::VoltageSource, QPointF(100, 380), 0.0, 90);
+    v.function = SourceFunction::Sine;
+    v.amplitude = 5.0;
+    v.frequency = 1e6;
+    addComponent(c, v);
+    Component op = makeComp(ComponentType::OpAmp, QPointF(300, 300), 1e5);
+    op.vSatHigh = 5.0;
+    op.vSatLow = -5.0;
+    op.gbw = 1e9;
+    op.slewRate = 50e6;      // 50 V/µs
+    addComponent(c, op);
+    addComponent(c, makeComp(ComponentType::Ground, QPointF(120, 410), 0.0));
+    c.wires.append(Wire{{QPointF(100, 350), QPointF(100, 280), QPointF(270, 280)}});
+    c.wires.append(Wire{{QPointF(100, 410), QPointF(100, 440), QPointF(120, 440),
+                         QPointF(120, 410)}});
+    c.wires.append(Wire{{QPointF(270, 320), QPointF(240, 320), QPointF(240, 300),
+                         QPointF(330, 300)}});
+
+    // 0.05 × 量程(10 V) / 50 V/µs = 10 ns
+    const double step = c.suggestedMaxStep();
+    QVERIFY2(step > 0.0 && step <= 1.2e-8,
+             qPrintable(QStringLiteral("建议步长 %1 s，应当 ≤ 10 ns").arg(step)));
+
+    // 按建议步长跑，必须收敛
+    SimulationOptions tr;
+    tr.kind = AnalysisKind::Transient;
+    tr.tStop = 3e-6;
+    tr.tStep = step;
+    const SimulationResult r = Simulator::run(c, tr);
+    QVERIFY2(r.ok, qPrintable(r.error));
+}
+
+void CoreAnalysisTest::opAmpOffsetAndBiasShiftOutput()
+{
+    const double base = opAmpOutput(opAmpStage(0.0, 1e5, 1000.0, 0.0, 0.0, 0.0, 0.0));
+
+    // 反相放大、同相端接地：vout = −(1 + RF/R1)·Vos = −11 × 10 mV = −110 mV
+    const double withVos = opAmpOutput(opAmpStage(0.0, 1e5, 1000.0, 0.0, 0.0, 0.010, 0.0));
+    QVERIFY2(std::abs((withVos - base) + 0.11) < 0.02,
+             qPrintable(QStringLiteral("失调带来的偏移 %1 V").arg(withVos - base)));
+
+    // 偏置电流 1 µA 流过 1 kΩ 的 R1 → 1 mV，×10 → 10 mV
+    const double withIb = opAmpOutput(opAmpStage(0.0, 1e5, 1000.0, 0.0, 0.0, 0.0, 1e-6));
+    QVERIFY2(std::abs((withIb - base) - 0.010) < 0.005,
+             qPrintable(QStringLiteral("偏置电流带来的偏移 %1 V").arg(withIb - base)));
+}
+
+void CoreAnalysisTest::opAmpParametersRoundTrip()
+{
+    // 六个新参数要能存进 .csm 再读回来
+    Circuit c;
+    Component op = makeComp(ComponentType::OpAmp, QPointF(300, 300), 2e5);
+    op.vSatHigh = 12.5;
+    op.vSatLow = -11.5;
+    op.gbw = 2.2e6;
+    op.slewRate = 3.3e6;
+    op.vos = 0.004;
+    op.ibias = 2e-7;
+    addComponent(c, op);
+
+    const Circuit back = Circuit::fromJson(c.toJson());
+    QCOMPARE(back.components.size(), 1);
+    const Component& got = back.components.first();
+    QCOMPARE(got.vSatHigh, 12.5);
+    QCOMPARE(got.vSatLow, -11.5);
+    QCOMPARE(got.gbw, 2.2e6);
+    QCOMPARE(got.slewRate, 3.3e6);
+    QCOMPARE(got.vos, 0.004);
+    QCOMPARE(got.ibias, 2e-7);
 }
 
 void CoreAnalysisTest::opAmpInvertingAc()
