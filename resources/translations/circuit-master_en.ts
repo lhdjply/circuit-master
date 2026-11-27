@@ -1660,6 +1660,10 @@ Checked: normally closed, opens while held.</translation>
         <translation>Unit mismatch, expected %1</translation>
     </message>
     <message>
+        <source>Unknown error</source>
+        <translation>Unknown error</translation>
+    </message>
+    <message>
         <source>Unknown unit: %1</source>
         <translation>Unknown unit: %1</translation>
     </message>

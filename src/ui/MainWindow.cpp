@@ -42,6 +42,7 @@
 #include <QDockWidget>
 #include <QFile>
 #include <QFileDialog>
+#include <QSaveFile>
 #include <QFileInfo>
 #include <QFontDatabase>
 #include <QGraphicsItem>
@@ -2117,16 +2118,34 @@ bool MainWindow::writeDocumentToDisk(Document* document, QString* error)
     if (!document || document->filePath.isEmpty())
         return false;
 
-    QFile file(document->filePath);
+    QJsonObject root = document->scene->toCircuit().toJson();
+    root.insert(QStringLiteral("analysis"), analysisToJson(document->options));
+    const QByteArray data = QJsonDocument(root).toJson(QJsonDocument::Indented);
+
+    // 用 QSaveFile 而不是 QFile：它先写同目录下的临时文件，commit() 时才原子地
+    // 替换目标。直接 QFile::open(WriteOnly) 会先把目标截成 0 字节，之后写到一半
+    // 崩溃、断电或磁盘满，用户的 .csm 就只剩半截了。
+    QSaveFile file(document->filePath);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         if (error)
             *error = file.errorString();
         return false;
     }
-    QJsonObject root = document->scene->toCircuit().toJson();
-    root.insert(QStringLiteral("analysis"), analysisToJson(document->options));
-    file.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-    file.close();
+    // write() 的返回值不能不看：磁盘满时它会少写，commit() 之前就该发现
+    if (file.write(data) != qint64(data.size())) {
+        if (error)
+            *error = file.errorString();
+        file.cancelWriting();
+        return false;
+    }
+    if (!file.commit()) {
+        if (error) {
+            *error = file.errorString();
+            if (error->isEmpty())
+                *error = CSM_TR("Unknown error");
+        }
+        return false;
+    }
 
     document->dirty = false;
     Autosave::remove(document->recoveryId);   // 已经存回文件，恢复副本可以删了

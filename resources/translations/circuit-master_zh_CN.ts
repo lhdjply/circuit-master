@@ -1663,6 +1663,10 @@ Checked: normally closed, opens while held.</source>
         <translation>单位不匹配，应为 %1</translation>
     </message>
     <message>
+        <source>Unknown error</source>
+        <translation>未知错误</translation>
+    </message>
+    <message>
         <source>Unknown unit: %1</source>
         <translation>无法识别的单位：%1</translation>
     </message>

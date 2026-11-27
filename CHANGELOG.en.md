@@ -10,6 +10,11 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Fixed
 
+- **Saving no longer truncates first**: it uses QSaveFile now — a temp file in the same
+  directory is written and then swapped in atomically by `commit()`. `QFile::open(WriteOnly)`
+  used to empty the `.csm` first, so a crash, power cut or full disk halfway through left a
+  half-written file. A failed save now leaves the original untouched and keeps the `*`;
+  recovery copies are written the same way.
 - **Dialogs no longer add a taskbar entry**: after going frameless, some window
   managers treated them as ordinary windows. They are Tool windows now (transient
   children when they have a parent), so only the main window shows in the taskbar. The

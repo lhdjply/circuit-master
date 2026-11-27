@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QSaveFile>
 #include <QJsonDocument>
 #include <QSettings>
 #include <QStandardPaths>
@@ -97,11 +98,18 @@ bool write(const Record& record)
     root.insert(QStringLiteral("savedAt"), record.savedAt.toString(Qt::ISODate));
     root.insert(QStringLiteral("circuit"), record.circuit);
 
-    QFile file(QDir(directory()).filePath(name));
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    const QByteArray data = QJsonDocument(root).toJson(QJsonDocument::Compact);
+
+    // 同样用 QSaveFile：写副本的过程中崩溃，不能把上一次的副本也截成半截 ——
+    // 那样「崩溃恢复」正好在最需要它的时候失效。
+    QSaveFile file(QDir(directory()).filePath(name));
+    if (!file.open(QIODevice::WriteOnly))
         return false;
-    file.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
-    return true;
+    if (file.write(data) != qint64(data.size())) {
+        file.cancelWriting();
+        return false;
+    }
+    return file.commit();
 }
 
 QVector<Record> pending()
