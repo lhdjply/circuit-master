@@ -34,6 +34,7 @@
     <file alias="save.svg">icons/save.svg</file>
     <file alias="save_as.svg">icons/save_as.svg</file>
     <file alias="page_setup.svg">icons/page_setup.svg</file>
+    <file alias="print.svg">icons/print.svg</file>
     <file alias="select.svg">icons/select.svg</file>
     <file alias="select_all.svg">icons/select_all.svg</file>
     <file alias="settings.svg">icons/settings.svg</file>

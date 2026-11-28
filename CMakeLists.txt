@@ -48,7 +48,7 @@ include(GNUInstallDirs)
 # 因此**只能用 6.4 就有的接口**。6.5+ 的（QStyleHints::colorScheme、
 # QList::assign(6.6) 等）要么换成等价写法，要么用 QT_VERSION_CHECK 包起来 ——
 # 否则本地 Qt 6.8 编得过，Debian 12 上却报 “has no member named ...”。
-find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Charts Svg Network)
+find_package(Qt6 6.4 REQUIRED COMPONENTS Core Gui Widgets Charts Svg Network PrintSupport)
 find_package(Qt6 6.4 QUIET COMPONENTS Test)
 
 # Debian 打包的版本号只能来自 debian/changelog（dpkg 的硬约束，不能动态生成）。
@@ -143,6 +143,8 @@ set(CSM_UI_SOURCES
     src/ui/Symbols.cpp
     src/ui/SettingsDialog.cpp
     src/ui/PageSetupDialog.cpp
+    src/ui/PrintDialog.cpp
+    src/ui/PrintPlan.cpp
     src/ui/TitleBar.cpp
     src/ui/Theme.cpp
     src/ui/ComponentItem.cpp
@@ -171,7 +173,8 @@ set(CSM_UI_HEADERS
 )
 
 add_library(csm_ui OBJECT ${CSM_UI_SOURCES} ${CSM_UI_HEADERS})
-target_link_libraries(csm_ui PUBLIC csm_core Qt6::Widgets Qt6::Charts Qt6::Svg)
+target_link_libraries(csm_ui PUBLIC csm_core Qt6::Widgets Qt6::Charts Qt6::Svg
+                                  Qt6::PrintSupport)
 target_compile_options(csm_ui PRIVATE -Wall -Wextra -Wno-unused-parameter)
 
 # ---------------------------------------------------------------- 资源

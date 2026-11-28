@@ -4,6 +4,7 @@
 #include "core/Language.h"
 #include "ui/Document.h"
 #include "core/PageSetup.h"
+#include "ui/PrintDialog.h"
 #include "sim/Simulator.h"
 
 #include <QJsonObject>
@@ -19,6 +20,8 @@ class QLabel;
 class QListWidget;
 class QListWidgetItem;
 class QPlainTextEdit;
+
+class QPrinter;
 
 namespace csm {
 
@@ -41,6 +44,19 @@ public:
     bool exportSchematicImage(const QString& path);
     /// 导出 PDF：页面尺寸取页面设置里的纸张，内容铺满整张纸
     bool exportSchematicPdf(const QString& path);
+    /// 打印：对话框里带预览，按图纸尺寸出图
+    void printSchematic();
+    /// 把整张图纸渲染成位图（导出 / 打印 / 预览共用），dpi <= 0 时取 300
+    QImage renderSheetImage(int dpi = 0);
+    /// 把图纸贴到任意画笔的目标矩形上（保持比例、居中）
+    void paintSheet(QPainter& painter, const QRectF& target, int dpi = 0);
+    /// 按打印选项准备好的位图（黑白时是灰度图）
+    QImage sheetImageForPrint(const PrintOptions& options);
+    /// 打印时该画到哪儿：QPrinter 的画笔原点已在可打印区左上，只取尺寸
+    QRectF printTargetRect(QPrinter& printer);
+    /// 按对话框选的比例把图纸画到 printer 上（适应图纸 / 1:1 / 自定义）。
+    /// 一张纸放不下就自动分页：画完一页调用 newPage()
+    void paintPrintPages(QPrinter& printer, const PrintOptions& options);
 
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override;
@@ -199,6 +215,8 @@ private:
     /// 把电路装进标签页：当前是「干净的空文档」就沿用它，否则新开一个
     /// 右键菜单里的「页面设置」
     void openPageSetup();
+    /// 按页面设置配好纸张（打印 / 预览共用）
+    void configurePrinter(QPrinter& printer);
 
     Document* loadCircuitData(const Circuit& circuit, const QString& title, const QString& path,
                               const SimulationOptions& options,
@@ -262,6 +280,7 @@ private:
     QAction* m_actSave = nullptr;
     QAction* m_actSaveAs = nullptr;
     QAction* m_actPageSetup = nullptr;
+    QAction* m_actPrint = nullptr;
     QAction* m_actCloseTab = nullptr;
     QAction* m_actNextTab = nullptr;
     QAction* m_actPrevTab = nullptr;

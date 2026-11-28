@@ -15,6 +15,7 @@ struct PaperEntry {
 
 // ISO 216 的 A 系列（竖版，mm）
 constexpr PaperEntry kPapers[] = {
+    {PaperSize::A5, 148.0, 210.0},
     {PaperSize::A4, 210.0, 297.0},
     {PaperSize::A3, 297.0, 420.0},
     {PaperSize::A2, 420.0, 594.0},
@@ -24,6 +25,7 @@ constexpr PaperEntry kPapers[] = {
 QString tagFor(PaperSize size)
 {
     switch (size) {
+    case PaperSize::A5:     return QStringLiteral("A5");
     case PaperSize::A4:     return QStringLiteral("A4");
     case PaperSize::A3:     return QStringLiteral("A3");
     case PaperSize::A2:     return QStringLiteral("A2");
@@ -35,6 +37,7 @@ QString tagFor(PaperSize size)
 
 PaperSize sizeFromTag(const QString& tag)
 {
+    if (tag == QLatin1String("A5")) return PaperSize::A5;
     if (tag == QLatin1String("A3")) return PaperSize::A3;
     if (tag == QLatin1String("A2")) return PaperSize::A2;
     if (tag == QLatin1String("A1")) return PaperSize::A1;
@@ -47,6 +50,7 @@ PaperSize sizeFromTag(const QString& tag)
 QString paperSizeName(PaperSize size)
 {
     switch (size) {
+    case PaperSize::A5:     return QStringLiteral("A5");
     case PaperSize::A4:     return QStringLiteral("A4");
     case PaperSize::A3:     return QStringLiteral("A3");
     case PaperSize::A2:     return QStringLiteral("A2");
@@ -86,6 +90,12 @@ QSizeF PageSetup::sizeMm() const
     // 否则「选自定义 + 点横向」会毫无反应
     return landscape ? QSizeF(std::max(w, h), std::min(w, h))
                      : QSizeF(std::min(w, h), std::max(w, h));
+}
+
+QSizeF PageSetup::portraitSizeMm() const
+{
+    const QSizeF mm = sizeMm();
+    return QSizeF(std::min(mm.width(), mm.height()), std::max(mm.width(), mm.height()));
 }
 
 QRectF PageSetup::sceneRect() const

@@ -101,6 +101,10 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</source>
         <translation>打开(&amp;O)…</translation>
     </message>
     <message>
+        <source>&amp;Print…</source>
+        <translation>打印(&amp;P)…</translation>
+    </message>
+    <message>
         <source>&amp;Quit</source>
         <translation>退出(&amp;Q)</translation>
     </message>
@@ -187,6 +191,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>About Circuit Master</source>
         <translation>关于电路仿真大师</translation>
+    </message>
+    <message>
+        <source>Actual size (1:1)</source>
+        <translation>实际大小 (1:1)</translation>
     </message>
     <message>
         <source>Add junction here</source>
@@ -279,6 +287,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Bias current flowing into each input terminal.</source>
         <translation>两个输入端各自流进器件的电流。</translation>
+    </message>
+    <message>
+        <source>Black and white</source>
+        <translation>黑白</translation>
     </message>
     <message>
         <source>Both pins of %1 are shorted together.</source>
@@ -441,6 +453,14 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Closed</source>
         <translation>闭合</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>彩色</translation>
+    </message>
+    <message>
+        <source>Color:</source>
+        <translation>颜色：</translation>
     </message>
     <message>
         <source>Command</source>
@@ -715,6 +735,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>适应窗口</translation>
     </message>
     <message>
+        <source>Fit to sheet</source>
+        <translation>适应图纸</translation>
+    </message>
+    <message>
         <source>Flip horizontally</source>
         <translation>水平翻转</translation>
     </message>
@@ -880,6 +904,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>实时仿真中止：%1</translation>
     </message>
     <message>
+        <source>Location:</source>
+        <translation>位置：</translation>
+    </message>
+    <message>
         <source>Logic gate</source>
         <translation>逻辑门</translation>
     </message>
@@ -948,6 +976,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>NPN 三极管</translation>
     </message>
     <message>
+        <source>Name:</source>
+        <translation>名称：</translation>
+    </message>
+    <message>
         <source>Net label</source>
         <translation>网络标签</translation>
     </message>
@@ -978,6 +1010,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Next Tab</source>
         <translation>下一个标签页</translation>
+    </message>
+    <message>
+        <source>Next page</source>
+        <translation>下一页</translation>
     </message>
     <message>
         <source>No GND in the circuit; %1 is used as the reference node (0 V).</source>
@@ -1124,6 +1160,14 @@ Place a voltage (TP) or current (IP) test point and run again</source>
         <translation>方向</translation>
     </message>
     <message>
+        <source>Orientation:</source>
+        <translation>方向：</translation>
+    </message>
+    <message>
+        <source>Output file:</source>
+        <translation>输出文件：</translation>
+    </message>
+    <message>
         <source>Output high level. Low level is fixed at 0 V; input threshold is half of it (5% hysteresis).</source>
         <translation>输出的高电平。低电平固定 0 V，输入阈值取它的一半（带 5% 回差）。</translation>
     </message>
@@ -1148,6 +1192,10 @@ Place a voltage (TP) or current (IP) test point and run again</source>
         <translation>P 沟道 MOS</translation>
     </message>
     <message>
+        <source>PDF document</source>
+        <translation>PDF 文件</translation>
+    </message>
+    <message>
         <source>PDF document (*.pdf)</source>
         <translation>PDF 文档 (*.pdf)</translation>
     </message>
@@ -1166,6 +1214,10 @@ Place a voltage (TP) or current (IP) test point and run again</source>
     <message>
         <source>PNP transistor</source>
         <translation>PNP 三极管</translation>
+    </message>
+    <message>
+        <source>Page %1 / %2</source>
+        <translation>第 %1 / %2 页</translation>
     </message>
     <message>
         <source>Page Set&amp;up…</source>
@@ -1190,6 +1242,10 @@ Place a voltage (TP) or current (IP) test point and run again</source>
     <message>
         <source>Paper size and orientation for this sheet</source>
         <translation>设置这张图纸的纸张大小与方向</translation>
+    </message>
+    <message>
+        <source>Paper:</source>
+        <translation>纸张：</translation>
     </message>
     <message>
         <source>Paste</source>
@@ -1244,12 +1300,40 @@ Place a voltage (TP) or current (IP) test point and run again</source>
         <translation>上一个标签页</translation>
     </message>
     <message>
+        <source>Previous page</source>
+        <translation>上一页</translation>
+    </message>
+    <message>
         <source>Primary + auxiliary + secondary</source>
         <translation>初级 + 辅助 + 次级</translation>
     </message>
     <message>
         <source>Primary inductance L1</source>
         <translation>初级电感 L1</translation>
+    </message>
+    <message>
+        <source>Print</source>
+        <translation>打印</translation>
+    </message>
+    <message>
+        <source>Print this sheet</source>
+        <translation>打印这张图纸</translation>
+    </message>
+    <message>
+        <source>Print to file</source>
+        <translation>打印到文件</translation>
+    </message>
+    <message>
+        <source>Print to file (PDF)</source>
+        <translation>打印到文件（PDF）</translation>
+    </message>
+    <message>
+        <source>Printed to: %1</source>
+        <translation>已打印到：%1</translation>
+    </message>
+    <message>
+        <source>Printer</source>
+        <translation>打印机</translation>
     </message>
     <message>
         <source>Probe I(dc): %1</source>
@@ -1452,6 +1536,10 @@ Place a voltage (TP) or current (IP) test point and run again</source>
         <translation>锯齿波</translation>
     </message>
     <message>
+        <source>Scale:</source>
+        <translation>比例：</translation>
+    </message>
+    <message>
         <source>Secondary dot at bottom (inverted)</source>
         <translation>次级同名端在下（反相）</translation>
     </message>
@@ -1484,6 +1572,10 @@ to edit its parameters</source>
     <message>
         <source>Semiconductors</source>
         <translation>半导体</translation>
+    </message>
+    <message>
+        <source>Sent to printer: %1</source>
+        <translation>已发送到打印机：%1</translation>
     </message>
     <message>
         <source>Series resistance at the output; the output sags under load.</source>
@@ -1784,6 +1876,10 @@ Restore them?</source>
     <message>
         <source>Turns ratio N1:N2:N3</source>
         <translation>匝数比 N1:N2:N3</translation>
+    </message>
+    <message>
+        <source>Type:</source>
+        <translation>类型：</translation>
     </message>
     <message>
         <source>Unchecked: normally open, conducts while held during simulation.

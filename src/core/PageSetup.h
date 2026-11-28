@@ -17,6 +17,7 @@
 namespace csm {
 
 enum class PaperSize {
+    A5,
     A4,
     A3,
     A2,
@@ -36,6 +37,9 @@ struct PageSetup {
 
     /// 纸张尺寸（mm），已按方向处理：横向时宽 > 高
     QSizeF sizeMm() const;
+    /// 纸张的竖版基础尺寸（mm）：打印时用「竖版尺寸 + 明确方向」交给驱动，
+    /// 直接塞横版尺寸的话驱动会当成竖版内容去转，出来是竖的
+    QSizeF portraitSizeMm() const;
     /// 画布坐标下的纸张矩形，以原点为中心（老电路的坐标不用挪）
     QRectF sceneRect() const;
     /// 界面上显示的一行摘要，例如「A3 横向 (420 × 297 mm)」

@@ -80,6 +80,8 @@ public:
 
     /// 图纸（纸张大小与方向）：画布范围就是这张纸，纸外不画网格
     void setPageSetup(const PageSetup& page);
+    /// 打印 / 导出时置真：纸画成纯白，而不是跟着主题走（深色主题下否则是深色纸）
+    void setPrintMode(bool on) { m_printMode = on; }
     /// 画布范围 = 纸张 ∪ 内容：默认纸是 A4，比纸大的图仍然能滚到、能编辑
     void updateCanvasRect();
     const PageSetup& pageSetup() const { return m_page; }
@@ -113,6 +115,7 @@ private:
     bool m_hasCursorPos = false;
     bool m_geometryDirty = false;  // 导线几何被改过，commitEdit 时值得整理一次
     bool m_showGrid = true;
+    bool m_printMode = false;
     PageSetup m_page;
 };
 

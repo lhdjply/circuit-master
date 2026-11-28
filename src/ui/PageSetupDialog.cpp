@@ -29,8 +29,8 @@ PageSetupDialog::PageSetupDialog(const PageSetup& current, QWidget* parent)
     form->setLabelAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
     m_sizeBox = new QComboBox(this);
-    for (PaperSize size : {PaperSize::A4, PaperSize::A3, PaperSize::A2, PaperSize::A1,
-                           PaperSize::Custom}) {
+    for (PaperSize size : {PaperSize::A5, PaperSize::A4, PaperSize::A3, PaperSize::A2,
+                           PaperSize::A1, PaperSize::Custom}) {
         m_sizeBox->addItem(paperSizeName(size), int(size));
     }
     m_sizeBox->setCurrentIndex(m_sizeBox->findData(int(current.size)));

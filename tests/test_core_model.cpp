@@ -103,6 +103,17 @@ void CoreModelTest::pageSetupSizesAndOrientation()
     page.landscape = true;
     QCOMPARE(page.sizeMm(), QSizeF(297.0, 210.0));
 
+    // A5 也在可选范围内（打印对话框要用）
+    PageSetup a5;
+    a5.size = PaperSize::A5;
+    a5.landscape = true;
+    QCOMPARE(a5.sizeMm(), QSizeF(210.0, 148.0));
+    a5.landscape = false;
+    QCOMPARE(a5.sizeMm(), QSizeF(148.0, 210.0));
+
+    // 打印用的竖版基础尺寸：横向纸张也要给出 210×297，交给驱动去转
+    QCOMPARE(page.portraitSizeMm(), QSizeF(210.0, 297.0));
+
     // 画布坐标：1 mm = 96/25.4 个单位
     const QRectF rect = page.sceneRect();
     QVERIFY2(std::abs(rect.width() - 297.0 * 96.0 / 25.4) < 0.01,

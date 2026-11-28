@@ -1253,7 +1253,8 @@ void SchematicScene::recomputeJunctions()
 void SchematicScene::drawBackground(QPainter* painter, const QRectF& rect)
 {
     painter->save();
-    painter->fillRect(rect, Theme::canvas());
+    // 打印 / 导出：纸是白的，不能跟着深色主题变成深灰
+    painter->fillRect(rect, m_printMode ? QColor(Qt::white) : Theme::canvas());
 
     // 纸张矩形：网格与边框都要用
     const QRectF paper = m_page.sceneRect();
@@ -1301,11 +1302,15 @@ void SchematicScene::drawBackground(QPainter* painter, const QRectF& rect)
         borderPen.setJoinStyle(Qt::MiterJoin);
         painter->setPen(borderPen);
         painter->setBrush(Qt::NoBrush);
-        // 外框往里让 1 个单位（线宽的一半），否则半个线宽会落在纸外被裁掉
-        painter->drawRect(paper.adjusted(1.0, 1.0, -1.0, -1.0));
+        // 外框离纸边 5 mm、内框 10 mm：打印机打不到纸边（A4 每边约 4.2 mm），
+        // 图框贴着纸边的话 1:1 打印时最外那条线必被裁掉。往里让 5 mm 之后
+        // 「适应图纸」和「实际大小」都能完整印出双线框。
+        const double outerInset = std::round(5.0 * PageSetup::pixelsPerMm());
+        painter->drawRect(paper.adjusted(outerInset, outerInset, -outerInset, -outerInset));
 
-        // 内框往里缩 5 mm；取整到 1 个单位，免得抗锯齿把细线糊成半透明
-        const qreal inset = std::round(5.0 * PageSetup::pixelsPerMm());
+        // 内框再往里 5 mm（离纸边共 10 mm）；取整到 1 个单位，
+        // 免得抗锯齿把细线糊成半透明
+        const qreal inset = std::round(10.0 * PageSetup::pixelsPerMm());
         const QRectF inner = paper.adjusted(inset, inset, -inset, -inset);
         if (inner.width() > 1.0 && inner.height() > 1.0)
             painter->drawRect(inner);

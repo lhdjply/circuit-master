@@ -98,6 +98,10 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</translat
         <translation>&amp;Open…</translation>
     </message>
     <message>
+        <source>&amp;Print…</source>
+        <translation>&amp;Print…</translation>
+    </message>
+    <message>
         <source>&amp;Quit</source>
         <translation>&amp;Quit</translation>
     </message>
@@ -184,6 +188,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>About Circuit Master</source>
         <translation>About Circuit Master</translation>
+    </message>
+    <message>
+        <source>Actual size (1:1)</source>
+        <translation>Actual size (1:1)</translation>
     </message>
     <message>
         <source>Add junction here</source>
@@ -276,6 +284,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Bias current flowing into each input terminal.</source>
         <translation>Bias current flowing into each input terminal.</translation>
+    </message>
+    <message>
+        <source>Black and white</source>
+        <translation>Black and white</translation>
     </message>
     <message>
         <source>Both pins of %1 are shorted together.</source>
@@ -438,6 +450,14 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Closed</source>
         <translation>Closed</translation>
+    </message>
+    <message>
+        <source>Color</source>
+        <translation>Color</translation>
+    </message>
+    <message>
+        <source>Color:</source>
+        <translation>Color:</translation>
     </message>
     <message>
         <source>Command</source>
@@ -712,6 +732,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Fit to Window</translation>
     </message>
     <message>
+        <source>Fit to sheet</source>
+        <translation>Fit to sheet</translation>
+    </message>
+    <message>
         <source>Flip horizontally</source>
         <translation>Flip horizontally</translation>
     </message>
@@ -878,6 +902,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Live simulation stopped: %1</translation>
     </message>
     <message>
+        <source>Location:</source>
+        <translation>Location:</translation>
+    </message>
+    <message>
         <source>Logic gate</source>
         <translation>Logic gate</translation>
     </message>
@@ -946,6 +974,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>NPN transistor</translation>
     </message>
     <message>
+        <source>Name:</source>
+        <translation>Name:</translation>
+    </message>
+    <message>
         <source>Net label</source>
         <translation>Net label</translation>
     </message>
@@ -976,6 +1008,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Next Tab</source>
         <translation>Next Tab</translation>
+    </message>
+    <message>
+        <source>Next page</source>
+        <translation>Next page</translation>
     </message>
     <message>
         <source>No GND in the circuit; %1 is used as the reference node (0 V).</source>
@@ -1122,6 +1158,14 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
         <translation>Orientation</translation>
     </message>
     <message>
+        <source>Orientation:</source>
+        <translation>Orientation:</translation>
+    </message>
+    <message>
+        <source>Output file:</source>
+        <translation>Output file:</translation>
+    </message>
+    <message>
         <source>Output high level. Low level is fixed at 0 V; input threshold is half of it (5% hysteresis).</source>
         <translation>Output high level. Low level is fixed at 0 V; input threshold is half of it (5% hysteresis).</translation>
     </message>
@@ -1146,6 +1190,10 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
         <translation>P-channel MOSFET</translation>
     </message>
     <message>
+        <source>PDF document</source>
+        <translation>PDF document</translation>
+    </message>
+    <message>
         <source>PDF document (*.pdf)</source>
         <translation>PDF document (*.pdf)</translation>
     </message>
@@ -1164,6 +1212,10 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
     <message>
         <source>PNP transistor</source>
         <translation>PNP transistor</translation>
+    </message>
+    <message>
+        <source>Page %1 / %2</source>
+        <translation>Page %1 / %2</translation>
     </message>
     <message>
         <source>Page Set&amp;up…</source>
@@ -1188,6 +1240,10 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
     <message>
         <source>Paper size and orientation for this sheet</source>
         <translation>Paper size and orientation for this sheet</translation>
+    </message>
+    <message>
+        <source>Paper:</source>
+        <translation>Paper:</translation>
     </message>
     <message>
         <source>Paste</source>
@@ -1242,12 +1298,40 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
         <translation>Previous Tab</translation>
     </message>
     <message>
+        <source>Previous page</source>
+        <translation>Previous page</translation>
+    </message>
+    <message>
         <source>Primary + auxiliary + secondary</source>
         <translation>Primary + auxiliary + secondary</translation>
     </message>
     <message>
         <source>Primary inductance L1</source>
         <translation>Primary inductance L1</translation>
+    </message>
+    <message>
+        <source>Print</source>
+        <translation>Print</translation>
+    </message>
+    <message>
+        <source>Print this sheet</source>
+        <translation>Print this sheet</translation>
+    </message>
+    <message>
+        <source>Print to file</source>
+        <translation>Print to file</translation>
+    </message>
+    <message>
+        <source>Print to file (PDF)</source>
+        <translation>Print to file (PDF)</translation>
+    </message>
+    <message>
+        <source>Printed to: %1</source>
+        <translation>Printed to: %1</translation>
+    </message>
+    <message>
+        <source>Printer</source>
+        <translation>Printer</translation>
     </message>
     <message>
         <source>Probe I(dc): %1</source>
@@ -1450,6 +1534,10 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
         <translation>Sawtooth</translation>
     </message>
     <message>
+        <source>Scale:</source>
+        <translation>Scale:</translation>
+    </message>
+    <message>
         <source>Secondary dot at bottom (inverted)</source>
         <translation>Secondary dot at bottom (inverted)</translation>
     </message>
@@ -1482,6 +1570,10 @@ to edit its parameters</translation>
     <message>
         <source>Semiconductors</source>
         <translation>Semiconductors</translation>
+    </message>
+    <message>
+        <source>Sent to printer: %1</source>
+        <translation>Sent to printer: %1</translation>
     </message>
     <message>
         <source>Series resistance at the output; the output sags under load.</source>
@@ -1782,6 +1874,10 @@ Restore them?</translation>
     <message>
         <source>Turns ratio N1:N2:N3</source>
         <translation>Turns ratio N1:N2:N3</translation>
+    </message>
+    <message>
+        <source>Type:</source>
+        <translation>Type:</translation>
     </message>
     <message>
         <source>Unchecked: normally open, conducts while held during simulation.

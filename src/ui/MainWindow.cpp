@@ -18,6 +18,8 @@
 #include "ui/WireItem.h"
 #include "ui/SettingsDialog.h"
 #include "ui/PageSetupDialog.h"
+#include "ui/PrintDialog.h"
+#include "ui/PrintPlan.h"
 #include "ui/Symbols.h"
 #include "ui/Theme.h"
 #include "ui/TitleBar.h"
@@ -46,6 +48,7 @@
 #include <QPageSize>
 #include <QPdfWriter>
 #include <QBuffer>
+#include <QPrinter>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGraphicsItem>
@@ -75,6 +78,9 @@
 #include <algorithm>
 
 namespace csm {
+
+/// 导出 / 打印用的位图分辨率：300 dpi 打原理图足够清晰，文件也不至于太大
+constexpr int kPrintDpi = 300;
 
 namespace {
 
@@ -815,6 +821,13 @@ void MainWindow::createActions()
     m_actPageSetup->setStatusTip(CSM_TR("Paper size and orientation for this sheet"));
     m_actPageSetup->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+P")));
 
+    m_actPrint = new QAction(
+        actionIcon(QStringLiteral("print"), QStringLiteral("document-print"),
+                   QStyle::SP_DialogApplyButton),
+        CSM_TR("&Print…"), this);
+    m_actPrint->setShortcut(QKeySequence::Print);
+    m_actPrint->setStatusTip(CSM_TR("Print this sheet"));
+
     m_actCloseTab = new QAction(
         actionIcon(QStringLiteral("close_tab"), QStringLiteral("window-close"), QStyle::SP_DialogCloseButton),
         CSM_TR("Close &Tab"), this);
@@ -1032,6 +1045,7 @@ void MainWindow::createActions()
     connect(m_actSave, &QAction::triggered, this, [this] { saveCircuit(); });
     connect(m_actSaveAs, &QAction::triggered, this, [this] { saveCircuitAs(); });
     connect(m_actPageSetup, &QAction::triggered, this, &MainWindow::openPageSetup);
+    connect(m_actPrint, &QAction::triggered, this, &MainWindow::printSchematic);
     connect(m_actCloseTab, &QAction::triggered, this, &MainWindow::closeCurrentDocument);
     connect(m_actNextTab, &QAction::triggered, this, [this] {
         if (!m_tabs || m_tabs->count() < 2)
@@ -1282,6 +1296,7 @@ void MainWindow::registerShortcutBindings()
         {QStringLiteral("file.save"), m_actSave},
         {QStringLiteral("file.saveAs"), m_actSaveAs},
         {QStringLiteral("file.pageSetup"), m_actPageSetup},
+        {QStringLiteral("file.print"), m_actPrint},
         {QStringLiteral("file.closeTab"), m_actCloseTab},
         {QStringLiteral("file.nextTab"), m_actNextTab},
         {QStringLiteral("file.prevTab"), m_actPrevTab},
@@ -1354,6 +1369,8 @@ void MainWindow::createMenus()
     fileMenu->addAction(m_actSaveAs);
     fileMenu->addSeparator();
     fileMenu->addAction(m_actPageSetup);
+    fileMenu->addSeparator();
+    fileMenu->addAction(m_actPrint);
     fileMenu->addSeparator();
     fileMenu->addAction(m_actCloseTab);
     fileMenu->addSeparator();
@@ -2281,40 +2298,37 @@ bool MainWindow::saveCircuitAs()
     return saveCircuit();
 }
 
-bool MainWindow::exportSchematicPdf(const QString& path)
+QImage MainWindow::renderSheetImage(int dpi)
 {
     if (!m_scene)
-        return false;
+        return QImage();
 
-    // 导出的是「图纸」本身：PDF 的页面尺寸取页面设置里那张纸（毫米），
-    // 内容按整张纸的范围铺满 —— 也就是界面上「适应图纸」看到的那些东西。
+    // 导出 / 打印 / 预览都走这一条：先把图纸渲染成位图，再贴到目标上。
+    // 不直接把场景画进 QPdfWriter / QPrinter：场景里的标签是 8.5 pt 的小字，
+    // 被放大几倍后 Qt 写进 PDF 的字体矩阵是坏的，poppler 与 Ghostscript 都渲染
+    // 成一团团方块（2026-11 实测）。也别给位图设 dotsPerMeter —— 设了 QPainter
+    // 就按那个逻辑 DPI 算字号，同样会撑破标签框。
     const PageSetup page = m_scene->pageSetup();
     const QSizeF paperMm = page.sizeMm();
     const QRectF sheet = page.sceneRect();
     if (paperMm.isEmpty() || !sheet.isValid())
-        return false;
+        return QImage();
 
-    // 先把图纸画成一张 300 dpi 的位图，再把位图贴进 PDF。
-    // 不直接用 QPdfWriter 画场景：场景里的文字是 8.5 pt 的小字，被放大几倍后
-    // Qt 写进 PDF 的字体矩阵是坏的 —— poppler 和 Ghostscript 都渲染成一团团
-    // 方块（2026-11 实测）。走位图至少所见即所得。
-    constexpr int kDpi = 300;
-    const double pxPerMm = kDpi / 25.4;
-    const int width = qMax(1, int(std::lround(paperMm.width() * pxPerMm)));
-    const int height = qMax(1, int(std::lround(paperMm.height() * pxPerMm)));
+    constexpr int kFallbackDpi = 300;
+    if (dpi <= 0)
+        dpi = kFallbackDpi;
+    const int width = qMax(1, int(std::lround(paperMm.width() * dpi / 25.4)));
+    const int height = qMax(1, int(std::lround(paperMm.height() * dpi / 25.4)));
 
     QImage image(width, height, QImage::Format_ARGB32_Premultiplied);
-    if (image.isNull()) {
-        Dialogs::warn(this, CSM_TR("Export failed"), CSM_TR("Cannot write the PDF file."));
-        return false;
-    }
-    // 别给这张图设 dotsPerMeter：设了 QPainter 就按 300 dpi 的「逻辑 DPI」算字号，
-    // 8.5 pt 的字会被放大成四倍、撑破标签框，渲染出来是一团团方块
+    if (image.isNull())
+        return QImage();
     image.fill(Qt::white);
 
     // 导出时不要网格、不要选中高亮：网格是画布上的辅助线，印在纸上只有噪音
     const bool hadGrid = m_scene->showGrid();
     m_scene->setShowGrid(false);
+    m_scene->setPrintMode(true);   // 纸画成白的，深色主题下也是
     const QList<QGraphicsItem*> selected = m_scene->selectedItems();
     m_scene->clearSelection();
 
@@ -2326,8 +2340,45 @@ bool MainWindow::exportSchematicPdf(const QString& path)
     }
 
     m_scene->setShowGrid(hadGrid);
+    m_scene->setPrintMode(false);
     for (QGraphicsItem* item : selected)
         item->setSelected(true);
+    return image;
+}
+
+void MainWindow::paintSheet(QPainter& painter, const QRectF& target, int dpi)
+{
+    const QImage image = renderSheetImage(dpi);
+    if (image.isNull())
+        return;
+    // 保持比例内接、居中：纸和可打印区的比例差一点点（打印机边距把高度多切了
+    // 一点），硬拉满会让图框在短边被切掉
+    const QSizeF scaled = QSizeF(image.size()).scaled(target.size(), Qt::KeepAspectRatio);
+    const QPointF topLeft(target.center().x() - scaled.width() / 2.0,
+                          target.center().y() - scaled.height() / 2.0);
+    painter.drawImage(QRectF(topLeft, scaled), image);
+}
+
+QRectF MainWindow::printTargetRect(QPrinter& printer)
+{
+    // 注意：QPrinter 的画笔原点已经在「可打印区」左上角，paintRectPixels() 给的
+    // 是**页坐标系**里的位置（比如 167,167）。照它的原点去画会再平移一次，
+    // 内容被推出去、下边和右边的图框就没了 —— 这里只取它的尺寸。
+    const QRect paint = printer.pageLayout().paintRectPixels(printer.resolution());
+    return QRectF(0, 0, paint.width(), paint.height());
+}
+
+bool MainWindow::exportSchematicPdf(const QString& path)
+{
+    if (!m_scene)
+        return false;
+
+    // 导出的是「图纸」本身：PDF 的页面尺寸取页面设置里那张纸（毫米），
+    // 内容按整张纸的范围铺满 —— 也就是界面上「适应图纸」看到的那些东西。
+    const PageSetup page = m_scene->pageSetup();
+    const QSizeF paperMm = page.sizeMm();
+    if (paperMm.isEmpty())
+        return false;
 
     QBuffer buffer;
     if (!buffer.open(QIODevice::WriteOnly))
@@ -2336,13 +2387,13 @@ bool MainWindow::exportSchematicPdf(const QString& path)
         QPdfWriter writer(&buffer);
         writer.setCreator(QStringLiteral("Circuit Master"));
         writer.setTitle(doc() ? doc()->name : QStringLiteral("Circuit"));
-        writer.setResolution(kDpi);
+        writer.setResolution(kPrintDpi);
         writer.setPageSize(QPageSize(paperMm, QPageSize::Millimeter, QString(),
                                      QPageSize::ExactMatch));
         writer.setPageMargins(QMarginsF(0.0, 0.0, 0.0, 0.0));
 
         QPainter painter(&writer);
-        painter.drawImage(QRectF(0.0, 0.0, writer.width(), writer.height()), image);
+        paintSheet(painter, QRectF(0.0, 0.0, writer.width(), writer.height()), kPrintDpi);
     }
     buffer.close();
 
@@ -2354,6 +2405,95 @@ bool MainWindow::exportSchematicPdf(const QString& path)
     }
     appendLog(CSM_TR("Exported: %1").arg(path));
     return true;
+}
+
+void MainWindow::printSchematic()
+{
+    if (!m_scene)
+        return;
+
+    QPrinter printer(QPrinter::HighResolution);
+    configurePrinter(printer);
+
+    PrintDialog dialog(printer, m_scene->pageSetup(),
+                       [this](QPrinter& target, const PrintOptions& options) {
+                           paintPrintPages(target, options);
+                       },
+                       this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+    dialog.applyTo(printer);
+
+    paintPrintPages(printer, dialog.options());
+    if (printer.outputFormat() == QPrinter::PdfFormat)
+        appendLog(CSM_TR("Printed to: %1").arg(printer.outputFileName()));
+    else
+        appendLog(CSM_TR("Sent to printer: %1").arg(printer.printerName()));
+}
+
+QImage MainWindow::sheetImageForPrint(const PrintOptions& options)
+{
+    QImage image = renderSheetImage();
+    if (image.isNull())
+        return image;
+    // 黑白打印：自己转成灰度，别指望设备 —— 预览那台 printer 与真机不一定走
+    // 同一条路径，自己转才能保证「看到的」和「打出来的」一模一样
+    if (options.grayscale)
+        image = image.convertToFormat(QImage::Format_Grayscale8);
+    return image;
+}
+
+void MainWindow::paintPrintPages(QPrinter& printer, const PrintOptions& options)
+{
+    const QImage image = sheetImageForPrint(options);
+    if (image.isNull())
+        return;
+
+    const QPageLayout layout = printer.pageLayout();
+    const QRect paint = layout.paintRectPixels(printer.resolution());   // 可打印区（页坐标）
+    const QRect full = layout.fullRectPixels(printer.resolution());     // 整页（页坐标）
+    if (paint.width() < 1 || paint.height() < 1 || full.width() < 1)
+        return;
+    // 画笔原点在可打印区左上，所以页面左上角要往回挪一个页边距
+    const QPointF pageOrigin(-paint.x(), -paint.y());
+
+    // 分页几何交给 PrintPlan 算（有单元测试盯着），这里只负责按方案画
+    const PrintPlan plan = planPrint(
+        QSizeF(image.size()), QSizeF(full.size()), QSizeF(paint.size()), options.scaleMode,
+        printer.resolution() / 300.0, options.scalePercent);
+    if (plan.pages.isEmpty())
+        return;
+
+    QPainter painter(&printer);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::TextAntialiasing, true);
+    for (int i = 0; i < plan.pages.size(); ++i) {
+        if (i > 0)
+            printer.newPage();
+        const PrintPageRect& page = plan.pages.at(i);
+        // 必须自己 setClipRect —— 预览控件把一叠页面画在同一块缓冲里，
+        // 不裁的话相邻页会互相「漏」过来
+        painter.save();
+        painter.setClipRect(QRectF(0.0, 0.0, paint.width(), paint.height()));
+        painter.drawImage(QRectF(page.dst.topLeft() + pageOrigin, page.dst.size()), image,
+                          page.src);
+        painter.restore();
+    }
+    painter.end();
+}
+
+void MainWindow::configurePrinter(QPrinter& printer)
+{
+    // 纸张与方向取页面设置：打印机自己那套 A4/Letter 先不管，
+    // 用户画的图纸是什么尺寸就按什么尺寸出
+    const PageSetup page = m_scene ? m_scene->pageSetup() : PageSetup();
+    // 纸张按「竖版基础尺寸 + 明确方向」交给驱动：直接塞横版尺寸（297×210）的话，
+    // pageLayout 的方向仍是纵向，驱动会把它当竖版纸去打，出来就是竖的
+    printer.setPageSize(QPageSize(page.portraitSizeMm(), QPageSize::Millimeter, QString(),
+                                  QPageSize::ExactMatch));
+    printer.setPageOrientation(page.landscape ? QPageLayout::Landscape : QPageLayout::Portrait);
+    printer.setColorMode(QPrinter::Color);
+    printer.setDocName(doc() ? doc()->name : QStringLiteral("Circuit"));
 }
 
 bool MainWindow::exportSchematicImage(const QString& path)

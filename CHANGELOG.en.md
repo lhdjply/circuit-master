@@ -10,6 +10,23 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Added
 
+- **Paper, orientation and scale are adjustable when printing**: "Paper" is a dropdown
+  (A5 … A1, defaulting to the sheet's own setting), "Orientation" switches landscape /
+  portrait and "Scale" offers fit-to-sheet, actual size (1:1) or a custom percentage —
+  any change redraws the preview immediately. When the paper matches the sheet,
+  fit-to-sheet *is* 1:1 (both render pixel-for-pixel the same); when the paper is
+  smaller, fit-to-sheet squeezes the drawing onto one page while 1:1 keeps its real size
+  and spills across pages.
+- **Colour or black-and-white**: two radio buttons next to "Orientation". In black and
+  white the sheet is converted to grayscale before drawing rather than relying on the
+  device, so the preview and the printed job cannot diverge.
+- **Anything that does not fit spills onto more pages**: printing an A3 drawing 1:1 onto
+  A4 tiles it across pages; the preview gained Previous / Next buttons and a "Page N / M"
+  readout, and the printed job has the same pages.
+- A5 was added to the page setup as well.
+- **Printing and print preview**: the File menu gained "Print Preview…" (Ctrl+Alt+P) and
+  "Print…" (Ctrl+P). Paper size and orientation follow the page setup, and the printed area matches
+  "Fit to Sheet"; the preview *is* the printed output, so nothing shifts between the two.
 - **PDF export**: "Save As" gained a PDF file type. It exports the **whole sheet** — the
   PDF page takes the size from the page setup (A4 / A3 / A2 / A1 / custom, orientation
   included) and the drawing fills it, i.e. exactly what "Fit to Sheet" shows. The grid is
@@ -18,8 +35,8 @@ repository root (same form as the tag, e.g. `v0.4.0`).
   (default **Ctrl+Shift+P**, remappable in Settings), picks a paper size (A4, A3,
   A2, A1 or custom) and an orientation (landscape or portrait); a custom size takes
   millimetres. The canvas *is* that sheet: the grid is drawn inside it and its edge is a
-  **double solid frame** (outer line on the paper edge, inner line 5 mm in, as on an
-  engineering drawing) — no white fill and no size caption. Changing the paper
+  **double solid frame** — outer line 5 mm in from the paper edge, inner line 10 mm,
+  as on an engineering drawing — with no white fill and no size caption. Changing the paper
   re-centres the view. A new sheet defaults to **A4 landscape**; the paper is stored in
   the `.csm` under `"page"`, and files without that section open on A4. All **eight
   examples had their drawing re-centred on the sheet** (labels included, nothing sticking
@@ -53,6 +70,13 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Fixed
 
+- **Page tiling was wrong (a strip went missing between pages, and the two scales
+  disagreed when paper matched the sheet)**: the geometry now lives in `planPrint()`
+  with unit tests — with paper equal to the sheet, fit-to-sheet and actual size produce
+  the same plan (one page, same position, same scale); with smaller paper the drawing is
+  tiled by the **printable area** (tiling by the whole page loses the 4.2 mm that falls
+  into the printer margin, so neighbouring pages no longer line up). Each page is also
+  clipped explicitly, so pages no longer bleed into one another in the preview.
 - **The library background differed from the property panel**: the list used Base
   (pure white) while the panel next to it used the window colour, so the two looked like
   different layers. The library now uses the window colour too, with accent-tinted hover

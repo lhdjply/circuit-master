@@ -11,6 +11,7 @@
 #include "ui/MultimeterWindow.h"
 #include "ui/PropertyPanel.h"
 #include "ui/SchematicScene.h"
+#include "ui/PrintPlan.h"
 #include "ui/SchematicView.h"
 #include "ui/Symbols.h"
 #include "ui/Theme.h"
@@ -85,6 +86,9 @@ private slots:
     void emptyCanvasMenuHasPageSetup();
     void pageDrawsNothingOutsideTheSheet();
     void pdfExportFitsTheSheet();
+    void printPlanSplitsAndFitsCorrectly();
+    void printGrayscaleHasNoColour();
+    void printRendersTheSheet();
 
 private:
 
@@ -2203,6 +2207,141 @@ void UiEditorTest::pdfExportFitsTheSheet()
 
     // 导出不该动文档状态：路径还是空的、也不算「已修改」
     QVERIFY(!window.isWindowModified());
+}
+
+
+void UiEditorTest::printRendersTheSheet()
+{
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    QAction* rcExample = nullptr;
+    QAction* printAction = nullptr;
+    bool hasPreviewCommand = false;
+    for (QAction* action : window.findChildren<QAction*>()) {
+        const QString text = QString(action->text()).remove(QLatin1Char('&'));
+        if (text.contains(QStringLiteral("RC 充电")))
+            rcExample = action;
+        else if (text.contains(QStringLiteral("打印")) && text.contains(QStringLiteral("预览")))
+            hasPreviewCommand = true;
+        else if (text.contains(QStringLiteral("打印")))
+            printAction = action;
+    }
+    QVERIFY(rcExample);
+    QVERIFY2(printAction, "文件菜单里应当有「打印」");
+    // 预览已经并进打印对话框（右边那一半），不再单开一条命令
+    QVERIFY2(!hasPreviewCommand, "文件菜单里不该再有单独的「打印预览」");
+    QCOMPARE(printAction->shortcut(), QKeySequence(QKeySequence::Print));
+
+    rcExample->trigger();
+    settle();
+
+    auto* scene = currentScene(window);
+    QVERIFY(scene);
+
+    // 打印走的是「整张纸」的位图：尺寸等于纸张毫米数按 300 dpi 换算
+    const QSizeF mm = scene->pageSetup().sizeMm();
+    const QImage sheet = window.renderSheetImage();
+    QVERIFY(!sheet.isNull());
+    QCOMPARE(sheet.width(), int(std::lround(mm.width() * 300 / 25.4)));
+    QCOMPARE(sheet.height(), int(std::lround(mm.height() * 300 / 25.4)));
+
+    // 纸是白的，图上有内容：抽查中间那块不该全是纯白
+    bool hasInk = false;
+    for (int y = sheet.height() / 4; y < sheet.height() * 3 / 4 && !hasInk; y += 7)
+        for (int x = sheet.width() / 4; x < sheet.width() * 3 / 4; x += 7)
+            if (sheet.pixelColor(x, y) != QColor(Qt::white)) { hasInk = true; break; }
+    QVERIFY2(hasInk, "打印用的位图是空白的");
+}
+
+
+void UiEditorTest::printPlanSplitsAndFitsCorrectly()
+{
+    // A4 横向：纸 297×210、可打印区 288.6×201.6（打印机每边约 4.2 mm），位图 300 dpi
+    const QSizeF image(3508.0, 2480.0);          // A4 @300dpi
+    const QSizeF page(14031.0, 9933.0);          // A4 @1200dpi
+    const QSizeF printable(13699.0, 9582.0);
+    const double exact = 1200.0 / 300.0;
+
+    // ① 纸 = 图纸：适应图纸与 1:1 必须是同一种方案（一页、同一位置、同一比例）
+    const PrintPlan fit = planPrint(image, page, printable, 0, exact);
+    const PrintPlan one = planPrint(image, page, printable, 1, exact);
+    QCOMPARE(fit.pages.size(), 1);
+    QCOMPARE(one.pages.size(), 1);
+    QCOMPARE(fit.scale, one.scale);
+    QCOMPARE(fit.pages.first().dst, one.pages.first().dst);
+    QCOMPARE(fit.pages.first().dst.topLeft(), QPointF(0.0, 0.0));
+
+    // ② A3 图纸（420×297）打 A4：适应图纸缩到一页，1:1 分成多页
+    const QSizeF a3Image(4961.0, 3508.0);
+    const PrintPlan a3Fit = planPrint(a3Image, page, printable, 0, exact);
+    const PrintPlan a3One = planPrint(a3Image, page, printable, 1, exact);
+    QCOMPARE(a3Fit.pages.size(), 1);
+    QVERIFY2(a3Fit.scale < exact, "适应图纸应当缩小");
+    QVERIFY2(a3One.pages.size() > 1,
+             qPrintable(QStringLiteral("1:1 应当分页，实际 %1 页").arg(a3One.pages.size())));
+
+    // ③ 分页要无缝：相邻两页的落笔位置正好差一个可打印区宽度
+    //    （差应该由「可打印区」决定，用整页的话页间会漏一条）
+    if (a3One.pages.size() >= 2) {
+        const qreal step = a3One.pages.at(1).dst.left() - a3One.pages.at(0).dst.left();
+        QCOMPARE(step, -printable.width());
+    }
+
+    // ④ 自定义 50%：图纸与纸张相同时只有一页
+    const PrintPlan half = planPrint(image, page, printable, 2, exact, 50.0);
+    QCOMPARE(half.pages.size(), 1);
+    QVERIFY(half.scale < one.scale);
+}
+
+
+void UiEditorTest::printGrayscaleHasNoColour()
+{
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    QAction* example = nullptr;
+    for (QAction* action : window.findChildren<QAction*>())
+        if (QString(action->text()).remove(QLatin1Char('&'))
+                .contains(QStringLiteral("RC 充电")))
+            example = action;
+    QVERIFY(example);
+    example->trigger();
+    settle();
+
+    PrintOptions options;
+    const QImage color = window.sheetImageForPrint(options);
+    QVERIFY(!color.isNull());
+
+    // 彩色图里应该有蓝色（导线），否则这个用例证明不了什么
+    bool hasColour = false;
+    for (int y = 0; y < color.height() && !hasColour; y += 3)
+        for (int x = 0; x < color.width(); x += 3) {
+            const QColor c = color.pixelColor(x, y);
+            if (c.red() != c.green() || c.green() != c.blue()) {
+                hasColour = true;
+                break;
+            }
+        }
+    QVERIFY2(hasColour, "彩色出图里找不到彩色，用例前提不成立");
+
+    // 黑白：整张图必须是灰的
+    options.grayscale = true;
+    const QImage gray = window.sheetImageForPrint(options);
+    QVERIFY(!gray.isNull());
+    QCOMPARE(gray.size(), color.size());
+    int colored = 0;
+    for (int y = 0; y < gray.height(); y += 3)
+        for (int x = 0; x < gray.width(); x += 3) {
+            const QColor c = gray.pixelColor(x, y);
+            if (c.red() != c.green() || c.green() != c.blue())
+                ++colored;
+        }
+    QCOMPARE(colored, 0);
 }
 
 void UiEditorTest::draggingAComponentDoesNotPullUnrelatedWires()
