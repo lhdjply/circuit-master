@@ -235,8 +235,8 @@ TL431 可调基准（REF / 阳极 / 阴极）：
 
 - CMake ≥ 3.21
 - C++17 编译器（GCC 11+ / Clang 14+）
-- Qt 6.5+：`Core`、`Gui`、`Widgets`、`Charts`、`Svg`、`Network`（单实例转发用本地套接字），
-  测试还需要 `Test`
+- Qt 6.4+：`Core`、`Gui`、`Widgets`、`Charts`、`Svg`、`Network`（单实例转发用本地套接字）、
+  `PrintSupport`（打印与打印预览），测试还需要 `Test`
 
 Deepin / Debian / Ubuntu：
 
@@ -446,7 +446,7 @@ ctest --test-dir build --output-on-failure
 
 | 工作流 | 触发 | 内容 |
 | --- | --- | --- |
-| `build.yaml` | push / PR | **Linux**（Ubuntu 26.04）、**macOS**（Homebrew Qt）、**Windows**（MSYS2 UCRT64 / MinGW）三平台编译，校验 Qt ≥ 6.5、QtCharts 可用、产物存在（Windows 还检查 PE 子系统为 GUI，macOS 检查 `.app` 里的可执行文件） |
+| `build.yaml` | push / PR | **Linux**（Ubuntu 26.04）、**macOS**（Homebrew Qt）、**Windows**（MSYS2 UCRT64 / MinGW）三平台编译，校验 Qt ≥ 6.4、QtCharts 可用、产物存在（Windows 还检查 PE 子系统为 GUI，macOS 检查 `.app` 里的可执行文件） |
 | `test.yaml` | push / PR | 三平台跑 `ctest`（`QT_QPA_PLATFORM=offscreen`），失败时自动 `--rerun-failed -V` 重跑并上传日志 |
 | `release.yaml` | 任意分支 / tag | **Linux 四架构**（amd64 / arm64 / loong64 / riscv64，Deepin crimson 容器 + QEMU）`debuild` 出 `.deb` + 便携 `tar.gz`；**Windows 两架构**（x64 / arm64）`windeployqt` 打便携 zip 与 Inno Setup 安装包；**macOS 两架构**（`macos-26` → arm64、`macos-26-intel` → x64）用 `macdeployqt` 打包后 `hdiutil` 出 `.dmg`；随后生成校验和并发布 Release |
 
