@@ -49,6 +49,10 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Fixed
 
+- **The library background differed from the property panel**: the list used Base
+  (pure white) while the panel next to it used the window colour, so the two looked like
+  different layers. The library now uses the window colour too, with accent-tinted hover
+  and selection, and follows theme changes.
 - **The transformer's property panel was cut off**: the two "Windings" entries carried
   "(1 primary + 1 secondary)" and "(6 pins)", which pushed the whole panel wider than the
   dock — the right-hand fields were clipped and a horizontal scrollbar appeared. The

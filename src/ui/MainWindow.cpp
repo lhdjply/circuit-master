@@ -104,6 +104,31 @@ QByteArray circuitSignature(const Circuit& circuit)
 
 constexpr char kComponentMimeType[] = "application/x-csm-component";
 
+
+/// 元件库的配色：底色跟属性面板一样用窗口色（列表默认是 Base 白，比旁边
+/// 亮一档，看着像两块不同的面板）；悬停 / 选中沿用强调色的浅版。
+void styleLibrary(QListWidget* library)
+{
+    if (!library)
+        return;
+    const QColor windowColor = qApp->palette().color(QPalette::Window);
+    QColor hover = Theme::accent();
+    hover.setAlpha(28);
+    QColor picked = Theme::accent();
+    picked.setAlpha(56);
+    library->setStyleSheet(
+        QStringLiteral("QListWidget { background: %1; border: none; }"
+                       "QListWidget::item { border-radius: 4px; padding: 1px; }"
+                       "QListWidget::item:hover { background: rgba(%2,%3,%4,%5); }"
+                       "QListWidget::item:selected { background: rgba(%2,%3,%4,%6); }")
+            .arg(windowColor.name())
+            .arg(hover.red())
+            .arg(hover.green())
+            .arg(hover.blue())
+            .arg(0.11)
+            .arg(0.22));
+}
+
 class ComponentLibrary : public QListWidget {
 public:
     explicit ComponentLibrary(QWidget* parent = nullptr)
@@ -1620,6 +1645,7 @@ void MainWindow::createDocks()
     libraryLayout->addWidget(hint);
 
     m_library = new ComponentLibrary(libraryContainer);
+    styleLibrary(m_library);
     m_library->setIconSize(QSize(46, 34));
     m_library->setSpacing(2);
     m_library->setUniformItemSizes(true);
@@ -1715,6 +1741,7 @@ void MainWindow::applyTheme()
     if (m_library) {
         m_library->clear();
         buildLibrary();
+        styleLibrary(m_library);   // 切换主题后底色要跟着走
     }
 
     for (QWidget* widget : QApplication::topLevelWidgets())
