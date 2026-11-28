@@ -14,7 +14,10 @@
 #include <QJsonObject>
 #include <QTest>
 #include <cmath>
+
+#ifdef Q_OS_UNIX
 #include <unistd.h>
+#endif
 #include <limits>
 
 using namespace csm;
@@ -547,7 +550,10 @@ void CoreModelTest::autosaveReportsWriteFailures()
     QVERIFY(!Autosave::write(nameless, &reason));
     QVERIFY2(!reason.isEmpty(), "写失败必须给出原因");
 
-    // 目录不可写：必须返回 false 并带上原因（root 用户跳过，权限拦不住它）
+    // 目录不可写：必须返回 false 并带上原因。
+    // 只在 Unix 上验：Windows 的只读位管不住写入，而且没有 geteuid；
+    // root 用户也跳过 —— 权限拦不住它。
+#ifdef Q_OS_UNIX
     if (::geteuid() != 0) {
         const QString dir = Autosave::directory();
         const QFileDevice::Permissions original = QFile::permissions(dir);
@@ -560,6 +566,7 @@ void CoreModelTest::autosaveReportsWriteFailures()
         QVERIFY2(!ok, "只读目录下不该写成功");
         QVERIFY2(!blockedReason.isEmpty(), "只读目录写失败要给出原因");
     }
+#endif
 
     Autosave::clearAll();
     QDir(dataHome).removeRecursively();

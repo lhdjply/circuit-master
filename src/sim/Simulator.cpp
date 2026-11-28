@@ -1146,7 +1146,7 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
             if (transient && cp->gbw > 0.0) {
                 const double tau = a0 / (2.0 * kPi * cp->gbw);
                 const double hOverTau = h / std::max(tau, 1e-18);
-                const double yPrev = st.opampY.value(cp->id, 0.0);
+                const double yPrev = st.opampY.value(cp->id, railMid);
                 y = (yPrev + hOverTau * a0 * vd) / (1.0 + hOverTau);
             }
             // 归一化到「伏特」量级再比，免得 A0 很大时这个判据压过别的
@@ -1489,19 +1489,21 @@ bool applySlewLimit(const Problem& p, ElementState& st, const std::vector<double
         const double a0 = cp->value > 1.0 ? cp->value : 1e5;
         const double vd = p.voltage(x, p.nodeOf(cp->id, 0))
                           - p.voltage(x, p.nodeOf(cp->id, 1)) - cp->vos;
+        // 摆幅中点：内部 y 的 0 点。没记录内部状态时按中点起步（中点为 0 只是
+        // 对称限幅的特例），所以 mid 要在下面用到之前先算出来
+        double mid = 0.0;
+        double half = 1.0;
+        opampSatRange(*cp, &mid, &half);
         // 这一步本来想去的值（极点之后的内部输出）
         double want = a0 * vd;
         if (cp->gbw > 0.0) {
             const double tau = a0 / (2.0 * kPi * cp->gbw);
             const double hOverTau = h / std::max(tau, 1e-18);
-            want = (st.opampY.value(cp->id, 0.0) + hOverTau * a0 * vd) / (1.0 + hOverTau);
+            want = (st.opampY.value(cp->id, mid) + hOverTau * a0 * vd) / (1.0 + hOverTau);
         }
         // 比较和钉住的都必须是「输出电压」：opampY 是内部值（A0·vd，可能是几万伏），
         // 拿它跟 SR·h 比会永远成立，限速器一直开着、输出爬不动
-        double mid = 0.0;
-        double half = 1.0;
-        opampSatRange(*cp, &mid, &half);
-        const double yPrev = st.opampY.value(cp->id, 0.0);
+        const double yPrev = st.opampY.value(cp->id, mid);
         const double outPrev = opampSat(*cp, yPrev);
         const double wantOut = opampSat(*cp, want);
         const double maxStep = cp->slewRate * h;
@@ -1529,7 +1531,6 @@ void updateState(const Problem& p, ElementState& st, const std::vector<double>& 
         } else if (cp->type == ComponentType::OpAmp) {
             // 极点已经在牛顿迭代里推进过（存于 opampYIter），这里只补「每步」的
             // 压摆率限速，然后提交成下一步的初值。
-            const double yPrev = st.opampY.value(cp->id, 0.0);
             // opampY 一律存「内部」值（饱和之前）。被限速时把钉住的输出电压
             // 反解成内部值（sat 的反函数），保证 sat(opampY) == 钉住的输出
             double mid = 0.0;
