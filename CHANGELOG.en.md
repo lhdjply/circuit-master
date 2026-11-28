@@ -10,6 +10,10 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Added
 
+- **PDF export**: "Save As" gained a PDF file type. It exports the **whole sheet** — the
+  PDF page takes the size from the page setup (A4 / A3 / A2 / A1 / custom, orientation
+  included) and the drawing fills it, i.e. exactly what "Fit to Sheet" shows. The grid is
+  not printed and selection highlights are left out.
 - **Page setup**: right-click on empty canvas → "Page Setup…", or *File → Page Setup*
   (default **Ctrl+Shift+P**, remappable in Settings), picks a paper size (A4, A3,
   A2, A1 or custom) and an orientation (landscape or portrait); a custom size takes

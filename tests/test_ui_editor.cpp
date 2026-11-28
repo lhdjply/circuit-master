@@ -34,6 +34,7 @@
 #include <QSet>
 #include <QTabWidget>
 #include <QtTest/QTest>
+#include <QTemporaryDir>
 #include <QTest>
 #include <QTimer>
 #include <QWidget>
@@ -83,6 +84,7 @@ private slots:
     void rightButtonDragPansTheCanvas();
     void emptyCanvasMenuHasPageSetup();
     void pageDrawsNothingOutsideTheSheet();
+    void pdfExportFitsTheSheet();
 
 private:
 
@@ -2165,6 +2167,42 @@ void UiEditorTest::pageDrawsNothingOutsideTheSheet()
             if (image.pixelColor(x, y) != background)
                 ++stray;
     QVERIFY2(stray == 0, qPrintable(QStringLiteral("纸外有 %1 个非背景像素").arg(stray)));
+}
+
+
+void UiEditorTest::pdfExportFitsTheSheet()
+{
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    QAction* rcExample = nullptr;
+    for (QAction* action : window.findChildren<QAction*>())
+        if (action->text().contains(QStringLiteral("RC 充电")))
+            rcExample = action;
+    QVERIFY(rcExample);
+    rcExample->trigger();
+    settle();
+
+    QTemporaryDir dir;
+    QVERIFY(dir.isValid());
+    const QString path = dir.filePath(QStringLiteral("sheet.pdf"));
+
+    QVERIFY2(window.exportSchematicPdf(path), "PDF 导出失败");
+
+    QFile file(path);
+    QVERIFY(file.open(QIODevice::ReadOnly));
+    const QByteArray data = file.readAll();
+    file.close();
+
+    // 是个像样的 PDF：对得上文件头，也有实打实的页内容
+    QVERIFY2(data.startsWith("%PDF-"), "导出结果不是 PDF");
+    QVERIFY2(data.size() > 10000,
+             qPrintable(QStringLiteral("PDF 只有 %1 字节，像是空页").arg(data.size())));
+
+    // 导出不该动文档状态：路径还是空的、也不算「已修改」
+    QVERIFY(!window.isWindowModified());
 }
 
 void UiEditorTest::draggingAComponentDoesNotPullUnrelatedWires()

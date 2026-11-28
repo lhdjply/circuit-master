@@ -43,6 +43,9 @@
 #include <QDialog>
 #include <QDockWidget>
 #include <QFile>
+#include <QPageSize>
+#include <QPdfWriter>
+#include <QBuffer>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGraphicsItem>
@@ -2240,12 +2243,24 @@ bool MainWindow::saveCircuitAs()
     dialog.setAcceptMode(QFileDialog::AcceptSave);
     dialog.setFileMode(QFileDialog::AnyFile);
     dialog.setNameFilters({CSM_TR("Circuit Master circuit (*.csm)"),
-                           CSM_TR("PNG image (*.png)")});
+                           CSM_TR("PNG image (*.png)"),
+                           CSM_TR("PDF document (*.pdf)")});
     dialog.selectFile(doc()->name + QStringLiteral(".csm"));
     if (dialog.exec() != QDialog::Accepted || dialog.selectedFiles().isEmpty())
         return false;
 
     QString path = dialog.selectedFiles().constFirst();
+    const bool wantsPdf = dialog.selectedNameFilter().contains(QLatin1String(".pdf"))
+                          || path.endsWith(QLatin1String(".pdf"), Qt::CaseInsensitive);
+    if (wantsPdf) {
+        if (!path.endsWith(QLatin1String(".pdf"), Qt::CaseInsensitive)) {
+            if (path.endsWith(QLatin1String(".csm"), Qt::CaseInsensitive))
+                path.chop(4);
+            path += QStringLiteral(".pdf");
+        }
+        return exportSchematicPdf(path);
+    }
+
     const bool wantsPng = dialog.selectedNameFilter().contains(QLatin1String(".png"))
                           || path.endsWith(QLatin1String(".png"), Qt::CaseInsensitive);
     if (wantsPng) {
@@ -2264,6 +2279,81 @@ bool MainWindow::saveCircuitAs()
     doc()->filePath = path;
     doc()->name = QFileInfo(path).fileName();
     return saveCircuit();
+}
+
+bool MainWindow::exportSchematicPdf(const QString& path)
+{
+    if (!m_scene)
+        return false;
+
+    // 导出的是「图纸」本身：PDF 的页面尺寸取页面设置里那张纸（毫米），
+    // 内容按整张纸的范围铺满 —— 也就是界面上「适应图纸」看到的那些东西。
+    const PageSetup page = m_scene->pageSetup();
+    const QSizeF paperMm = page.sizeMm();
+    const QRectF sheet = page.sceneRect();
+    if (paperMm.isEmpty() || !sheet.isValid())
+        return false;
+
+    // 先把图纸画成一张 300 dpi 的位图，再把位图贴进 PDF。
+    // 不直接用 QPdfWriter 画场景：场景里的文字是 8.5 pt 的小字，被放大几倍后
+    // Qt 写进 PDF 的字体矩阵是坏的 —— poppler 和 Ghostscript 都渲染成一团团
+    // 方块（2026-11 实测）。走位图至少所见即所得。
+    constexpr int kDpi = 300;
+    const double pxPerMm = kDpi / 25.4;
+    const int width = qMax(1, int(std::lround(paperMm.width() * pxPerMm)));
+    const int height = qMax(1, int(std::lround(paperMm.height() * pxPerMm)));
+
+    QImage image(width, height, QImage::Format_ARGB32_Premultiplied);
+    if (image.isNull()) {
+        Dialogs::warn(this, CSM_TR("Export failed"), CSM_TR("Cannot write the PDF file."));
+        return false;
+    }
+    // 别给这张图设 dotsPerMeter：设了 QPainter 就按 300 dpi 的「逻辑 DPI」算字号，
+    // 8.5 pt 的字会被放大成四倍、撑破标签框，渲染出来是一团团方块
+    image.fill(Qt::white);
+
+    // 导出时不要网格、不要选中高亮：网格是画布上的辅助线，印在纸上只有噪音
+    const bool hadGrid = m_scene->showGrid();
+    m_scene->setShowGrid(false);
+    const QList<QGraphicsItem*> selected = m_scene->selectedItems();
+    m_scene->clearSelection();
+
+    {
+        QPainter painter(&image);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        painter.setRenderHint(QPainter::TextAntialiasing, true);
+        m_scene->render(&painter, QRectF(0.0, 0.0, width, height), sheet);
+    }
+
+    m_scene->setShowGrid(hadGrid);
+    for (QGraphicsItem* item : selected)
+        item->setSelected(true);
+
+    QBuffer buffer;
+    if (!buffer.open(QIODevice::WriteOnly))
+        return false;
+    {
+        QPdfWriter writer(&buffer);
+        writer.setCreator(QStringLiteral("Circuit Master"));
+        writer.setTitle(doc() ? doc()->name : QStringLiteral("Circuit"));
+        writer.setResolution(kDpi);
+        writer.setPageSize(QPageSize(paperMm, QPageSize::Millimeter, QString(),
+                                     QPageSize::ExactMatch));
+        writer.setPageMargins(QMarginsF(0.0, 0.0, 0.0, 0.0));
+
+        QPainter painter(&writer);
+        painter.drawImage(QRectF(0.0, 0.0, writer.width(), writer.height()), image);
+    }
+    buffer.close();
+
+    QString writeError;
+    if (!SafeWrite::bytes(path, buffer.data(), &writeError)) {
+        Dialogs::warn(this, CSM_TR("Export failed"),
+                      writeError.isEmpty() ? CSM_TR("Cannot write the PDF file.") : writeError);
+        return false;
+    }
+    appendLog(CSM_TR("Exported: %1").arg(path));
+    return true;
 }
 
 bool MainWindow::exportSchematicImage(const QString& path)

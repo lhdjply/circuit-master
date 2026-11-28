@@ -39,6 +39,8 @@ public:
     /// 把整张原理图导出成 PNG（按所有元件的包围盒渲染，不是当前视口）。
     /// 只导出，不动文档的路径、名字与「已修改」状态。
     bool exportSchematicImage(const QString& path);
+    /// 导出 PDF：页面尺寸取页面设置里的纸张，内容铺满整张纸
+    bool exportSchematicPdf(const QString& path);
 
     explicit MainWindow(QWidget* parent = nullptr);
     ~MainWindow() override;

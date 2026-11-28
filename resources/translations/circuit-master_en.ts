@@ -344,6 +344,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Cannot start the live simulation: %1</translation>
     </message>
     <message>
+        <source>Cannot write the PDF file.</source>
+        <translation>Cannot write the PDF file.</translation>
+    </message>
+    <message>
         <source>Cannot write the file.</source>
         <translation>Cannot write the file.</translation>
     </message>
@@ -1140,6 +1144,10 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
     <message>
         <source>P-channel MOSFET</source>
         <translation>P-channel MOSFET</translation>
+    </message>
+    <message>
+        <source>PDF document (*.pdf)</source>
+        <translation>PDF document (*.pdf)</translation>
     </message>
     <message>
         <source>PGND (power)</source>
