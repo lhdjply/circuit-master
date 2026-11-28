@@ -1236,8 +1236,8 @@ Place a voltage (TP) or current (IP) test point and run again</source>
         <translation>上一个标签页</translation>
     </message>
     <message>
-        <source>Primary + auxiliary + secondary (6 pins)</source>
-        <translation>初级 + 辅助绕组 + 次级（6 引脚）</translation>
+        <source>Primary + auxiliary + secondary</source>
+        <translation>初级 + 辅助 + 次级</translation>
     </message>
     <message>
         <source>Primary inductance L1</source>
@@ -1530,8 +1530,8 @@ to edit its parameters</source>
         <translation>正弦 (SIN)</translation>
     </message>
     <message>
-        <source>Single winding (1 primary + 1 secondary)</source>
-        <translation>单绕组（1 初级 + 1 次级）</translation>
+        <source>Single winding</source>
+        <translation>单绕组</translation>
     </message>
     <message>
         <source>Singular linear system (tiny pivot at row %1)</source>

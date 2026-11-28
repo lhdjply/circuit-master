@@ -1234,8 +1234,8 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
         <translation>Previous Tab</translation>
     </message>
     <message>
-        <source>Primary + auxiliary + secondary (6 pins)</source>
-        <translation>Primary + auxiliary + secondary (6 pins)</translation>
+        <source>Primary + auxiliary + secondary</source>
+        <translation>Primary + auxiliary + secondary</translation>
     </message>
     <message>
         <source>Primary inductance L1</source>
@@ -1528,8 +1528,8 @@ to edit its parameters</translation>
         <translation>Sine (SIN)</translation>
     </message>
     <message>
-        <source>Single winding (1 primary + 1 secondary)</source>
-        <translation>Single winding (1 primary + 1 secondary)</translation>
+        <source>Single winding</source>
+        <translation>Single winding</translation>
     </message>
     <message>
         <source>Singular linear system (tiny pivot at row %1)</source>

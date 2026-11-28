@@ -166,10 +166,11 @@ void PropertyPanel::buildUi()
     m_opRout->setToolTip(CSM_TR("Series resistance at the output; the output sags under load."));
     m_form->addRow(CSM_TR("Output resistance (Ω)"), m_opRout);
 
+    // 下拉项不要写「（1 初级 + 1 次级）」「（6 引脚）」这类补充说明：
+    // 面板只有 290 上下宽，长文字会把整行顶出可视区，右边被裁掉
     m_windings = new QComboBox(page);
-    m_windings->addItem(CSM_TR("Single winding (1 primary + 1 secondary)"),
-                        int(TransformerKind::Single));
-    m_windings->addItem(CSM_TR("Primary + auxiliary + secondary (6 pins)"),
+    m_windings->addItem(CSM_TR("Single winding"), int(TransformerKind::Single));
+    m_windings->addItem(CSM_TR("Primary + auxiliary + secondary"),
                         int(TransformerKind::PrimaryAuxSecondary));
     m_form->addRow(CSM_TR("Windings"), m_windings);
 
@@ -217,6 +218,7 @@ void PropertyPanel::buildUi()
     m_polarity->addItem(CSM_TR("Secondary dot at bottom (inverted)"), 1);
     m_form->addRow(CSM_TR("Dot polarity"), m_polarity);
 
+
     m_function = new QComboBox(page);
     m_function->addItem(CSM_TR("DC"), int(SourceFunction::Constant));
     m_function->addItem(CSM_TR("Sine (SIN)"), int(SourceFunction::Sine));
@@ -231,6 +233,17 @@ void PropertyPanel::buildUi()
     m_waveform->addItem(CSM_TR("Triangle"), int(Waveform::Triangle));
     m_waveform->addItem(CSM_TR("Sawtooth"), int(Waveform::Sawtooth));
     m_form->addRow(CSM_TR("Waveform"), m_waveform);
+
+    // 面板宽度只有 290 上下：所有下拉框都按「最短内容长度」定宽，
+    // 免得某一项的长文字把整行顶出可视区（右边被裁、底下多出横向滚动条）。
+    // 必须等这些下拉框都建好再统一设 —— 提前引用还没 new 的成员会直接崩。
+    for (QComboBox* box : {m_windings, m_meterMode, m_groundKind, m_polarity, m_function,
+                           m_waveform}) {
+        if (!box)
+            continue;
+        box->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+        box->setMinimumContentsLength(8);
+    }
 
     m_peak = makeEdit();
     m_peak->setToolTip(CSM_TR("**Peak** amplitude, measured from the DC offset"));

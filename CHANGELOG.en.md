@@ -47,6 +47,14 @@ repository root (same form as the tag, e.g. `v0.4.0`).
   rectifier: Vf of 0.3 / 0.7 / 1.2 / 3.0 V gives output peaks of
   4.76 / 4.37 / 3.87 / 2.10 V.
 
+### Fixed
+
+- **The transformer's property panel was cut off**: the two "Windings" entries carried
+  "(1 primary + 1 secondary)" and "(6 pins)", which pushed the whole panel wider than the
+  dock — the right-hand fields were clipped and a horizontal scrollbar appeared. The
+  entries are now "Single winding" and "Primary + auxiliary + secondary", and every combo
+  in the panel is sized by minimum contents length so a long entry can no longer widen it.
+
 ## [v0.6.0] - 2026-11-27
 
 This release turns the op-amp from an ideal part into a usable model — saturation,

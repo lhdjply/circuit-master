@@ -24,6 +24,8 @@
 #include <QDataStream>
 #include <QImage>
 #include <QComboBox>
+#include <QScrollArea>
+#include <QScrollBar>
 #include "ui/Dialogs.h"
 #include <QMenuBar>
 #include <QKeyEvent>
@@ -73,6 +75,7 @@ private slots:
     void rotationCanBeSetFromPanel();
     void transformerHasFourPinsAndPanel();
     void transformerWindingKindSwitchable();
+    void transformerPanelFitsTheDock();
     void groundCanBeRotated();
     void capacitorPolarityToggle();
     void optocouplerSymbolAndPanel();
@@ -336,6 +339,40 @@ void UiPanelTest::transformerHasFourPinsAndPanel()
     QVERIFY2(found, "属性面板应当显示初级电感");
 }
 
+
+void UiPanelTest::transformerPanelFitsTheDock()
+{
+    // 变压器的「绕组形式 / 同名端」下拉框最容易把面板顶宽：条目里带上
+    // 「（1 初级 + 1 次级）」这种补充说明时，右边会被裁掉、底下多出横向滚动条
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    auto* scene = window.findChild<SchematicScene*>();
+    auto* panel = window.findChild<PropertyPanel*>();
+    QVERIFY(scene && panel);
+
+    ComponentItem* t = scene->placeComponent(ComponentType::Transformer, QPointF(300, 300));
+    QVERIFY(t);
+    scene->clearSelection();
+    t->setSelected(true);
+    settle();
+
+    // 面板的「理想宽度」不能超过属性栏的最小宽度（290），否则一行会被裁掉
+    QVERIFY2(panel->minimumSizeHint().width() <= 290,
+             qPrintable(QStringLiteral("属性面板要 %1 px 宽，属性栏只有 290")
+                            .arg(panel->minimumSizeHint().width())));
+
+    // 底下不该出现横向滚动条
+    for (QScrollArea* area : window.findChildren<QScrollArea*>()) {
+        if (!area->widget() || area->widget() != panel)
+            continue;
+        QVERIFY2(!area->horizontalScrollBar()->isVisible(),
+                 "属性栏出现了横向滚动条，说明有一行比面板还宽");
+    }
+}
+
 void UiPanelTest::transformerWindingKindSwitchable()
 {
     MainWindow window;
@@ -354,7 +391,7 @@ void UiPanelTest::transformerWindingKindSwitchable()
     QComboBox* windings = nullptr;
     for (QComboBox* combo : window.findChildren<QComboBox*>())
         if (combo->count() == 2
-            && combo->itemText(1).contains(QStringLiteral("辅助绕组")))
+            && combo->itemText(1).contains(QStringLiteral("辅助")))
             windings = combo;
     QVERIFY2(windings, "属性面板应当有「绕组形式」下拉框");
 
