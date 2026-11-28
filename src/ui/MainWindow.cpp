@@ -1227,9 +1227,23 @@ void MainWindow::writeRecoveryCopies()
         record.savedAt = QDateTime::currentDateTime();
         QJsonObject root = document->scene->toCircuit().toJson();
         root.insert(QStringLiteral("analysis"), analysisToJson(document->options));
-    root.insert(QStringLiteral("page"), document->page.toJson());
+        root.insert(QStringLiteral("page"), document->page.toJson());
         record.circuit = root;
-        Autosave::write(record);
+
+        // 写失败必须说出来：磁盘满、家目录只读、配额用尽时副本根本不存在，
+        // 用户却以为「崩溃恢复开着」。以前返回值直接丢掉，出事后只会看到
+        // 「没有可恢复的内容」，和「确实没存过」分不出来。
+        // 定时器每几分钟跑一次，所以只在「从好到坏」时报一次，恢复后重新计数。
+        QString error;
+        if (!Autosave::write(record, &error)) {
+            if (!m_recoveryFailureReported) {
+                m_recoveryFailureReported = true;
+                appendLog(CSM_TR("Crash recovery copy could not be written: %1")
+                              .arg(error.isEmpty() ? CSM_TR("unknown error") : error));
+            }
+        } else {
+            m_recoveryFailureReported = false;
+        }
     }
 }
 

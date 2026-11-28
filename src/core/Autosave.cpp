@@ -1,5 +1,6 @@
 #include "core/Autosave.h"
 
+#include "core/Language.h"
 #include "core/SafeWrite.h"
 
 #include <QDir>
@@ -87,11 +88,17 @@ QString directory()
     return path;
 }
 
-bool write(const Record& record)
+bool write(const Record& record, QString* error)
 {
+    // 成功时也要清空：调用方可能复用同一个字符串，留着上次的内容会误导
+    if (error)
+        error->clear();
     const QString name = fileNameFor(record.id);
-    if (name.isEmpty())
+    if (name.isEmpty()) {
+        if (error)
+            *error = CSM_TR("The recovery record has no id.");
         return false;
+    }
 
     QJsonObject root;
     root.insert(QStringLiteral("id"), record.id);
@@ -102,7 +109,7 @@ bool write(const Record& record)
     // 走 SafeWrite（QSaveFile）：写副本的过程中崩溃，不能把上一次的副本也截成
     // 半截 —— 那样「崩溃恢复」正好在最需要它的时候失效。
     const QByteArray data = QJsonDocument(root).toJson(QJsonDocument::Compact);
-    return SafeWrite::bytes(QDir(directory()).filePath(name), data, nullptr);
+    return SafeWrite::bytes(QDir(directory()).filePath(name), data, error);
 }
 
 QVector<Record> pending()

@@ -487,6 +487,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>崩溃恢复</translation>
     </message>
     <message>
+        <source>Crash recovery copy could not be written: %1</source>
+        <translation>崩溃恢复副本没能写成：%1</translation>
+    </message>
+    <message>
         <source>Cross-platform schematic capture and circuit simulation.&lt;br&gt;&lt;br&gt;&lt;b&gt;Solver&lt;/b&gt;　modified nodal analysis (MNA) with Newton-Raphson iteration,&lt;br&gt;　　　　　supporting DC operating point, transient and AC small-signal sweep.&lt;br&gt;&lt;b&gt;Parts&lt;/b&gt;　resistors, capacitors, inductors, transformers, diodes, transistors,&lt;br&gt;　　　　　MOSFETs, op-amps, logic gates, switches, sources, multimeters, probes, grounds.</source>
         <translation>跨平台的电路原理图与仿真软件。&lt;br&gt;&lt;br&gt;&lt;b&gt;求解器&lt;/b&gt;　改进节点法（MNA）+ 牛顿-拉夫逊迭代，&lt;br&gt;　　　　　　支持直流工作点、瞬态与交流小信号扫频。&lt;br&gt;&lt;b&gt;元件&lt;/b&gt;　　电阻、电容、电感、变压器、二极管、三极管、&lt;br&gt;　　　　　　MOS、运放、逻辑门、开关、电源、万用表、测试点、接地。</translation>
     </message>
@@ -1786,6 +1790,10 @@ Restore them?</source>
         <translation>网络名不能为空</translation>
     </message>
     <message>
+        <source>The recovery record has no id.</source>
+        <translation>恢复记录缺少 id。</translation>
+    </message>
+    <message>
         <source>The solution contains non-finite values; the circuit may be diverging.</source>
         <translation>求解结果出现非有限数值，电路可能发散。</translation>
     </message>
@@ -2190,6 +2198,10 @@ Checked: normally closed, opens while held.</source>
     <message>
         <source>t = %1  ·  %2/div  ·  step %3</source>
         <translation>t = %1  ·  %2/div  ·  步长 %3</translation>
+    </message>
+    <message>
+        <source>unknown error</source>
+        <translation>未知错误</translation>
     </message>
     <message>
         <source>──────── Simulation ────────</source>

@@ -14,6 +14,7 @@
 #include <QJsonObject>
 #include <QTest>
 #include <cmath>
+#include <unistd.h>
 #include <limits>
 
 using namespace csm;
@@ -87,6 +88,7 @@ private slots:
     void jsonRoundTrip();
     void shortcutOverridesRoundTrip();
     void autosaveWritesAndClearsRecovery();
+    void autosaveReportsWriteFailures();
     void acDcSupplyExampleRuns();
     void tl431ExampleLoads();
     void pageSetupSizesAndOrientation();
@@ -508,6 +510,60 @@ void CoreModelTest::jsonRoundTrip()
     const Netlist net = loaded.buildNetlist();
     QVERIFY2(net.valid, qPrintable(net.error));
     QCOMPARE(net.nodeCount, 2);
+}
+
+
+void CoreModelTest::autosaveReportsWriteFailures()
+{
+    // 恢复副本写失败时必须能拿到原因：磁盘满 / 目录只读 / 配额用尽时副本
+    // 根本不存在，用户却以为「崩溃恢复开着」—— 出事后只会看到「没有可恢复
+    // 的内容」，和「确实没存过」分不出来。
+    QCoreApplication::setOrganizationName(QStringLiteral("CircuitMasterTest"));
+    QCoreApplication::setApplicationName(QStringLiteral("CircuitMasterTest"));
+    QSettings::setDefaultFormat(QSettings::IniFormat);
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, QDir::tempPath());
+    QFile::remove(QSettings().fileName());
+
+    const QString dataHome = QDir::tempPath() + QStringLiteral("/csm-autosave-fail-test");
+    QDir(dataHome).removeRecursively();
+    qputenv("XDG_DATA_HOME", dataHome.toUtf8());
+    Autosave::clearAll();
+
+    Autosave::Record record;
+    record.id = QStringLiteral("doc-fail");
+    record.originalPath = QStringLiteral("/tmp/foo.csm");
+    record.savedAt = QDateTime::currentDateTime();
+    record.circuit = QJsonObject{{QStringLiteral("components"), QJsonArray{1}}};
+
+    // 正常情况：成功且不填错误
+    QString error = QStringLiteral("未清空");
+    QVERIFY(Autosave::write(record, &error));
+    QVERIFY2(error.isEmpty(), qPrintable(error));
+
+    // 没有 id 的记录写不出去，要给出可读原因
+    Autosave::Record nameless = record;
+    nameless.id.clear();
+    QString reason;
+    QVERIFY(!Autosave::write(nameless, &reason));
+    QVERIFY2(!reason.isEmpty(), "写失败必须给出原因");
+
+    // 目录不可写：必须返回 false 并带上原因（root 用户跳过，权限拦不住它）
+    if (::geteuid() != 0) {
+        const QString dir = Autosave::directory();
+        const QFileDevice::Permissions original = QFile::permissions(dir);
+        QFile::setPermissions(dir, QFileDevice::ReadOwner | QFileDevice::ExeOwner);
+        Autosave::Record blocked = record;
+        blocked.id = QStringLiteral("doc-blocked");
+        QString blockedReason;
+        const bool ok = Autosave::write(blocked, &blockedReason);
+        QFile::setPermissions(dir, original);
+        QVERIFY2(!ok, "只读目录下不该写成功");
+        QVERIFY2(!blockedReason.isEmpty(), "只读目录写失败要给出原因");
+    }
+
+    Autosave::clearAll();
+    QDir(dataHome).removeRecursively();
+    QFile::remove(QSettings().fileName());
 }
 
 void CoreModelTest::acDcSupplyExampleRuns()

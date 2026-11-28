@@ -484,6 +484,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Crash recovery</translation>
     </message>
     <message>
+        <source>Crash recovery copy could not be written: %1</source>
+        <translation>Crash recovery copy could not be written: %1</translation>
+    </message>
+    <message>
         <source>Cross-platform schematic capture and circuit simulation.&lt;br&gt;&lt;br&gt;&lt;b&gt;Solver&lt;/b&gt;　modified nodal analysis (MNA) with Newton-Raphson iteration,&lt;br&gt;　　　　　supporting DC operating point, transient and AC small-signal sweep.&lt;br&gt;&lt;b&gt;Parts&lt;/b&gt;　resistors, capacitors, inductors, transformers, diodes, transistors,&lt;br&gt;　　　　　MOSFETs, op-amps, logic gates, switches, sources, multimeters, probes, grounds.</source>
         <translation>Cross-platform schematic capture and circuit simulation.&lt;br&gt;&lt;br&gt;&lt;b&gt;Solver&lt;/b&gt;　modified nodal analysis (MNA) with Newton-Raphson iteration,&lt;br&gt;　　　　　supporting DC operating point, transient and AC small-signal sweep.&lt;br&gt;&lt;b&gt;Parts&lt;/b&gt;　resistors, capacitors, inductors, transformers, diodes, transistors,&lt;br&gt;　　　　　MOSFETs, op-amps, logic gates, switches, sources, multimeters, probes, grounds.</translation>
     </message>
@@ -1784,6 +1788,10 @@ Restore them?</translation>
         <translation>The net name cannot be empty</translation>
     </message>
     <message>
+        <source>The recovery record has no id.</source>
+        <translation>The recovery record has no id.</translation>
+    </message>
+    <message>
         <source>The solution contains non-finite values; the circuit may be diverging.</source>
         <translation>The solution contains non-finite values; the circuit may be diverging.</translation>
     </message>
@@ -2188,6 +2196,10 @@ Checked: normally closed, opens while held.</translation>
     <message>
         <source>t = %1  ·  %2/div  ·  step %3</source>
         <translation>t = %1  ·  %2/div  ·  step %3</translation>
+    </message>
+    <message>
+        <source>unknown error</source>
+        <translation>unknown error</translation>
     </message>
     <message>
         <source>──────── Simulation ────────</source>

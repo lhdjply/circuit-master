@@ -280,6 +280,8 @@ private:
     QAction* m_actSave = nullptr;
     QAction* m_actSaveAs = nullptr;
     QAction* m_actPageSetup = nullptr;
+    /// 崩溃恢复副本写失败是否已经提示过（避免每次定时器都刷一行日志）
+    bool m_recoveryFailureReported = false;
     QAction* m_actPrint = nullptr;
     QAction* m_actCloseTab = nullptr;
     QAction* m_actNextTab = nullptr;

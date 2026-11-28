@@ -48,8 +48,10 @@ struct Record {
     QJsonObject circuit;
 };
 
-/// 写一份记录（覆盖同 id 的旧记录）
-bool write(const Record& record);
+/// 写一份记录（覆盖同 id 的旧记录）。
+/// 失败时（磁盘满、目录只读、配额用尽）返回 false 并填 error —— 调用方必须
+/// 让用户知道：崩溃恢复副本没写成，等于这次会话没有保护。
+bool write(const Record& record, QString* error = nullptr);
 
 /// 列出所有可恢复记录，按保存时间从新到旧
 QVector<Record> pending();

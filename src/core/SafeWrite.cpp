@@ -7,6 +7,8 @@ namespace SafeWrite {
 
 bool bytes(const QString& path, const QByteArray& data, QString* error)
 {
+    if (error)
+        error->clear();
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly)) {
         if (error)

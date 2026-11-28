@@ -77,6 +77,14 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Fixed
 
+- **A failed crash-recovery copy was reported nowhere**: the timer writes a recovery copy
+  every two minutes, but the return value of `Autosave::write()` was thrown away — with a
+  full disk, a read-only home directory or an exhausted quota no copy existed at all while
+  the UI still claimed crash recovery was on, and after a real crash the only message was
+  "nothing to recover", indistinguishable from "nothing was ever saved". Failures now go to
+  the log with their reason (the timer runs every few minutes, so it reports once when the
+  state flips from good to bad). `Autosave::write()` also gained an `error` out-parameter
+  which is cleared on success — reusing one string used to keep the previous message.
 - **Loading a file no longer silently changes the circuit**: `.csm` was read with no
   validation at all, and three cases altered the circuit without a word —
   duplicate component ids made the netlist's per-id pin table overwrite one entry, so two
