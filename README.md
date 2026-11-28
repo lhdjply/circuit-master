@@ -525,7 +525,18 @@ scripts/package-linux-tarball.sh --arch amd64 --from-deb ../circuit-master_0.5.2
 界面文案一律写英文（`CSM_TR("Open File")`），中文放在
 `resources/translations/circuit-master_zh_CN.ts`；改了文案跑
 `python3 scripts/update-translations.py`（或 `update_translations` 目标），
-`--check` 只查漏翻。更新日志有中英两份：`CHANGELOG.md` 与 `CHANGELOG.en.md`。
+`--check` 只查漏翻。
+
+更新日志有中英两份：`CHANGELOG.md` 与 `CHANGELOG.en.md`。**新改动一律写在
+`## [未发布]` 下面** —— 已发布版本的段落发过 tag 之后就不该再动。这条靠人眼
+很容易出错（项目里已经踩过三次），所以做成了检查：
+
+```bash
+python3 scripts/check-changelog.py          # 或 cmake --build build --target check_changelog
+```
+
+它拿每个 `## [vX.Y.Z]` 段落与同名 git tag 里那一版逐字比对，直接指出哪一行
+被改动了。
 
 
 提交信息遵循 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/)：

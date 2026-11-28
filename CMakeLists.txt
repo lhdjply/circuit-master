@@ -224,6 +224,14 @@ add_custom_target(check_translations
     COMMENT "Checking for untranslated strings"
 )
 
+# 更新日志：已发布的版本段落不许再改（新改动写「未发布」）。
+# 这条曾经连着出过三次错，做成构建目标免得再靠肉眼检查。
+add_custom_target(check_changelog
+    COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check-changelog.py
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Checking that released changelog sections are untouched"
+)
+
 if(Qt6LinguistTools_FOUND)
     # 注意要挂在 csm_core（而非可执行文件）上：测试只链库、不链可执行文件，
     # 挂在可执行文件上的话测试里拿不到 .qm，界面语言就退回英文了。
