@@ -117,10 +117,6 @@ void PropertyPanel::buildUi()
     m_refdes = makeEdit();
     m_form->addRow(CSM_TR("Designator"), m_refdes);
 
-    m_rotation = makeEdit(CSM_TR("e.g. 45"));
-    m_rotation->setToolTip(CSM_TR("In degrees; any angle works, e.g. 15, 45, 60"));
-    m_form->addRow(CSM_TR("Rotation (°)"), m_rotation);
-
     m_value = makeEdit(CSM_TR("e.g. 10k / 4.7u"));
     m_form->addRow(CSM_TR("Value"), m_value);
     m_valueLabel = qobject_cast<QLabel*>(m_form->labelForField(m_value));
@@ -358,22 +354,6 @@ void PropertyPanel::buildUi()
             [this](int) { applyValue(); });
     connect(m_groundKind, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int) { applyValue(); });
-    connect(m_rotation, &QLineEdit::editingFinished, this, [this] {
-        if (!m_item || m_updating)
-            return;
-        QString reason;
-        bool ok = false;
-        const double degrees = parseQuantity(m_rotation->text(), UnitKind::None, &ok, &reason);
-        if (!ok) {
-            markInvalid(m_rotation, reason);
-            return;
-        }
-        markValid(m_rotation);
-        m_item->setRotationAngle(int(std::lround(degrees)));
-        m_rotation->setText(QString::number(m_item->component().rotation));
-        emit changed();
-    });
-
     connect(m_function, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &PropertyPanel::applyFunction);
     connect(m_closed, &QCheckBox::toggled, this, &PropertyPanel::applyClosed);
@@ -473,7 +453,6 @@ void PropertyPanel::refreshFromItem()
     m_acFrequency->setText(quantityText(c.acFrequency, UnitKind::Hertz));
     m_polarity->setCurrentIndex(m_polarity->findData(c.secondaryInverted ? 1 : 0));
     m_groundKind->setCurrentIndex(m_groundKind->findData(int(c.groundKind)));
-    m_rotation->setText(QString::number(c.rotation));
     m_function->setCurrentIndex(m_function->findData(int(c.function)));
 
     const UnitKind unit = sourceUnitFor(c.type);

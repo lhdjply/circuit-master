@@ -838,10 +838,6 @@ With them wired, the output swing follows the real supply rails (minus %1 V) ins
         <translation>IGBT</translation>
     </message>
     <message>
-        <source>In degrees; any angle works, e.g. 15, 45, 60</source>
-        <translation>单位是度，可以填任意角度，例如 15、45、60</translation>
-    </message>
-    <message>
         <source>Inductor</source>
         <translation>电感</translation>
     </message>
@@ -1510,10 +1506,6 @@ Place a voltage (TP) or current (IP) test point and run again</source>
         <translation>旋转 90°</translation>
     </message>
     <message>
-        <source>Rotation (°)</source>
-        <translation>旋转角度 (°)</translation>
-    </message>
-    <message>
         <source>Run Again</source>
         <translation>重新仿真</translation>
     </message>
@@ -2176,10 +2168,6 @@ Checked: normally closed, opens while held.</source>
     <message>
         <source>e.g. 3.3</source>
         <translation>例如 3.3</translation>
-    </message>
-    <message>
-        <source>e.g. 45</source>
-        <translation>例如 45</translation>
     </message>
     <message>
         <source>e.g. 5%1</source>

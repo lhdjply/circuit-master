@@ -836,10 +836,6 @@ With them wired, the output swing follows the real supply rails (minus %1 V) ins
         <translation>IGBT</translation>
     </message>
     <message>
-        <source>In degrees; any angle works, e.g. 15, 45, 60</source>
-        <translation>In degrees; any angle works, e.g. 15, 45, 60</translation>
-    </message>
-    <message>
         <source>Inductor</source>
         <translation>Inductor</translation>
     </message>
@@ -1508,10 +1504,6 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
         <translation>Rotate 90°</translation>
     </message>
     <message>
-        <source>Rotation (°)</source>
-        <translation>Rotation (°)</translation>
-    </message>
-    <message>
         <source>Run Again</source>
         <translation>Run Again</translation>
     </message>
@@ -2174,10 +2166,6 @@ Checked: normally closed, opens while held.</translation>
     <message>
         <source>e.g. 3.3</source>
         <translation>e.g. 3.3</translation>
-    </message>
-    <message>
-        <source>e.g. 45</source>
-        <translation>e.g. 45</translation>
     </message>
     <message>
         <source>e.g. 5%1</source>

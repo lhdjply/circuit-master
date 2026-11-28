@@ -53,7 +53,6 @@ private:
 
     QFormLayout* m_form = nullptr;
     QLineEdit* m_refdes = nullptr;
-    QLineEdit* m_rotation = nullptr;   // 旋转角度（可自由输入 15 / 45 / 60…）
     QLineEdit* m_value = nullptr;
     QCheckBox* m_polarized = nullptr;
     QLineEdit* m_k = nullptr;

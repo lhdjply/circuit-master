@@ -10,6 +10,9 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Changed
 
+- **The property panel no longer has a "Rotation (°)" field**: it accepted any angle, but
+  schematics are drawn in 90° steps and a stray value left parts sitting at odd angles.
+  Rotation stays on the space bar and the context menu, 90° at a time.
 - **Wires are drawn with right angles only, and the corner stays where it settled**:
   dragging diagonally no longer produces a slanted segment — an elbow is inserted so the run
   becomes one horizontal plus one vertical step. Once the corner is chosen it is kept: drag

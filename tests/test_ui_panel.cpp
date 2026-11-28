@@ -72,7 +72,7 @@ private slots:
     void initTestCase();
     void propertyPanelPlaceholderIsCentred();
     void valueWithUnits();
-    void rotationCanBeSetFromPanel();
+    void rotationMovesPins();
     void transformerHasFourPinsAndPanel();
     void transformerWindingKindSwitchable();
     void transformerPanelFitsTheDock();
@@ -263,8 +263,10 @@ void UiPanelTest::valueWithUnits()
     QVERIFY(valueEdit->text().contains(QStringLiteral("100")));
 }
 
-void UiPanelTest::rotationCanBeSetFromPanel()
+void UiPanelTest::rotationMovesPins()
 {
+    // 属性面板里不再有「旋转角度」输入框（旋转统一走空格键 / 旋转菜单），
+    // 但旋转本身仍然要正确带动引脚位置 —— 导线靠引脚坐标接上去。
     MainWindow window;
     window.resize(1200, 800);
     window.show();
@@ -274,39 +276,31 @@ void UiPanelTest::rotationCanBeSetFromPanel()
     QVERIFY(scene);
     ComponentItem* item = scene->placeComponent(ComponentType::Resistor, QPointF(300, 300));
     QVERIFY(item);
-    scene->clearSelection();
-    item->setSelected(true);
-    settle();
 
-    // 属性面板里的「旋转角度」可以填任意角度
-    QLineEdit* rotation = nullptr;
+    // 面板里不该再有那个输入框
     for (QLineEdit* edit : window.findChildren<QLineEdit*>())
-        if (edit->text() == QStringLiteral("0") && edit->toolTip().contains(QStringLiteral("角度")))
-            rotation = edit;
-    QVERIFY2(rotation, "属性面板应当有「旋转角度」输入框");
+        QVERIFY2(!edit->toolTip().contains(QStringLiteral("角度")),
+                 "属性面板不该再有「旋转角度」输入框");
 
-    const auto setAngle = [&](const QString& text) {
-        rotation->setText(text);
-        emit rotation->editingFinished();
+    const auto setAngle = [&](int degrees) {
+        item->setRotationAngle(degrees);
         settle();
     };
 
-    setAngle(QStringLiteral("90"));
+    setAngle(90);
     QCOMPARE(item->component().rotation, 90);
     QCOMPARE(item->pinScenePositions().at(0), QPointF(300, 270));
 
-    setAngle(QStringLiteral("180"));
+    setAngle(180);
     QCOMPARE(item->component().rotation, 180);
     QCOMPARE(item->pinScenePositions().at(0), QPointF(330, 300));
 
-    // 自由角度：45° 不再是 90° 的整数倍
-    setAngle(QStringLiteral("45"));
+    // 自由角度：45° 不是 90° 的整数倍，引脚照样吸附到 10 px 网格
+    setAngle(45);
     QCOMPARE(item->component().rotation, 45);
-    // 引脚吸附到 10 px 网格，斜放也能和导线端点对齐
-    const QPointF pin45 = item->pinScenePositions().at(0);
-    QCOMPARE(pin45, QPointF(280, 280));
+    QCOMPARE(item->pinScenePositions().at(0), QPointF(280, 280));
 
-    setAngle(QStringLiteral("0"));
+    setAngle(0);
     QCOMPARE(item->component().rotation, 0);
 }
 
