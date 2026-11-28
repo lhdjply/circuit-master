@@ -48,7 +48,7 @@ perf(ui): 仅在需要时重算节点编号
 docs: 补充 MNA 装配公式与验证数据
 test(core): 增加二极管整流基准用例
 build: 将 Qt 最低版本提升到 6.5
-chore: 发布 0.2.0
+chore(release): v0.2.0
 ```
 
 破坏性变更：
