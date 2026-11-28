@@ -3,6 +3,7 @@
 ; 本地编译（在仓库根目录，先跑过 windeployqt 那套打包流程，暂存目录里要有
 ; 主程序 + Qt 运行时）：
 ;   set /p MyVer=<VERSION
+;   set MyVer=%MyVer:v=%       （VERSION 里写的是 v0.6.0，这里去掉开头的 v）
 ;   iscc /DMyAppVersion=%MyVer% /DMyArch=x64 /DMyArchAllowed=x64compatible ^
 ;        /DMySourceDir=%CD%\dist\circuit-master-%MyVer%-windows-x64 ^
 ;        /DMyOutputDir=%CD%\dist /DMyRepoRoot=%CD% ^
@@ -28,8 +29,11 @@
 ; resources/win/circuit-master.rc，与本脚本是同一份 ico；
 ; 这里仍随包装进 {app}，供安装程序、快捷方式与卸载项使用。
 
+; 版本号必须由调用方传入（CI 从仓库根目录的 VERSION 读，本地见上面的命令行）。
+; 以前这里兜底成 "0.2.0"，忘了传参时会安安静静打出一个版本号早就过期的安装包：
+; 文件名、控制面板里的版本、升级判断全是错的，比编译失败难发现得多。
 #ifndef MyAppVersion
-  #define MyAppVersion "0.2.0"
+  #error "MyAppVersion is not defined: pass /DMyAppVersion=<version> (see the command line at the top of this file). The CI reads it from VERSION."
 #endif
 
 ; MyArch 只用于产物文件名；MyArchAllowed 是 Inno 的目标架构约束。
