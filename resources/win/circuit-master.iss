@@ -3,7 +3,7 @@
 ; 本地编译（在仓库根目录，先跑过 windeployqt 那套打包流程，暂存目录里要有
 ; 主程序 + Qt 运行时）：
 ;   set /p MyVer=<VERSION
-;   set MyVer=%MyVer:v=%       （VERSION 里写的是 v0.6.0，这里去掉开头的 v）
+;   set MyVer=%MyVer:v=%       （VERSION 里写的是 v0.7.0，这里去掉开头的 v）
 ;   iscc /DMyAppVersion=%MyVer% /DMyArch=x64 /DMyArchAllowed=x64compatible ^
 ;        /DMySourceDir=%CD%\dist\circuit-master-%MyVer%-windows-x64 ^
 ;        /DMyOutputDir=%CD%\dist /DMyRepoRoot=%CD% ^

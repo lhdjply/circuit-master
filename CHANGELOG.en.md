@@ -6,135 +6,45 @@ numbering follows [Semantic Versioning](https://semver.org/).
 The single source of truth for the version is the `VERSION` file at the
 repository root (same form as the tag, e.g. `v0.4.0`).
 
-## [Unreleased]
+## [v0.7.0] - 2026-11-28
+
+This release takes the sheet of paper seriously: the canvas *is* a sheet, and it
+prints and exports at that size. Op-amps also gained power pins.
 
 ### Added
 
-- **Op-amps can have V+ / V- power pins**: a "Power pins" checkbox in the property panel
-  adds two pins (V+ / V-, pins 4 and 5) and makes the output swing follow the real supply
-  rails (1.5 V short of each), so changing the supply no longer means editing parameters.
-  Leaving it unchecked keeps the original three-terminal model with the two swing fields.
-  The rails carry a 1 mA quiescent current so V+ is not left floating when only the supply
-  is wired.
-- **Update packages are verified with SHA-256**: every package's hash goes into the update
-  manifest (`assets[].sha256` in `latest.json`) — there is no separate `hashes.sha256`
-  file to ignore. The client hashes the download as it streams, then compares before
-  installing: on a mismatch the file is discarded and the next mirror is tried, and if all
-  of them disagree it reports both the expected and the actual digest.
-  Nothing was checked before — a mirror could have served any file at all. Releases that
-  predate this still install, but the UI says the package was not verified.
-- **Paper, orientation and scale are adjustable when printing**: "Paper" is a dropdown
-  (A5 … A1, defaulting to the sheet's own setting), "Orientation" switches landscape /
-  portrait and "Scale" offers fit-to-sheet, actual size (1:1) or a custom percentage —
-  any change redraws the preview immediately. When the paper matches the sheet,
-  fit-to-sheet *is* 1:1 (both render pixel-for-pixel the same); when the paper is
-  smaller, fit-to-sheet squeezes the drawing onto one page while 1:1 keeps its real size
-  and spills across pages.
-- **Colour or black-and-white**: two radio buttons next to "Orientation". In black and
-  white the sheet is converted to grayscale before drawing rather than relying on the
-  device, so the preview and the printed job cannot diverge.
-- **Anything that does not fit spills onto more pages**: printing an A3 drawing 1:1 onto
-  A4 tiles it across pages; the preview gained Previous / Next buttons and a "Page N / M"
-  readout, and the printed job has the same pages.
-- A5 was added to the page setup as well.
-- **Printing and print preview**: the File menu gained "Print Preview…" (Ctrl+Alt+P) and
-  "Print…" (Ctrl+P). Paper size and orientation follow the page setup, and the printed area matches
-  "Fit to Sheet"; the preview *is* the printed output, so nothing shifts between the two.
-- **PDF export**: "Save As" gained a PDF file type. It exports the **whole sheet** — the
-  PDF page takes the size from the page setup (A4 / A3 / A2 / A1 / custom, orientation
-  included) and the drawing fills it, i.e. exactly what "Fit to Sheet" shows. The grid is
-  not printed and selection highlights are left out.
-- **Page setup**: right-click on empty canvas → "Page Setup…", or *File → Page Setup*
-  (default **Ctrl+Shift+P**, remappable in Settings), picks a paper size (A4, A3,
-  A2, A1 or custom) and an orientation (landscape or portrait); a custom size takes
-  millimetres. The canvas *is* that sheet: the grid is drawn inside it and its edge is a
-  **double solid frame** — outer line 5 mm in from the paper edge, inner line 10 mm,
-  as on an engineering drawing — with no white fill and no size caption. Changing the paper
-  re-centres the view. A new sheet defaults to **A4 landscape**; the paper is stored in
-  the `.csm` under `"page"`, and files without that section open on A4. All **eight
-  examples had their drawing re-centred on the sheet** (labels included, nothing sticking
-  out); the flyback drawing is larger than A4, so that one uses A3 landscape. When a
-  drawing is larger than the sheet, the canvas grows to cover it so the part outside the
-  sheet stays reachable.
-- **Fit to Sheet**: the toolbar gained a button right after "Fit to Window" (also in the
-  View menu, default **Ctrl+Shift+0**) that zooms so the whole sheet fills the view — handy
-  for seeing where the frame sits on a large drawing. "Fit to Window" still targets the
-  drawing itself.
-- **Right-drag pans the canvas**: hold the right button and the drawing moves with the
-  cursor — the cursor becomes a hand on press and returns to an arrow on release, the
-  same feel as middle-drag. A right click without moving still opens the usual context
-  menu (and in wire mode the right button still finishes the wire).
-- **Zener diode**: the Semiconductors category gained a DZ part. Forward it behaves like
-  an ordinary diode (with an adjustable drop); reverse-biased it conducts at its
-  breakdown voltage and clamps there. The property panel takes the breakdown voltage Vz
-  (5.1 V by default). Measured with Vz = 5.1 V and a 1 kΩ series resistor: a 20 V supply
-  clamps at 5.09 V, a 3 V supply (below breakdown) passes 3.00 V unchanged, and the
-  3.3 V / 12 V parts line up too.
+- **Page setup**: A5, A4, A3, A2, A1 or a custom size in millimetres, either
+  orientation; the grid is drawn only inside the sheet and the border is a double
+  frame. The paper is stored with the file, and all eight examples were re-centred.
+- **Printing and print preview**: *File → Print* (Ctrl+P) puts the printer on the
+  left and a live preview on the right; paper, orientation, scale (fit to sheet,
+  actual size or custom) and colour or black-and-white are adjustable. A drawing
+  that does not fit spills onto more pages, with previous/next in the preview.
+- **PDF export**: *Save As* offers PDF, using the paper size from the page setup.
+- **Op-amp power pins**: optional V+ / V- pins take the output swing from the real
+  supply, so changing the supply no longer means editing parameters.
+- **Zener diode**: a new DZ part that clamps at its breakdown voltage.
+- **"Fit to Sheet" button**: fills the view with the whole sheet.
 
 ### Changed
 
-- **A diode's forward drop is now adjustable**: the property panel gained a
-  "Forward drop Vf" row (0.7 V by default) and the canvas label shows it too (it used
-  to be a hard-coded `1N4148`). The model calibrates the saturation current from the
-  drop at 20 mA and keeps the 1N4148 emission coefficient of 1.752 — changing the drop
-  shifts the whole I-V curve without changing its slope. Measured on a half-wave
-  rectifier: Vf of 0.3 / 0.7 / 1.2 / 3.0 V gives output peaks of
-  4.76 / 4.37 / 3.87 / 2.10 V.
+- The diode forward drop is adjustable (0.7 V by default) and shown on the canvas.
+- The AC multimeter measures over one period of its own frequency (20-500 Hz)
+  instead of a fixed 50 Hz.
+- Dragging the canvas with the right button now pans.
 
 ### Fixed
 
-- **The AC multimeter finally honours its own frequency**: three links were broken — the
-  "AC frequency" field in the property panel was displayed but never written back to the
-  component, the simulation hardcoded a 0.02 s window (50 Hz), and the value was saved but
-  never read back. Typing 400 Hz therefore did nothing; the window was always 50 Hz. The
-  window is now one period of that meter's own frequency, limited to **20-500 Hz** (values
-  outside clamp to the bounds, blank means 50 Hz), and the tooltip takes the range from the
-  constants. acMeterHonoursConfiguredFrequency proves the window really changes — a 300 Hz
-  window already reads at 5 ms while a 50 Hz one still shows dashes — and checks that the
-  live and batch paths agree.
-- **A failed crash-recovery copy was reported nowhere**: the timer writes a recovery copy
-  every two minutes, but the return value of `Autosave::write()` was thrown away — with a
-  full disk, a read-only home directory or an exhausted quota no copy existed at all while
-  the UI still claimed crash recovery was on, and after a real crash the only message was
-  "nothing to recover", indistinguishable from "nothing was ever saved". Failures now go to
-  the log with their reason (the timer runs every few minutes, so it reports once when the
-  state flips from good to bad). `Autosave::write()` also gained an `error` out-parameter
-  which is cleared on success — reusing one string used to keep the previous message.
-- **Loading a file no longer silently changes the circuit**: `.csm` was read with no
-  validation at all, and three cases altered the circuit without a word —
-  duplicate component ids made the netlist's per-id pin table overwrite one entry, so two
-  parts ended up on the same node (a 5 V divider measured 0 V instead of 2.5 V); an
-  unrecognised type tag quietly became a "0 Ω resistor"; and a non-finite number put inf
-  into the matrix, so the solve returned nan and the user only saw "did not converge".
-  Duplicate ids are now renumbered, unknown types are skipped, non-finite values fall back
-  to their defaults, and each case leaves a note in the log. Ground / multimeter / gate
-  modes are clamped to their valid range too (they used to be cast straight from any
-  integer, leaving switches without a matching branch).
-- **Editing a parameter mid-run reset the capacitor voltage to the DC operating point**:
-  while the live scope was running, changing a resistor or capacitor value re-solved the
-  DC operating point and wrote it back into the capacitor voltage, so a half-charged
-  capacitor jumped straight to its steady-state value (RC with a 5 V supply and τ = 1 ms:
-  3.17 V → 5 V at t = 1 ms). Now, when the topology is unchanged and only values moved,
-  the capacitor voltages and inductor currents are kept as they were and the next step
-  continues with the new values; only a real topology change restarts from the operating
-  point. Guarded by liveParameterChangeKeepsCapacitorVoltage (the difference across the
-  edit must stay under 0.01 V).
-- **Page tiling was wrong (a strip went missing between pages, and the two scales
-  disagreed when paper matched the sheet)**: the geometry now lives in `planPrint()`
-  with unit tests — with paper equal to the sheet, fit-to-sheet and actual size produce
-  the same plan (one page, same position, same scale); with smaller paper the drawing is
-  tiled by the **printable area** (tiling by the whole page loses the 4.2 mm that falls
-  into the printer margin, so neighbouring pages no longer line up). Each page is also
-  clipped explicitly, so pages no longer bleed into one another in the preview.
-- **The library background differed from the property panel**: the list used Base
-  (pure white) while the panel next to it used the window colour, so the two looked like
-  different layers. The library now uses the window colour too, with accent-tinted hover
-  and selection, and follows theme changes.
-- **The transformer's property panel was cut off**: the two "Windings" entries carried
-  "(1 primary + 1 secondary)" and "(6 pins)", which pushed the whole panel wider than the
-  dock — the right-hand fields were clipped and a horizontal scrollbar appeared. The
-  entries are now "Single winding" and "Primary + auxiliary + secondary", and every combo
-  in the panel is sized by minimum contents length so a long entry can no longer widen it.
+- **Editing a parameter during a live run reset the capacitor voltage** to the DC
+  operating point, so a half-charged capacitor jumped to its steady-state value.
+- **File loading is validated**: duplicate ids, unknown part types and non-finite
+  numbers are reported instead of silently changing the circuit.
+- **A failed crash-recovery copy is now reported** — previously a full disk left no
+  trace and the only message after a crash was "nothing to recover".
+- **Printing**: landscape paper came out portrait, the frame was clipped at the
+  paper edge, and pagination was off.
+- The transformer's property panel no longer clips; the parts library matches the
+  property panel background.
 
 ## [v0.6.0] - 2026-11-27
 

@@ -12,7 +12,10 @@
     python3 scripts/check-changelog.py          # 检查
     python3 scripts/check-changelog.py --list    # 顺便列出各段落状态
 
-退出码：0 = 没问题，1 = 有已发布段落被改动 / 缺「未发布」段落
+退出码：0 = 没问题，1 = 有已发布段落被改动
+
+不要求「## [未发布]」段落存在：刚发完版时这个标题本来就该去掉（发布提交里
+「未发布」直接变成版本号），等下一次有改动再加回来。
 """
 
 from __future__ import annotations
@@ -76,9 +79,6 @@ def main() -> int:
             continue
 
         current = sections(path.read_text())
-        if not any(key in UNRELEASED for key, _ in current):
-            print(f"{name}：缺少「## [未发布]」段落", file=sys.stderr)
-            failures += 1
 
         for key, body in current:
             if key in UNRELEASED:
