@@ -1,6 +1,7 @@
 #include "core/Circuit.h"
 #include "core/Units.h"
 #include "core/Autosave.h"
+#include "core/PageSetup.h"
 #include "core/Shortcuts.h"
 #include "core/UpdateChecker.h"
 #include "csm_version.h"
@@ -86,7 +87,76 @@ private slots:
     void autosaveWritesAndClearsRecovery();
     void acDcSupplyExampleRuns();
     void tl431ExampleLoads();
+    void pageSetupSizesAndOrientation();
+    void pageSetupDefaultIsA4Landscape();
+    void pageSetupRoundTripsThroughJson();
 };
+
+
+void CoreModelTest::pageSetupSizesAndOrientation()
+{
+    // 纸张尺寸按 ISO 216：竖版 A4 是 210 × 297，横向就反过来
+    PageSetup page;
+    page.size = PaperSize::A4;
+    page.landscape = false;
+    QCOMPARE(page.sizeMm(), QSizeF(210.0, 297.0));
+    page.landscape = true;
+    QCOMPARE(page.sizeMm(), QSizeF(297.0, 210.0));
+
+    // 画布坐标：1 mm = 96/25.4 个单位
+    const QRectF rect = page.sceneRect();
+    QVERIFY2(std::abs(rect.width() - 297.0 * 96.0 / 25.4) < 0.01,
+             qPrintable(QStringLiteral("宽 %1").arg(rect.width())));
+    QVERIFY2(std::abs(rect.height() - 210.0 * 96.0 / 25.4) < 0.01, "高对不上");
+    // 左上角钉在原点
+    QCOMPARE(rect.topLeft(), QPointF(0.0, 0.0));
+
+    // 自定义尺寸：横向时宽取大的那个，别让「选自定义 + 点横向」毫无反应
+    page.size = PaperSize::Custom;
+    page.customWidthMm = 400.0;
+    page.customHeightMm = 300.0;
+    page.landscape = true;
+    QCOMPARE(page.sizeMm(), QSizeF(400.0, 300.0));
+    page.landscape = false;
+    QCOMPARE(page.sizeMm(), QSizeF(300.0, 400.0));
+}
+
+void CoreModelTest::pageSetupDefaultIsA4Landscape()
+{
+    // 默认图纸就是 A4 横向，而且默认值不写进文件
+    const PageSetup fallback = PageSetup::fromJson(QJsonObject());
+    QCOMPARE(fallback.size, PaperSize::A4);
+    QCOMPARE(fallback.landscape, true);
+    QVERIFY(fallback.isDefault());
+
+    PageSetup portrait = fallback;
+    portrait.landscape = false;
+    QVERIFY(!portrait.isDefault());
+
+    PageSetup a3 = fallback;
+    a3.size = PaperSize::A3;
+    QVERIFY(!a3.isDefault());
+}
+
+void CoreModelTest::pageSetupRoundTripsThroughJson()
+{
+    PageSetup page;
+    page.size = PaperSize::Custom;
+    page.landscape = false;
+    page.customWidthMm = 320.0;
+    page.customHeightMm = 240.0;
+
+    const PageSetup back = PageSetup::fromJson(page.toJson());
+    QCOMPARE(back.size, PaperSize::Custom);
+    QCOMPARE(back.landscape, false);
+    QCOMPARE(back.customWidthMm, 320.0);
+    QCOMPARE(back.customHeightMm, 240.0);
+
+    // 缺键的老文件：默认 A4 横向
+    const PageSetup fallback = PageSetup::fromJson(QJsonObject());
+    QCOMPARE(fallback.size, PaperSize::A4);
+    QCOMPARE(fallback.landscape, true);
+}
 
 void CoreModelTest::netLabelsWithSameNameConnectNets()
 {

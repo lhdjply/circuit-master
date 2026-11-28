@@ -44,8 +44,27 @@ QPoint gridKey(const QPointF& p)
 SchematicScene::SchematicScene(QObject* parent)
     : QGraphicsScene(parent)
 {
-    setSceneRect(-2000.0, -1500.0, 4000.0, 3000.0);
+    setSceneRect(m_page.sceneRect());
     setBackgroundBrush(Qt::NoBrush);
+}
+
+void SchematicScene::setPageSetup(const PageSetup& page)
+{
+    m_page = page;
+    updateCanvasRect();
+    update();
+}
+
+void SchematicScene::updateCanvasRect()
+{
+    const QRectF page = m_page.sceneRect();
+    const QRectF content = itemsBoundingRect();
+    // 装得下就正好是这张纸；装不下（示例「220 V 转 12 V」就是）才扩大到
+    // 内容范围，否则纸外的元件滚不过去、也就编辑不了
+    if (!content.isNull() && !page.contains(content))
+        setSceneRect(page.united(content.adjusted(-120.0, -120.0, 120.0, 120.0)));
+    else
+        setSceneRect(page);
 }
 
 void SchematicScene::clearAll()
@@ -74,6 +93,10 @@ void SchematicScene::load(const Circuit& circuit)
     // 这里必须重算一次，否则它们会一直显示「没贴在导线上」
     updateProbeAttachments();
     refresh();
+    // 载入的图纸可能比默认的 A4 大（示例「220 V 转 12 V」就是）：画布按内容扩
+    // 一次，超出的部分还能滚过去编辑。只在载入时算 —— 拖元件的过程中改
+    // sceneRect 会让视图跳位。
+    updateCanvasRect();
 }
 
 Circuit SchematicScene::toCircuit() const
@@ -115,6 +138,7 @@ bool probePointOnSegment(const QPoint& p, const QPoint& a, const QPoint& b)
     return std::min(a.x(), b.x()) <= p.x() && p.x() <= std::max(a.x(), b.x())
            && std::min(a.y(), b.y()) <= p.y() && p.y() <= std::max(a.y(), b.y());
 }
+
 } // namespace
 
 void SchematicScene::updateProbeAttachments()
@@ -1231,6 +1255,9 @@ void SchematicScene::drawBackground(QPainter* painter, const QRectF& rect)
     painter->save();
     painter->fillRect(rect, Theme::canvas());
 
+    // 纸张矩形：网格与边框都要用
+    const QRectF paper = m_page.sceneRect();
+
     if (m_showGrid && !rect.isEmpty()) {
         const qreal scale = painter->worldTransform().m11();
         const qreal grid = Grid::size();
@@ -1241,19 +1268,48 @@ void SchematicScene::drawBackground(QPainter* painter, const QRectF& rect)
         QPen minorPen(Theme::gridMinor(), 0.0);
         QPen majorPen(Theme::gridMajor(), 0.0);
 
-        const qreal startX = std::floor(rect.left() / step) * step;
-        const qreal startY = std::floor(rect.top() / step) * step;
+        // 网格只画在纸上：纸外是空白，一眼就能看出边界
+        const QRectF gridRect = paper.isValid() ? rect.intersected(paper) : rect;
+        const qreal startX = std::floor(gridRect.left() / step) * step;
+        const qreal startY = std::floor(gridRect.top() / step) * step;
 
-        for (qreal x = startX; x <= rect.right(); x += step) {
+        // 两个方向的循环都按 gridRect 收边。横线的循环以前漏写成 rect.bottom()，
+        // 于是纸下面的空地会拉出一条条横线，看着像纸外多了个网格块。
+        for (qreal x = startX; x <= gridRect.right(); x += step) {
             const bool major = std::abs(std::fmod(std::abs(x), grid * 5.0)) < 0.01;
             painter->setPen(major ? majorPen : minorPen);
-            painter->drawLine(QPointF(x, rect.top()), QPointF(x, rect.bottom()));
+            painter->drawLine(QPointF(x, gridRect.top()), QPointF(x, gridRect.bottom()));
         }
-        for (qreal y = startY; y <= rect.bottom(); y += step) {
+        for (qreal y = startY; y <= gridRect.bottom(); y += step) {
             const bool major = std::abs(std::fmod(std::abs(y), grid * 5.0)) < 0.01;
             painter->setPen(major ? majorPen : minorPen);
-            painter->drawLine(QPointF(rect.left(), y), QPointF(rect.right(), y));
+            painter->drawLine(QPointF(gridRect.left(), y), QPointF(gridRect.right(), y));
         }
+    }
+
+    // 纸张的边框：外框贴着纸边，内框往里缩 5 mm，两圈都是实线 ——
+    // 和工程图纸的画法一致。只画框，不铺底色、不印规格文字。
+    // 必须画在网格之后：先画框的话，网格的浅色线会把框「切」成一截一截的。
+    if (paper.isValid() && rect.intersects(paper)) {
+        // 比网格深一点才看得出是「图纸边框」，用淡灰蓝；线宽 1 个像素。
+        // 关掉抗锯齿：1 px 的线落在像素边界上时，AA 会把它摊成两个半透明的
+        // 像素，看着像虚线
+        const bool hadAA = painter->testRenderHint(QPainter::Antialiasing);
+        painter->setRenderHint(QPainter::Antialiasing, false);
+        // 线宽 2 个画布单位：1 px 在缩放后几乎看不见，2 看着才是「图框」
+        QPen borderPen(Theme::textMuted(), 2.0, Qt::SolidLine);
+        borderPen.setJoinStyle(Qt::MiterJoin);
+        painter->setPen(borderPen);
+        painter->setBrush(Qt::NoBrush);
+        // 外框往里让 1 个单位（线宽的一半），否则半个线宽会落在纸外被裁掉
+        painter->drawRect(paper.adjusted(1.0, 1.0, -1.0, -1.0));
+
+        // 内框往里缩 5 mm；取整到 1 个单位，免得抗锯齿把细线糊成半透明
+        const qreal inset = std::round(5.0 * PageSetup::pixelsPerMm());
+        const QRectF inner = paper.adjusted(inset, inset, -inset, -inset);
+        if (inner.width() > 1.0 && inner.height() > 1.0)
+            painter->drawRect(inner);
+        painter->setRenderHint(QPainter::Antialiasing, hadAA);
     }
 
     painter->restore();

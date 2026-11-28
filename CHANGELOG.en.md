@@ -10,6 +10,26 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Added
 
+- **Page setup**: right-click on empty canvas → "Page Setup…", or *File → Page Setup*
+  (default **Ctrl+Shift+P**, remappable in Settings), picks a paper size (A4, A3,
+  A2, A1 or custom) and an orientation (landscape or portrait); a custom size takes
+  millimetres. The canvas *is* that sheet: the grid is drawn inside it and its edge is a
+  **double solid frame** (outer line on the paper edge, inner line 5 mm in, as on an
+  engineering drawing) — no white fill and no size caption. Changing the paper
+  re-centres the view. A new sheet defaults to **A4 landscape**; the paper is stored in
+  the `.csm` under `"page"`, and files without that section open on A4. All **eight
+  examples had their drawing re-centred on the sheet** (labels included, nothing sticking
+  out); the flyback drawing is larger than A4, so that one uses A3 landscape. When a
+  drawing is larger than the sheet, the canvas grows to cover it so the part outside the
+  sheet stays reachable.
+- **Fit to Sheet**: the toolbar gained a button right after "Fit to Window" (also in the
+  View menu, default **Ctrl+Shift+0**) that zooms so the whole sheet fills the view — handy
+  for seeing where the frame sits on a large drawing. "Fit to Window" still targets the
+  drawing itself.
+- **Right-drag pans the canvas**: hold the right button and the drawing moves with the
+  cursor — the cursor becomes a hand on press and returns to an arrow on release, the
+  same feel as middle-drag. A right click without moving still opens the usual context
+  menu (and in wire mode the right button still finishes the wire).
 - **Zener diode**: the Semiconductors category gained a DZ part. Forward it behaves like
   an ordinary diode (with an adjustable drop); reverse-biased it conducts at its
   breakdown voltage and clamps there. The property panel takes the breakdown voltage Vz

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/Circuit.h"
+#include "core/PageSetup.h"
 
 #include <QGraphicsScene>
 
@@ -77,6 +78,12 @@ public:
     void setShowGrid(bool show);
     bool showGrid() const { return m_showGrid; }
 
+    /// 图纸（纸张大小与方向）：画布范围就是这张纸，纸外不画网格
+    void setPageSetup(const PageSetup& page);
+    /// 画布范围 = 纸张 ∪ 内容：默认纸是 A4，比纸大的图仍然能滚到、能编辑
+    void updateCanvasRect();
+    const PageSetup& pageSetup() const { return m_page; }
+
     QPointF snap(const QPointF& point) const;
     QPointF snapToPin(const QPointF& point, double tolerance = 12.0) const;
     /// 元件移动后，把连在它引脚上的导线顶点一起带过去
@@ -106,6 +113,7 @@ private:
     bool m_hasCursorPos = false;
     bool m_geometryDirty = false;  // 导线几何被改过，commitEdit 时值得整理一次
     bool m_showGrid = true;
+    PageSetup m_page;
 };
 
 } // namespace csm

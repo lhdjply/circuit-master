@@ -36,8 +36,16 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</translat
         <translation> minutes</translation>
     </message>
     <message>
+        <source> mm</source>
+        <translation> mm</translation>
+    </message>
+    <message>
         <source>"%1" has unsaved changes. Save them?</source>
         <translation>"%1" has unsaved changes. Save them?</translation>
+    </message>
+    <message>
+        <source>%1 %2 (%3 × %4 mm)</source>
+        <translation>%1 %2 (%3 × %4 mm)</translation>
     </message>
     <message>
         <source>%1 is already used by %2; pick another shortcut.</source>
@@ -52,6 +60,10 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</translat
 %3 data points</source>
         <translation>%1 signals, %2 selected
 %3 data points</translation>
+    </message>
+    <message>
+        <source>%1 × %2 mm · %3 × %4 units on the canvas</source>
+        <translation>%1 × %2 mm · %3 × %4 units on the canvas</translation>
     </message>
     <message>
         <source>%1 — Multimeter</source>
@@ -464,6 +476,14 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Current version v%1. The download is your call; the application never replaces itself.</translation>
     </message>
     <message>
+        <source>Custom</source>
+        <translation>Custom</translation>
+    </message>
+    <message>
+        <source>Custom size</source>
+        <translation>Custom size</translation>
+    </message>
+    <message>
         <source>Cut</source>
         <translation>Cut</translation>
     </message>
@@ -680,6 +700,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Finished: HTTP %1, %2 bytes received, error %3 (%4)</translation>
     </message>
     <message>
+        <source>Fit to Sheet</source>
+        <translation>Fit to Sheet</translation>
+    </message>
+    <message>
         <source>Fit to Window</source>
         <translation>Fit to Window</translation>
     </message>
@@ -808,6 +832,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>LED</source>
         <translation>LED</translation>
+    </message>
+    <message>
+        <source>Landscape</source>
+        <translation>Landscape</translation>
     </message>
     <message>
         <source>Language</source>
@@ -1086,6 +1114,10 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
         <translation>Optocoupler</translation>
     </message>
     <message>
+        <source>Orientation</source>
+        <translation>Orientation</translation>
+    </message>
+    <message>
         <source>Output high level. Low level is fixed at 0 V; input threshold is half of it (5% hysteresis).</source>
         <translation>Output high level. Low level is fixed at 0 V; input threshold is half of it (5% hysteresis).</translation>
     </message>
@@ -1124,6 +1156,30 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
     <message>
         <source>PNP transistor</source>
         <translation>PNP transistor</translation>
+    </message>
+    <message>
+        <source>Page Set&amp;up…</source>
+        <translation>Page Set&amp;up…</translation>
+    </message>
+    <message>
+        <source>Page Setup</source>
+        <translation>Page Setup</translation>
+    </message>
+    <message>
+        <source>Page Setup…</source>
+        <translation>Page Setup…</translation>
+    </message>
+    <message>
+        <source>Page: %1</source>
+        <translation>Page: %1</translation>
+    </message>
+    <message>
+        <source>Paper size</source>
+        <translation>Paper size</translation>
+    </message>
+    <message>
+        <source>Paper size and orientation for this sheet</source>
+        <translation>Paper size and orientation for this sheet</translation>
     </message>
     <message>
         <source>Paste</source>
@@ -1168,6 +1224,10 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
     <message>
         <source>Portable package downloaded to %1; unzip it over the original folder</source>
         <translation>Portable package downloaded to %1; unzip it over the original folder</translation>
+    </message>
+    <message>
+        <source>Portrait</source>
+        <translation>Portrait</translation>
     </message>
     <message>
         <source>Previous Tab</source>
@@ -1854,6 +1914,10 @@ Checked: normally closed, opens while held.</translation>
         <translation>Zoom Out</translation>
     </message>
     <message>
+        <source>Zoom so the whole sheet fills the view</source>
+        <translation>Zoom so the whole sheet fills the view</translation>
+    </message>
+    <message>
         <source>e.g. -15</source>
         <translation>e.g. -15</translation>
     </message>
@@ -1978,8 +2042,16 @@ Checked: normally closed, opens while held.</translation>
         <translation>e.g. VCC / GND_D / OUT</translation>
     </message>
     <message>
+        <source>landscape</source>
+        <translation>landscape</translation>
+    </message>
+    <message>
         <source>pkexec not found, cannot install automatically: %1</source>
         <translation>pkexec not found, cannot install automatically: %1</translation>
+    </message>
+    <message>
+        <source>portrait</source>
+        <translation>portrait</translation>
     </message>
     <message>
         <source>t = %1  ·  %2/div  ·  step %3</source>

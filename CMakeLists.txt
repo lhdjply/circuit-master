@@ -117,6 +117,7 @@ include_directories("${CMAKE_CURRENT_BINARY_DIR}/generated")
 # 测试目标同样链接这两个对象库（每个目标各拿一份对象文件）。
 add_library(csm_core OBJECT
     src/core/Grid.cpp
+    src/core/PageSetup.cpp
     src/core/Language.cpp
     src/core/Units.cpp
     src/core/Component.cpp
@@ -141,6 +142,7 @@ set(CSM_UI_SOURCES
     src/ui/SingleInstance.cpp
     src/ui/Symbols.cpp
     src/ui/SettingsDialog.cpp
+    src/ui/PageSetupDialog.cpp
     src/ui/TitleBar.cpp
     src/ui/Theme.cpp
     src/ui/ComponentItem.cpp
@@ -178,6 +180,22 @@ set(CSM_RESOURCES
     resources/assets/circuit-master.qrc
     resources/examples/examples.qrc
 )
+
+# 资源文件里列的那些文件改了，qrc 也要重编 —— 否则改了 .csm 直接构建，程序里
+# 还是旧的示例（表现为「示例明明改过，打开却还是老样子」）。AUTORCC 目前只盯
+# .qrc 本身，所以这里把清单里的文件手工挂成依赖。
+file(GLOB CSM_EXAMPLE_FILES CONFIGURE_DEPENDS resources/examples/*.csm)
+set(CSM_ICON_FILES "")
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resources/assets/icons")
+    file(GLOB CSM_ICON_FILES CONFIGURE_DEPENDS resources/assets/icons/*.svg)
+endif()
+foreach(qrc IN ITEMS resources/examples/examples.qrc resources/assets/circuit-master.qrc)
+    if(qrc STREQUAL "resources/examples/examples.qrc")
+        set_property(SOURCE ${qrc} PROPERTY OBJECT_DEPENDS ${CSM_EXAMPLE_FILES})
+    else()
+        set_property(SOURCE ${qrc} PROPERTY OBJECT_DEPENDS ${CSM_ICON_FILES})
+    endif()
+endforeach()
 
 # ---------------------------------------------------------------- 翻译
 # 源码里文案是英文，中文放在 resources/translations/*.ts。

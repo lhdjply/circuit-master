@@ -1,4 +1,5 @@
 #include "core/Circuit.h"
+#include "core/PageSetup.h"
 
 #include "core/Language.h"
 #include "core/Netlist.h"
@@ -12,6 +13,7 @@
 #include "ui/SchematicScene.h"
 #include "ui/SchematicView.h"
 #include "ui/Symbols.h"
+#include "ui/Theme.h"
 #include "ui/UpdateDialog.h"
 #include "ui/WaveformWindow.h"
 #include "ui/WireItem.h"
@@ -24,12 +26,16 @@
 #include <QFile>
 #include <QGraphicsSceneMouseEvent>
 #include <QLineEdit>
+#include <QImage>
 #include <QMenu>
+#include <QMouseEvent>
+#include <QScrollBar>
 #include <QMimeData>
 #include <QSet>
 #include <QTabWidget>
 #include <QtTest/QTest>
 #include <QTest>
+#include <QTimer>
 #include <QWidget>
 #include <cmath>
 #include <cstdio>
@@ -74,6 +80,9 @@ private slots:
     void measureProbeBoxStaysReadableWhenRotated();
     void shortcutsWorkOnANewTab();
     void draggingAComponentDoesNotPullUnrelatedWires();
+    void rightButtonDragPansTheCanvas();
+    void emptyCanvasMenuHasPageSetup();
+    void pageDrawsNothingOutsideTheSheet();
 
 private:
 
@@ -1072,18 +1081,21 @@ void UiEditorTest::copyPasteAndMirror()
     }
     QVERIFY(pasted);
     QCOMPARE(pasted->component().value, 1000.0);
-    QCOMPARE(pasted->pos(), QPointF(220, 220));
+    // 按相对位置断言：示例里的坐标以后还会调（改纸张时整张图会重新摆），
+    // 写死绝对坐标的话每挪一次示例就要改一次测试
+    const QPointF origin = resistor->pos();
+    QCOMPARE(pasted->pos(), origin + QPointF(20, 20));
     QVERIFY(pasted->isSelected());
 
-    // 水平翻转：左右引脚交换
+    // 水平翻转：左右引脚交换（横向电阻的引脚在 ±30 处）
     resistor->setMirrored(true, false);
-    QCOMPARE(resistor->pinScenePositions().at(0), QPointF(230, 200));
-    QCOMPARE(resistor->pinScenePositions().at(1), QPointF(170, 200));
+    QCOMPARE(resistor->pinScenePositions().at(0), origin + QPointF(30, 0));
+    QCOMPARE(resistor->pinScenePositions().at(1), origin + QPointF(-30, 0));
     QCOMPARE(resistor->component().rotation, 0);
 
     // 翻转后再旋转
     resistor->setRotationAngle(90);
-    QCOMPARE(resistor->pinScenePositions().at(0), QPointF(200, 170));
+    QCOMPARE(resistor->pinScenePositions().at(0), origin + QPointF(0, -30));
 
     const Circuit circuit = scene->toCircuit();
     const Component* saved = circuit.find(resistor->component().id);
@@ -1122,9 +1134,10 @@ void UiEditorTest::multiSelectionDrag()
     }
     QVERIFY(r1 && c1);
 
-    // 框选整块电路
-    const QPoint from = view->mapFromScene(QPointF(40, 100));
-    const QPoint to = view->mapFromScene(QPointF(460, 520));
+    // 框选整块电路：按示例的实际范围框，别写死坐标（换纸张时示例会整体挪）
+    const QRectF bounds = scene->itemsBoundingRect().adjusted(-20, -20, 20, 20);
+    const QPoint from = view->mapFromScene(bounds.topLeft());
+    const QPoint to = view->mapFromScene(bounds.bottomRight());
     QTest::mousePress(view->viewport(), Qt::LeftButton, Qt::NoModifier, from);
     QTest::mouseMove(view->viewport(), to, 20);
     QTest::mouseRelease(view->viewport(), Qt::LeftButton, Qt::NoModifier, to);
@@ -1764,10 +1777,38 @@ void UiEditorTest::measureProbeReadsTheWire()
     auto* scene = currentScene(window);
     QVERIFY(scene);
 
+    // 把探针放在 R1 右侧引脚引出的那条横导线上 —— 按元件位置算，
+    // 不写死坐标（示例换纸张时会整体平移）
+    ComponentItem* r1 = nullptr;
+    for (ComponentItem* candidate : scene->componentItems())
+        if (candidate->component().refdes == QLatin1String("R1"))
+            r1 = candidate;
+    QVERIFY(r1);
+
+    QPointF onWire;
+    const QVector<QPointF> pins = r1->pinScenePositions();
+    for (WireItem* wire : scene->wireItems()) {
+        const QVector<QPointF> points = wire->scenePoints();
+        for (const QPointF& pin : pins) {
+            for (int i = 0; i + 1 < points.size(); ++i) {
+                if ((points.at(i) - pin).manhattanLength() > 1.0)
+                    continue;
+                const QPointF a = points.at(i);
+                const QPointF b = points.at(i + 1);
+                if (std::abs(a.y() - b.y()) < 0.5 && std::abs(a.x() - b.x()) > 40.0)
+                    onWire = (a + b) / 2.0;
+                break;
+            }
+        }
+        if (!onWire.isNull())
+            break;
+    }
+    QVERIFY2(!onWire.isNull(), "R1 引脚上应当接着一条横导线");
+
     Component probe;
     probe.type = ComponentType::MeasureProbe;
     probe.refdes = scene->nextRefdes(ComponentType::MeasureProbe);
-    probe.pos = QPointF(250.0, 200.0);   // R1 与 C1 之间的横导线
+    probe.pos = onWire;
     ComponentItem* item = scene->addComponent(probe);
     QVERIFY(item);
     settle();
@@ -1995,6 +2036,136 @@ void UiEditorTest::shortcutsWorkOnANewTab()
     QVERIFY(scene->componentItems().isEmpty());
 }
 
+
+
+void UiEditorTest::rightButtonDragPansTheCanvas()
+{
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    settle();
+
+    SchematicView* view = currentView(window);
+    QVERIFY(view);
+
+    // 默认纸张可能整页都放得下（没有滚动条）——先换一张大纸，平移才有空间
+    view->scene()->setSceneRect(0.0, 0.0, 12000.0, 9000.0);
+    view->centerOn(6000.0, 4500.0);
+    settle();
+
+    view->horizontalScrollBar()->setValue(view->horizontalScrollBar()->maximum() / 2);
+    view->verticalScrollBar()->setValue(view->verticalScrollBar()->maximum() / 2);
+    settle();
+    const int h0 = view->horizontalScrollBar()->value();
+    const int v0 = view->verticalScrollBar()->value();
+    QVERIFY2(view->horizontalScrollBar()->maximum() > 0, "画布要先能滚动才能测平移");
+
+    const QPoint from = view->viewport()->rect().center();
+    const QPoint to = from + QPoint(-120, -80);
+
+    QTest::mousePress(view->viewport(), Qt::RightButton, Qt::NoModifier, from);
+    settle();
+    // 按下就变成小手
+    QCOMPARE(view->viewport()->cursor().shape(), Qt::ClosedHandCursor);
+
+    // 分几步移动，模拟真实拖动
+    for (int step = 1; step <= 4; ++step) {
+        const QPoint p = from + (to - from) * step / 4;
+        QMouseEvent move(QEvent::MouseMove, p, view->viewport()->mapToGlobal(p),
+                         Qt::NoButton, Qt::RightButton, Qt::NoModifier);
+        QApplication::sendEvent(view->viewport(), &move);
+    }
+    settle();
+
+    QTest::mouseRelease(view->viewport(), Qt::RightButton, Qt::NoModifier, to);
+    settle();
+
+    // 画布跟着走了 120 / 80 像素（视图里没有可滚动范围时贴边，所以只要求变化方向对）
+    QVERIFY2(view->horizontalScrollBar()->value() > h0,
+             qPrintable(QStringLiteral("h: %1 → %2").arg(h0).arg(view->horizontalScrollBar()->value())));
+    QVERIFY2(view->verticalScrollBar()->value() > v0,
+             qPrintable(QStringLiteral("v: %1 → %2").arg(v0).arg(view->verticalScrollBar()->value())));
+    // 松手后光标恢复成箭头，不是一直握着
+    QCOMPARE(view->viewport()->cursor().shape(), Qt::ArrowCursor);
+}
+
+
+void UiEditorTest::emptyCanvasMenuHasPageSetup()
+{
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    settle();
+
+    SchematicView* view = currentView(window);
+    QVERIFY(view);
+    SchematicScene* scene = currentScene(window);
+    QVERIFY(scene);
+
+    // 空白处右键：菜单里应当有「页面设置…」，并且能改画布范围
+    QStringList actions;
+    QTimer::singleShot(200, [&actions] {
+        auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+        if (!menu)
+            return;
+        for (QAction* action : menu->actions())
+            actions << action->text();
+        menu->close();
+    });
+    QTest::mouseClick(view->viewport(), Qt::RightButton, Qt::NoModifier,
+                      view->viewport()->rect().center());
+    settle();
+
+    QVERIFY2(!actions.isEmpty(), "右键菜单没弹出来");
+    bool found = false;
+    for (const QString& text : actions)
+        if (text.contains(QStringLiteral("页面设置")))
+            found = true;
+    QVERIFY2(found, qPrintable(QStringLiteral("菜单里没有页面设置：") + actions.join(QLatin1Char('|'))));
+
+    // 换一张纸：画布范围跟着变
+    PageSetup page = scene->pageSetup();
+    page.size = PaperSize::A3;
+    page.landscape = true;
+    scene->setPageSetup(page);
+    settle();
+    QCOMPARE(qRound(scene->sceneRect().width()), qRound(420.0 * 96.0 / 25.4));
+    QCOMPARE(qRound(scene->sceneRect().height()), qRound(297.0 * 96.0 / 25.4));
+}
+
+
+void UiEditorTest::pageDrawsNothingOutsideTheSheet()
+{
+    // 网格只能画在纸上。横线的循环曾经按「整个可视区域」收边，于是纸下面
+    // 会拉出一条条横线，看着像纸外多了一块网格 —— 这条用例守住它。
+    SchematicScene scene;
+    PageSetup page;
+    page.size = PaperSize::A4;
+    page.landscape = true;
+    scene.setPageSetup(page);
+
+    const QRectF sheet = scene.sceneRect();
+    QVERIFY(sheet.isValid());
+
+    // 渲染一块比纸大很多的区域：纸下面也画进来
+    const QRectF area(sheet.left() - 30.0, sheet.top() - 30.0,
+                      sheet.width() + 60.0, sheet.height() + 300.0);
+    QImage image(int(area.width()), int(area.height()), QImage::Format_ARGB32);
+    image.fill(Theme::canvas());
+    QPainter painter(&image);
+    scene.render(&painter, QRectF(0, 0, image.width(), image.height()), area);
+    painter.end();
+
+    // 纸底以下（留 6 px 给虚线边框）不该有任何东西
+    const QColor background = Theme::canvas();
+    const int y0 = int(sheet.bottom() - area.top()) + 6;
+    int stray = 0;
+    for (int y = y0; y < image.height() - 2; ++y)
+        for (int x = 2; x < image.width() - 2; ++x)
+            if (image.pixelColor(x, y) != background)
+                ++stray;
+    QVERIFY2(stray == 0, qPrintable(QStringLiteral("纸外有 %1 个非背景像素").arg(stray)));
+}
 
 void UiEditorTest::draggingAComponentDoesNotPullUnrelatedWires()
 {

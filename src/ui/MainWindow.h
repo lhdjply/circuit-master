@@ -3,6 +3,7 @@
 #include "core/UpdateChecker.h"
 #include "core/Language.h"
 #include "ui/Document.h"
+#include "core/PageSetup.h"
 #include "sim/Simulator.h"
 
 #include <QJsonObject>
@@ -194,8 +195,12 @@ private:
     /// 某个文档是否已经打开（按绝对路径判断）
     int indexOfPath(const QString& path) const;
     /// 把电路装进标签页：当前是「干净的空文档」就沿用它，否则新开一个
+    /// 右键菜单里的「页面设置」
+    void openPageSetup();
+
     Document* loadCircuitData(const Circuit& circuit, const QString& title, const QString& path,
-                              const SimulationOptions& options);
+                              const SimulationOptions& options,
+                              const PageSetup& page = PageSetup());
 
     QTabWidget* m_tabs = nullptr;          // 中央标签页：一个标签一个文档
     QVector<Document*> m_documents;
@@ -254,6 +259,7 @@ private:
     QAction* m_actOpen = nullptr;
     QAction* m_actSave = nullptr;
     QAction* m_actSaveAs = nullptr;
+    QAction* m_actPageSetup = nullptr;
     QAction* m_actCloseTab = nullptr;
     QAction* m_actNextTab = nullptr;
     QAction* m_actPrevTab = nullptr;
@@ -275,6 +281,7 @@ private:
     QAction* m_actZoomIn = nullptr;
     QAction* m_actZoomOut = nullptr;
     QAction* m_actZoomFit = nullptr;
+    QAction* m_actZoomFitPage = nullptr;
     QAction* m_actGrid = nullptr;
 
     QAction* m_actRun = nullptr;

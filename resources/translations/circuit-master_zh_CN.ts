@@ -39,8 +39,16 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</source>
         <translation> 分钟</translation>
     </message>
     <message>
+        <source> mm</source>
+        <translation> mm</translation>
+    </message>
+    <message>
         <source>"%1" has unsaved changes. Save them?</source>
         <translation>「%1」有未保存的更改，是否保存？</translation>
+    </message>
+    <message>
+        <source>%1 %2 (%3 × %4 mm)</source>
+        <translation>%1 %2（%3 × %4 mm）</translation>
     </message>
     <message>
         <source>%1 is already used by %2; pick another shortcut.</source>
@@ -55,6 +63,10 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</source>
 %3 data points</source>
         <translation>%1 个信号，已选 %2 个
 共 %3 个数据点</translation>
+    </message>
+    <message>
+        <source>%1 × %2 mm · %3 × %4 units on the canvas</source>
+        <translation>%1 × %2 mm · 画布上 %3 × %4 个单位</translation>
     </message>
     <message>
         <source>%1 — Multimeter</source>
@@ -467,6 +479,14 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>当前版本 v%1。下载由你决定，本程序不会自行替换自身。</translation>
     </message>
     <message>
+        <source>Custom</source>
+        <translation>自定义</translation>
+    </message>
+    <message>
+        <source>Custom size</source>
+        <translation>自定义尺寸</translation>
+    </message>
+    <message>
         <source>Cut</source>
         <translation>剪切</translation>
     </message>
@@ -683,6 +703,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>结束：HTTP %1，已收 %2 字节，错误 %3（%4）</translation>
     </message>
     <message>
+        <source>Fit to Sheet</source>
+        <translation>适应图纸</translation>
+    </message>
+    <message>
         <source>Fit to Window</source>
         <translation>适应窗口</translation>
     </message>
@@ -810,6 +834,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>LED</source>
         <translation>发光二极管</translation>
+    </message>
+    <message>
+        <source>Landscape</source>
+        <translation>横向</translation>
     </message>
     <message>
         <source>Language</source>
@@ -1088,6 +1116,10 @@ Place a voltage (TP) or current (IP) test point and run again</source>
         <translation>光耦</translation>
     </message>
     <message>
+        <source>Orientation</source>
+        <translation>方向</translation>
+    </message>
+    <message>
         <source>Output high level. Low level is fixed at 0 V; input threshold is half of it (5% hysteresis).</source>
         <translation>输出的高电平。低电平固定 0 V，输入阈值取它的一半（带 5% 回差）。</translation>
     </message>
@@ -1126,6 +1158,30 @@ Place a voltage (TP) or current (IP) test point and run again</source>
     <message>
         <source>PNP transistor</source>
         <translation>PNP 三极管</translation>
+    </message>
+    <message>
+        <source>Page Set&amp;up…</source>
+        <translation>页面设置(&amp;U)…</translation>
+    </message>
+    <message>
+        <source>Page Setup</source>
+        <translation>页面设置</translation>
+    </message>
+    <message>
+        <source>Page Setup…</source>
+        <translation>页面设置…</translation>
+    </message>
+    <message>
+        <source>Page: %1</source>
+        <translation>图纸：%1</translation>
+    </message>
+    <message>
+        <source>Paper size</source>
+        <translation>纸张大小</translation>
+    </message>
+    <message>
+        <source>Paper size and orientation for this sheet</source>
+        <translation>设置这张图纸的纸张大小与方向</translation>
     </message>
     <message>
         <source>Paste</source>
@@ -1170,6 +1226,10 @@ Place a voltage (TP) or current (IP) test point and run again</source>
     <message>
         <source>Portable package downloaded to %1; unzip it over the original folder</source>
         <translation>便携包已下载到 %1，解压后覆盖原目录即可</translation>
+    </message>
+    <message>
+        <source>Portrait</source>
+        <translation>纵向</translation>
     </message>
     <message>
         <source>Previous Tab</source>
@@ -1856,6 +1916,10 @@ Checked: normally closed, opens while held.</source>
         <translation>缩小</translation>
     </message>
     <message>
+        <source>Zoom so the whole sheet fills the view</source>
+        <translation>缩放到整张图纸铺满视图</translation>
+    </message>
+    <message>
         <source>e.g. -15</source>
         <translation>例如 -15</translation>
     </message>
@@ -1980,8 +2044,16 @@ Checked: normally closed, opens while held.</source>
         <translation>例如 VCC / GND_D / OUT</translation>
     </message>
     <message>
+        <source>landscape</source>
+        <translation>横向</translation>
+    </message>
+    <message>
         <source>pkexec not found, cannot install automatically: %1</source>
         <translation>未找到 pkexec，无法自动安装：%1</translation>
+    </message>
+    <message>
+        <source>portrait</source>
+        <translation>纵向</translation>
     </message>
     <message>
         <source>t = %1  ·  %2/div  ·  step %3</source>

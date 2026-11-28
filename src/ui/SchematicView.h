@@ -31,6 +31,8 @@ public:
 
     void zoomBy(double factor);
     void zoomFit();
+    /// 适应图纸：把整张纸（页面设置里的纸张）铺满视图
+    void zoomFitPage();
     void rotateSelection();
     void deleteSelection();
     void cancelWire();
@@ -42,6 +44,8 @@ signals:
     void scaleChanged(double scale);
     void toolChanged();
     void componentEditRequested(ComponentItem* item);
+    /// 右键菜单里选了「页面设置」：由主窗口弹对话框并写回场景
+    void pageSetupRequested();
     /// 仿真运行中点了一下开关：由上层决定怎么改电路
     void switchToggled(ComponentItem* item);
     /// 仿真运行中按住 / 松开按钮开关
@@ -56,6 +60,8 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
     void keyPressEvent(QKeyEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
+    /// 在 pos（控件坐标）处弹出右键菜单：右键没拖动时也算一次普通点击
+    void showContextMenuAt(const QPoint& pos);
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
@@ -81,6 +87,14 @@ private:
 
     bool m_panning = false;
     QPoint m_panStart;
+    /// 正在拖动的是哪个键（中键 / 右键）
+    Qt::MouseButton m_panButton = Qt::NoButton;
+    /// 右键按下时的位置与「是否真的拖动过」：没拖动就当成普通右键菜单
+    QPoint m_rightPressPos;
+    bool m_rightMoved = false;
+    /// 右键按下时如果先来了 contextMenuEvent，先记下位置，松手时再弹
+    QPoint m_pendingMenuPos;
+    bool m_menuPending = false;
 };
 
 } // namespace csm

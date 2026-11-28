@@ -33,6 +33,7 @@
     <file alias="run.svg">icons/run.svg</file>
     <file alias="save.svg">icons/save.svg</file>
     <file alias="save_as.svg">icons/save_as.svg</file>
+    <file alias="page_setup.svg">icons/page_setup.svg</file>
     <file alias="select.svg">icons/select.svg</file>
     <file alias="select_all.svg">icons/select_all.svg</file>
     <file alias="settings.svg">icons/settings.svg</file>
@@ -44,6 +45,7 @@
     <file alias="update.svg">icons/update.svg</file>
     <file alias="wire.svg">icons/wire.svg</file>
     <file alias="zoom_fit.svg">icons/zoom_fit.svg</file>
+    <file alias="zoom_fit_page.svg">icons/zoom_fit_page.svg</file>
     <file alias="zoom_in.svg">icons/zoom_in.svg</file>
     <file alias="zoom_out.svg">icons/zoom_out.svg</file>
   </qresource>

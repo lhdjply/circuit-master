@@ -83,16 +83,23 @@ void SchematicView::updateCursorAndHint()
 void SchematicView::mousePressEvent(QMouseEvent* event)
 {
     m_scene->setCursorScenePos(mapToScene(event->pos()));
-    if (event->button() == Qt::MiddleButton) {
+    // 中键、右键都能拖着走图纸
+    if (event->button() == Qt::MiddleButton || event->button() == Qt::RightButton) {
+        // 布线时右键仍然是「结束这条线」，不是平移
+        if (event->button() == Qt::RightButton && m_tool == Tool::Wire && !m_wirePoints.isEmpty()) {
+            finishWire();
+            event->accept();
+            return;
+        }
         m_panning = true;
+        m_panButton = event->button();
         m_panStart = event->pos();
+        if (event->button() == Qt::RightButton) {
+            m_rightPressPos = event->pos();
+            m_rightMoved = false;
+            m_menuPending = false;
+        }
         viewport()->setCursor(Qt::ClosedHandCursor);
-        event->accept();
-        return;
-    }
-
-    if (event->button() == Qt::RightButton && m_tool == Tool::Wire && !m_wirePoints.isEmpty()) {
-        finishWire();
         event->accept();
         return;
     }
@@ -140,6 +147,10 @@ void SchematicView::mouseMoveEvent(QMouseEvent* event)
     if (m_panning) {
         const QPoint delta = event->pos() - m_panStart;
         m_panStart = event->pos();
+        // 超过 4 px 才算拖动，否则右键仍然是「点一下弹菜单」
+        if (m_panButton == Qt::RightButton
+            && (event->pos() - m_rightPressPos).manhattanLength() > 4)
+            m_rightMoved = true;
         horizontalScrollBar()->setValue(horizontalScrollBar()->value() - delta.x());
         verticalScrollBar()->setValue(verticalScrollBar()->value() - delta.y());
         event->accept();
@@ -166,9 +177,19 @@ void SchematicView::mouseReleaseEvent(QMouseEvent* event)
         event->accept();
         return;
     }
-    if (event->button() == Qt::MiddleButton && m_panning) {
+    if (m_panning
+        && (event->button() == Qt::MiddleButton || event->button() == Qt::RightButton)) {
+        const bool wasRight = m_panButton == Qt::RightButton;
+        const bool dragged = m_rightMoved;
+        const QPoint menuPos = m_menuPending ? m_pendingMenuPos : event->pos();
         m_panning = false;
+        m_panButton = Qt::NoButton;
+        m_rightMoved = false;
+        m_menuPending = false;
         updateCursorAndHint();
+        // 右键没拖动（或者干脆没收到 contextMenuEvent）：当成一次普通右键
+        if (wasRight && !dragged)
+            showContextMenuAt(menuPos);
         event->accept();
         return;
     }
@@ -316,13 +337,25 @@ void addArrangeMenu(QMenu* menu, SchematicScene* scene)
 
 void SchematicView::contextMenuEvent(QContextMenuEvent* event)
 {
+    // 右键按下就进入了平移：这里先记下位置，松手时若不是拖动再弹菜单。
+    // 不同平台派发 contextMenuEvent 的时机不一样（按下 / 松开），统一在这里收口
+    if (m_panning && m_panButton == Qt::RightButton) {
+        m_pendingMenuPos = event->pos();
+        m_menuPending = true;
+        event->accept();
+        return;
+    }
     if (m_tool == Tool::Wire) {
         event->ignore();
         return;
     }
+    showContextMenuAt(event->pos());
+}
 
+void SchematicView::showContextMenuAt(const QPoint& pos)
+{
     ComponentItem* component = nullptr;
-    const QList<QGraphicsItem*> hitItems = items(event->pos());
+    const QList<QGraphicsItem*> hitItems = items(pos);
     for (QGraphicsItem* item : hitItems) {
         if (item->type() == ComponentItem::Type) {
             component = static_cast<ComponentItem*>(item);
@@ -351,7 +384,7 @@ void SchematicView::contextMenuEvent(QContextMenuEvent* event)
         QAction* edit = menu.addAction(CSM_TR("Edit parameters…"));
         QAction* remove = menu.addAction(CSM_TR("Delete"));
 
-        QAction* chosen = menu.exec(event->globalPos());
+        QAction* chosen = menu.exec(viewport()->mapToGlobal(pos));
         if (!chosen)
             return;
         if (chosen == rotate) {
@@ -374,16 +407,20 @@ void SchematicView::contextMenuEvent(QContextMenuEvent* event)
             m_scene->deleteSelection();
         }
     } else {
-        const QPointF scenePos = m_scene->snap(mapToScene(event->pos()));
+        const QPointF scenePos = m_scene->snap(mapToScene(pos));
         QAction* junction = menu.addAction(CSM_TR("Add junction here"));
         junction->setEnabled(m_scene->hasCrossingAt(scenePos));
         QAction* paste = menu.addAction(CSM_TR("Paste"));
         paste->setEnabled(m_scene->hasClipboard());
-        QAction* chosen = menu.exec(event->globalPos());
+        menu.addSeparator();
+        QAction* pageSetup = menu.addAction(CSM_TR("Page Setup…"));
+        QAction* chosen = menu.exec(viewport()->mapToGlobal(pos));
         if (chosen == junction)
             m_scene->connectWiresAt(scenePos);
         else if (chosen == paste)
             m_scene->pasteClipboard();
+        else if (chosen == pageSetup)
+            emit pageSetupRequested();
     }
 
     m_scene->refresh();
@@ -503,6 +540,18 @@ void SchematicView::zoomFit()
         return;
     }
     fitInView(bounds.adjusted(-60.0, -60.0, 60.0, 60.0), Qt::KeepAspectRatio);
+    emit scaleChanged(transform().m11());
+}
+
+void SchematicView::zoomFitPage()
+{
+    const QRectF page = m_scene->pageSetup().sceneRect();
+    if (!page.isValid() || page.isEmpty()) {
+        zoomFit();
+        return;
+    }
+    // 留一点边：纸框贴着视图边缘时，边框线会被裁掉一半
+    fitInView(page.adjusted(-24.0, -24.0, 24.0, 24.0), Qt::KeepAspectRatio);
     emit scaleChanged(transform().m11());
 }
 

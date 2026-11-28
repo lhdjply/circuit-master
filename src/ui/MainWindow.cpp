@@ -17,6 +17,7 @@
 #include "ui/SchematicView.h"
 #include "ui/WireItem.h"
 #include "ui/SettingsDialog.h"
+#include "ui/PageSetupDialog.h"
 #include "ui/Symbols.h"
 #include "ui/Theme.h"
 #include "ui/TitleBar.h"
@@ -581,6 +582,10 @@ void MainWindow::wireDocument(Document* document)
                 if (document == doc())
                     onEditRequested(item);
             });
+    connect(view, &SchematicView::pageSetupRequested, this, [this, document] {
+        if (document == doc())
+            openPageSetup();
+    });
     // 仿真运行中点击开关：拨动它，实时引擎会在 200 ms 内换上新拓扑
     connect(view, &SchematicView::switchToggled, this, [this, document](ComponentItem* item) {
         if (document == doc())
@@ -775,6 +780,13 @@ void MainWindow::createActions()
     m_actSaveAs->setShortcut(QKeySequence::SaveAs);
 
 
+    m_actPageSetup = new QAction(
+        actionIcon(QStringLiteral("page_setup"), QStringLiteral("document-properties"),
+                   QStyle::SP_FileDialogContentsView),
+        CSM_TR("Page Set&up…"), this);
+    m_actPageSetup->setStatusTip(CSM_TR("Paper size and orientation for this sheet"));
+    m_actPageSetup->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+P")));
+
     m_actCloseTab = new QAction(
         actionIcon(QStringLiteral("close_tab"), QStringLiteral("window-close"), QStyle::SP_DialogCloseButton),
         CSM_TR("Close &Tab"), this);
@@ -924,6 +936,13 @@ void MainWindow::createActions()
         CSM_TR("Fit to Window"), this);
     m_actZoomFit->setShortcut(QKeySequence(QStringLiteral("Ctrl+0")));
 
+    m_actZoomFitPage = new QAction(
+        actionIcon(QStringLiteral("zoom_fit_page"), QStringLiteral("document-page-setup"),
+                   QStyle::SP_FileDialogInfoView),
+        CSM_TR("Fit to Sheet"), this);
+    m_actZoomFitPage->setStatusTip(CSM_TR("Zoom so the whole sheet fills the view"));
+    m_actZoomFitPage->setShortcut(QKeySequence(QStringLiteral("Ctrl+Shift+0")));
+
     m_actGrid = new QAction(
         actionIcon(QStringLiteral("grid"), QStringLiteral("view-grid"), QStyle::SP_FileDialogListView),
         CSM_TR("Show Grid"), this);
@@ -984,6 +1003,7 @@ void MainWindow::createActions()
     connect(m_actOpen, &QAction::triggered, this, &MainWindow::openCircuit);
     connect(m_actSave, &QAction::triggered, this, [this] { saveCircuit(); });
     connect(m_actSaveAs, &QAction::triggered, this, [this] { saveCircuitAs(); });
+    connect(m_actPageSetup, &QAction::triggered, this, &MainWindow::openPageSetup);
     connect(m_actCloseTab, &QAction::triggered, this, &MainWindow::closeCurrentDocument);
     connect(m_actNextTab, &QAction::triggered, this, [this] {
         if (!m_tabs || m_tabs->count() < 2)
@@ -1013,6 +1033,7 @@ void MainWindow::createActions()
     connect(m_actZoomIn, &QAction::triggered, this, [this] { m_view->zoomBy(1.2); });
     connect(m_actZoomOut, &QAction::triggered, this, [this] { m_view->zoomBy(1.0 / 1.2); });
     connect(m_actZoomFit, &QAction::triggered, this, [this] { m_view->zoomFit(); });
+    connect(m_actZoomFitPage, &QAction::triggered, this, [this] { m_view->zoomFitPage(); });
     connect(m_actGrid, &QAction::toggled, this, [this](bool on) { m_scene->setShowGrid(on); });
 
     connect(m_actRun, &QAction::triggered, this, [this] {
@@ -1164,6 +1185,7 @@ void MainWindow::writeRecoveryCopies()
         record.savedAt = QDateTime::currentDateTime();
         QJsonObject root = document->scene->toCircuit().toJson();
         root.insert(QStringLiteral("analysis"), analysisToJson(document->options));
+    root.insert(QStringLiteral("page"), document->page.toJson());
         record.circuit = root;
         Autosave::write(record);
     }
@@ -1231,6 +1253,7 @@ void MainWindow::registerShortcutBindings()
         {QStringLiteral("file.open"), m_actOpen},
         {QStringLiteral("file.save"), m_actSave},
         {QStringLiteral("file.saveAs"), m_actSaveAs},
+        {QStringLiteral("file.pageSetup"), m_actPageSetup},
         {QStringLiteral("file.closeTab"), m_actCloseTab},
         {QStringLiteral("file.nextTab"), m_actNextTab},
         {QStringLiteral("file.prevTab"), m_actPrevTab},
@@ -1245,6 +1268,7 @@ void MainWindow::registerShortcutBindings()
         {QStringLiteral("view.zoomIn"), m_actZoomIn},
         {QStringLiteral("view.zoomOut"), m_actZoomOut},
         {QStringLiteral("view.zoomFit"), m_actZoomFit},
+        {QStringLiteral("view.zoomFitPage"), m_actZoomFitPage},
         {QStringLiteral("tool.select"), m_actSelectTool},
         {QStringLiteral("tool.wire"), m_actWireTool},
         {QStringLiteral("tool.cancel"), m_actCancel},
@@ -1301,6 +1325,8 @@ void MainWindow::createMenus()
     fileMenu->addAction(m_actSave);
     fileMenu->addAction(m_actSaveAs);
     fileMenu->addSeparator();
+    fileMenu->addAction(m_actPageSetup);
+    fileMenu->addSeparator();
     fileMenu->addAction(m_actCloseTab);
     fileMenu->addSeparator();
     fileMenu->addAction(m_actQuit);
@@ -1346,6 +1372,7 @@ void MainWindow::createMenus()
     viewMenu->addAction(m_actZoomIn);
     viewMenu->addAction(m_actZoomOut);
     viewMenu->addAction(m_actZoomFit);
+    viewMenu->addAction(m_actZoomFitPage);
     viewMenu->addSeparator();
     viewMenu->addAction(m_actGrid);
     viewMenu->addSeparator();
@@ -1481,6 +1508,7 @@ void MainWindow::createToolBar()
     bar->addAction(m_actMonitor);
     bar->addSeparator();
     bar->addAction(m_actZoomFit);
+    bar->addAction(m_actZoomFitPage);
 }
 
 void MainWindow::buildLibrary()
@@ -2048,7 +2076,8 @@ void MainWindow::appendLog(const QString& text)
 }
 
 Document* MainWindow::loadCircuitData(const Circuit& circuit, const QString& title,
-                                      const QString& path, const SimulationOptions& options)
+                                      const QString& path, const SimulationOptions& options,
+                                      const PageSetup& page)
 {
     // 当前标签如果还是「干净的空文档」，就直接用它 —— 不要在它旁边再开一个空标签，
     // 那样用户每次打开文件都会多出一个什么都不含的页
@@ -2062,6 +2091,8 @@ Document* MainWindow::loadCircuitData(const Circuit& circuit, const QString& tit
         target->name = title, target->filePath = path;
 
     target->options = options;
+    target->page = page;
+    target->scene->setPageSetup(page);
 
     m_loading = true;
     closeMeterWindows();
@@ -2108,6 +2139,30 @@ void MainWindow::newCircuit()
     appendLog(CSM_TR("New blank circuit (new tab)."));
 }
 
+void MainWindow::openPageSetup()
+{
+    if (!doc() || !m_scene)
+        return;
+
+    PageSetupDialog dialog(m_scene->pageSetup(), this);
+    if (dialog.exec() != QDialog::Accepted)
+        return;
+
+    const PageSetup page = dialog.pageSetup();
+    doc()->page = page;
+    m_scene->setPageSetup(page);
+    // 换了纸张尺寸，视图重新对准纸心，免得画布跑到视野外
+    if (m_view) {
+        const QRectF paper = page.sceneRect();
+        m_view->centerOn(paper.center());
+    }
+
+    doc()->dirty = true;
+    updateTitle();
+    updateTabTitle(doc());
+    appendLog(CSM_TR("Page: %1").arg(page.summary()));
+}
+
 bool MainWindow::writeDocumentToDisk(Document* document, QString* error)
 {
     if (!document || document->filePath.isEmpty())
@@ -2115,6 +2170,7 @@ bool MainWindow::writeDocumentToDisk(Document* document, QString* error)
 
     QJsonObject root = document->scene->toCircuit().toJson();
     root.insert(QStringLiteral("analysis"), analysisToJson(document->options));
+    root.insert(QStringLiteral("page"), document->page.toJson());
     const QByteArray data = QJsonDocument(root).toJson(QJsonDocument::Indented);
 
     // 原子写：先写同目录的临时文件，成功才替换目标。直接用 QFile 的话会先把
@@ -2284,7 +2340,10 @@ bool MainWindow::openPath(const QString& path)
     if (!analysis.isEmpty())
         options = optionsFromJson(analysis);
 
-    loadCircuitData(circuit, QFileInfo(path).fileName(), path, options);
+    // 没记纸张的老文件一律用默认 A4 横向（示例文件就是这么用的）
+    const PageSetup page =
+        PageSetup::fromJson(root.value(QStringLiteral("page")).toObject());
+    loadCircuitData(circuit, QFileInfo(path).fileName(), path, options, page);
     appendLog(CSM_TR("Opened: %1 (%2 components)")
                   .arg(path)
                   .arg(circuit.components.size()));
@@ -2811,7 +2870,9 @@ void MainWindow::loadExample(int index)
     // 示例不带路径（另存时才问），分析参数跟着示例走
     const SimulationOptions options =
         optionsFromJson(root.value(QStringLiteral("analysis")).toObject());
-    loadCircuitData(circuit, name, QString(), options);
+    const PageSetup page =
+        PageSetup::fromJson(root.value(QStringLiteral("page")).toObject());
+    loadCircuitData(circuit, name, QString(), options, page);
     appendLog(CSM_TR("Example \"%1\" loaded. Press %2 to run the simulation.")
                   .arg(name, keyLabel(m_actRun)));
 }

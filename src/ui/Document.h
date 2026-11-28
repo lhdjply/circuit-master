@@ -11,6 +11,7 @@
 // ---------------------------------------------------------------------------
 
 #include "sim/Simulator.h"
+#include "core/PageSetup.h"
 #include "core/Language.h"
 
 #include <QByteArray>
@@ -44,6 +45,7 @@ struct Document {
     bool restoring = false; // 正在恢复快照，别把它记进历史
 
     SimulationOptions options;      // 分析参数，随文件存盘
+    PageSetup page;                 // 图纸大小与方向，随文件存盘
     SimulationResult lastResult;    // 最近一次仿真的结果，供「静态波形」使用
     bool hasResult = false;
     bool resultStale = false;       // 电路改过，上一次的结果已经不作数
