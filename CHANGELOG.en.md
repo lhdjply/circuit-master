@@ -70,6 +70,15 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Fixed
 
+- **Editing a parameter mid-run reset the capacitor voltage to the DC operating point**:
+  while the live scope was running, changing a resistor or capacitor value re-solved the
+  DC operating point and wrote it back into the capacitor voltage, so a half-charged
+  capacitor jumped straight to its steady-state value (RC with a 5 V supply and τ = 1 ms:
+  3.17 V → 5 V at t = 1 ms). Now, when the topology is unchanged and only values moved,
+  the capacitor voltages and inductor currents are kept as they were and the next step
+  continues with the new values; only a real topology change restarts from the operating
+  point. Guarded by liveParameterChangeKeepsCapacitorVoltage (the difference across the
+  edit must stay under 0.01 V).
 - **Page tiling was wrong (a strip went missing between pages, and the two scales
   disagreed when paper matched the sheet)**: the geometry now lives in `planPrint()`
   with unit tests — with paper equal to the sheet, fit-to-sheet and actual size produce

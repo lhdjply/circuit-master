@@ -1978,19 +1978,24 @@ bool LiveTransient::updateCircuit(const Circuit& circuit, QString* error)
     d.problem = buildProblem(d.circuit, d.net);
 
     const int size = d.problem.nNodes + d.problem.nBranches;
-    if (sameTopology && int(oldX.size()) == size) {
-        d.x = oldX;         // 保持上一时刻的解，迭代收敛更快
-        d.state = oldState; // 电容电压、电感电流继续用
-    } else {
-        d.state = ElementState();
-        d.x.assign(size_t(size), 0.0);
-    }
+    const bool keepState = sameTopology && int(oldX.size()) == size;
     d.t = t;
 
-    // 在当前时刻重解一次工作点，让新的拓扑/数值立即生效
-    if (!newtonSolve(d.problem, d.state, false, 0.0, d.t, d.x, d.diode, error))
-        return false;
-    updateState(d.problem, d.state, d.x);
+    if (keepState) {
+        // 只是改了数值（电阻、电容、电源值……）：状态变量必须原样留着。
+        // 以前这里顺手重解了一次直流工作点，updateState 再把 capV 覆盖成直流值，
+        // 于是「充电到一半改个电阻」电容会瞬间跳到稳态电压 —— 电容电压不能突变。
+        // 下一次 advance() 会用新的参数和这份历史算出正确的一步。
+        d.x = oldX;
+        d.state = oldState;
+    } else {
+        // 拓扑变了：旧的状态变量对不上，按新电路从工作点重来
+        d.state = ElementState();
+        d.x.assign(size_t(size), 0.0);
+        if (!newtonSolve(d.problem, d.state, false, 0.0, d.t, d.x, d.diode, error))
+            return false;
+        updateState(d.problem, d.state, d.x);
+    }
     trackReverseCaps(d.problem, d.x, d.worstReverse);
 
     d.names.clear();

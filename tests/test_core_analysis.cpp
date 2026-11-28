@@ -99,6 +99,7 @@ private slots:
     void sineAmplitudeIsRms();
     void suggestedStepAvoidsAliasing();
     void liveTransientMatchesBatch();
+    void liveParameterChangeKeepsCapacitorVoltage();
     void voltageDividerDc();
     void rcCharging();
     void opAmpInvertingDc();
@@ -123,6 +124,45 @@ private slots:
     void logicGatesFollowTruthTable();
     void logicGateChainSettles();
 };
+
+
+void CoreAnalysisTest::liveParameterChangeKeepsCapacitorVoltage()
+{
+    // 充电到一半时改电阻：电容电压不能突变（改了数值不该等于重新求工作点）
+    Circuit c = loopCircuit(ComponentType::Resistor, 1000.0,
+                            ComponentType::Capacitor, 1e-6, 0.0);
+    Component& v = c.components[0];
+    v.function = SourceFunction::Pulse;
+    v.pulseV1 = 0.0;
+    v.pulseV2 = 5.0;
+    v.pulseRise = 1e-9;
+    v.pulseFall = 1e-9;
+    v.pulseWidth = 0.05;
+    v.pulsePeriod = 0.1;
+
+    LiveTransient live;
+    QString error;
+    QVERIFY2(live.start(c, 1e-5, &error), qPrintable(error));
+    QVERIFY2(live.advance(101, &error), qPrintable(error));   // t ≈ 1.01 ms ≈ τ
+    const int index = live.signalNames().indexOf(QStringLiteral("V(2)"));
+    QVERIFY(index >= 0);
+
+    const double before = live.values().at(index);
+    // 前提：确实在充电途中（τ = 1 ms，t ≈ τ 时应为 5·(1−e⁻¹) ≈ 3.17 V）
+    QVERIFY2(near(before, 3.17, 0.1), qPrintable(QString::number(before)));
+
+    c.components[1].value = 2000.0;   // 1 kΩ → 2 kΩ，拓扑没变
+    QVERIFY2(live.updateCircuit(c, &error), qPrintable(error));
+    const double after = live.values().at(index);
+    QVERIFY2(near(after, before, 0.01),
+             qPrintable(QStringLiteral("改参数后电容电压跳了 %1 V").arg(after - before)));
+
+    // 继续走也应当接着充，而不是从 5 V 的稳态开始
+    QVERIFY2(live.advance(10, &error), qPrintable(error));
+    const double later = live.values().at(index);
+    QVERIFY2(near(later, before, 0.1), qPrintable(QString::number(later)));
+    QVERIFY2(later < 4.5, qPrintable(QString::number(later)));
+}
 
 void CoreAnalysisTest::suggestedStepUsesPulseWidthNotEdge()
 {
