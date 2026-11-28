@@ -15,6 +15,12 @@ constexpr double kPi = 3.14159265358979323846;
 
 QVector<QPointF> pinOffsets(const Component& comp)
 {
+    // 运放：打开「电源引脚」后多两个引脚（3 = V+、4 = V−），坐标必须是 10 的
+    // 整数倍，否则导线端点落在网格之间画不上去
+    if (comp.type == ComponentType::OpAmp && comp.opampPowerPins) {
+        return {QPointF(-30.0, -20.0), QPointF(-30.0, 20.0), QPointF(30.0, 0.0),
+                QPointF(0.0, -30.0), QPointF(0.0, 30.0)};
+    }
     // 变压器按绕组形式给不同的引脚布局：三绕组时左边初级 + 辅助、右边次级
     if (comp.type == ComponentType::Transformer) {
         if (comp.transformerKind == TransformerKind::PrimaryAuxSecondary) {
@@ -53,6 +59,7 @@ QVector<QPointF> pinOffsets(ComponentType type)
     if (type == ComponentType::Ground || isVoltageTap(type)
         || type == ComponentType::NetLabel)
         return {QPointF(0.0, 0.0)};
+    // 运放：默认三端（−IN 上、+IN 下、输出右）。打开电源引脚后多出 V+（上）与 V−（下）
     if (type == ComponentType::OpAmp)
         return {QPointF(-30.0, -20.0), QPointF(-30.0, 20.0), QPointF(30.0, 0.0)};
     // 变压器：0/1 = 初级 +/−（左），2/3 = 次级 +/−（右）

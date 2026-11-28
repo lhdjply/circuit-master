@@ -98,6 +98,7 @@ private slots:
     void multimeterMeasuresVoltageCurrentResistance();
     void multimeterMeasuresAcRms();
     void acMeterHonoursConfiguredFrequency();
+    void opAmpPowerPinsLimitSwingToRails();
     void groundKindsAreSeparateNets();
     void signalGeneratorPlaysEveryWaveform();
     void signalGeneratorDrivesCircuitAndRoundTrips();
@@ -332,6 +333,124 @@ void CoreDeviceTest::acMeterHonoursConfiguredFrequency()
     raw.insert(QStringLiteral("components"), comps);
     QCOMPARE(Circuit::fromJson(raw).components.first().acFrequency,
              Component::kAcFrequencyMax);
+}
+
+
+void CoreDeviceTest::opAmpPowerPinsLimitSwingToRails()
+{
+    // 运放可以选要不要 V+ / V− 引脚。接上之后输出摆幅由实际电源轨决定
+    // （各留 kOpampRailHeadroom 余量），不再是属性面板里那两个写死的摆幅。
+    const auto follower = [](bool withPowerPins, double inputVolts) {
+        Circuit c;
+        Component v1;
+        v1.id = 1;
+        v1.type = ComponentType::VoltageSource;
+        v1.pos = QPointF(100, 400);
+        v1.rotation = 90;
+        v1.refdes = QStringLiteral("V1");
+        v1.function = SourceFunction::Constant;
+        v1.dcValue = inputVolts;
+        c.components.append(v1);
+
+        Component op;
+        op.id = 2;
+        op.type = ComponentType::OpAmp;
+        op.pos = QPointF(300, 300);
+        op.refdes = QStringLiteral("U1");
+        op.value = 1e5;
+        op.opampPowerPins = withPowerPins;
+        c.components.append(op);
+
+        Component g;
+        g.id = 3;
+        g.type = ComponentType::Ground;
+        g.pos = QPointF(100, 500);
+        g.refdes = QStringLiteral("GND");
+        c.components.append(g);
+
+        // 输入接到 +IN（引脚 0）
+        c.wires.append(Wire{{QPointF(100, 370), QPointF(100, 280), QPointF(270, 280)}});
+        c.wires.append(Wire{{QPointF(100, 430), QPointF(100, 500)}});
+        // 输出回接到 −IN（引脚 1），构成跟随器
+        c.wires.append(Wire{{QPointF(330, 300), QPointF(350, 300), QPointF(350, 340),
+                             QPointF(270, 340), QPointF(270, 320)}});
+
+        if (withPowerPins) {
+            Component rail;
+            rail.id = 4;
+            rail.type = ComponentType::VoltageSource;
+            rail.pos = QPointF(400, 400);
+            rail.rotation = 90;
+            rail.refdes = QStringLiteral("VCC");
+            rail.function = SourceFunction::Constant;
+            rail.dcValue = 5.0;
+            c.components.append(rail);
+            // V+（引脚 3）接 5 V；V−（引脚 4）接地
+            c.wires.append(Wire{{QPointF(400, 370), QPointF(400, 270), QPointF(300, 270)}});
+            c.wires.append(Wire{{QPointF(400, 430), QPointF(400, 500), QPointF(300, 500),
+                                 QPointF(100, 500), QPointF(100, 430)}});
+            c.wires.append(Wire{{QPointF(300, 330), QPointF(300, 500)}});
+        }
+        return c;
+    };
+
+    // 引脚数：默认三端，勾上电源后五端
+    Component plain;
+    plain.type = ComponentType::OpAmp;
+    QCOMPARE(pinCount(plain), 3);
+    plain.opampPowerPins = true;
+    QCOMPARE(pinCount(plain), 5);
+
+    const auto outputOf = [&follower](bool rails, double input) {
+        const Circuit c = follower(rails, input);
+        const Netlist net = c.buildNetlist();
+        if (!net.valid)
+            return -1e9;
+        // 输出是引脚下标 2（标签里写成 U1.3，1 起算）；再从工作点报告里取它的电压
+        const int outNode = net.nodeOf(2, 2);
+        if (outNode <= 0)
+            return -1e9;
+        SimulationOptions opt;
+        opt.kind = AnalysisKind::OperatingPoint;
+        const SimulationResult r = Simulator::run(c, opt);
+        if (!r.ok)
+            return -1e9;
+        for (const QString& line : r.report.split(QLatin1Char('\n'))) {
+            const int eq = line.indexOf(QLatin1Char('='));
+            if (eq < 0 || !line.startsWith(QStringLiteral("  ")))
+                continue;
+            // 行格式：`  <标签左对齐 28> = <数值> V`
+            const QString value = line.mid(eq + 1).trimmed();
+            if (!value.endsWith(QLatin1String("V")))
+                continue;
+            // 标签里必须出现这个节点号，否则可能取错行
+            const QString label = line.mid(2, eq - 2).trimmed();
+            if (!label.contains(QStringLiteral("U1.%1").arg(3)))
+                continue;
+            bool ok = false;
+            const double volts = parseQuantity(value, UnitKind::Volt, &ok, nullptr);
+            return ok ? volts : -1e9;
+        }
+        return -1e9;
+    };
+
+    // 没有电源引脚：摆幅用默认 ±15 V，4 V 输入跟得上去
+    const double noRails = outputOf(false, 4.0);
+    QVERIFY2(noRails > 3.5, qPrintable(QStringLiteral("无电源引脚时输出 %1").arg(noRails)));
+
+    // 有电源引脚、5 V 供电：摆幅上限 = 5 − 1.5 = 3.5 V
+    const double withRails = outputOf(true, 4.0);
+    QVERIFY2(near(withRails, 5.0 - Component::kOpampRailHeadroom, 0.1),
+             qPrintable(QStringLiteral("5 V 供电时输出 %1 V").arg(withRails)));
+
+    // 存盘往返：这个开关要跟着文件走
+    Circuit saved;
+    Component op;
+    op.type = ComponentType::OpAmp;
+    op.opampPowerPins = true;
+    saved.components.append(op);
+    const Circuit back = Circuit::fromJson(saved.toJson());
+    QCOMPARE(back.components.first().opampPowerPins, true);
 }
 
 void CoreDeviceTest::polarizedCapacitorReverseDetected()

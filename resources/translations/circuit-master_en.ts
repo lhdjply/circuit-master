@@ -206,6 +206,12 @@ Set it to the measured signal's frequency, otherwise the window does not line up
         <translation>Add junction here</translation>
     </message>
     <message>
+        <source>Adds V+ (pin 4) and V- (pin 5).
+With them wired, the output swing follows the real supply rails (minus %1 V) instead of the two swing fields below.</source>
+        <translation>Adds V+ (pin 4) and V- (pin 5).
+With them wired, the output swing follows the real supply rails (minus %1 V) instead of the two swing fields below.</translation>
+    </message>
+    <message>
         <source>Align and Distribute</source>
         <translation>Align and Distribute</translation>
     </message>
@@ -1318,6 +1324,10 @@ Place a voltage (TP) or current (IP) test point and run again</translation>
         <translation>Portrait</translation>
     </message>
     <message>
+        <source>Power pins</source>
+        <translation>Power pins</translation>
+    </message>
+    <message>
         <source>Previous Tab</source>
         <translation>Previous Tab</translation>
     </message>
@@ -1952,6 +1962,10 @@ Checked: normally closed, opens while held.</translation>
     <message>
         <source>Update check failed: %1</source>
         <translation>Update check failed: %1</translation>
+    </message>
+    <message>
+        <source>V+ / V- power pins</source>
+        <translation>V+ / V- power pins</translation>
     </message>
     <message>
         <source>Value</source>

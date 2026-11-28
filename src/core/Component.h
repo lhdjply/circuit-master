@@ -210,6 +210,11 @@ struct Component {
     double rin = 2e6;
     /// 输出电阻（Ω）：输出端等效串联电阻，带载时输出电压会掉
     double rout = 50.0;
+    /// 是否画 / 接 V+ / V− 电源引脚（引脚 3 = V+、4 = V−）。
+    /// 打开后输出摆幅改由这两条实际电源轨决定，vSatHigh/vSatLow 不再生效。
+    bool opampPowerPins = false;
+    /// 有电源引脚时，输出轨距电源轨的余量（V）：真实运放输出到不了轨
+    static constexpr double kOpampRailHeadroom = 1.5;
 
     // 独立源参数
     SourceFunction function = SourceFunction::Constant;

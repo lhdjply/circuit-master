@@ -387,6 +387,21 @@ void paintSymbol(QPainter* p, const Component& comp, bool selected, bool showPin
         p->drawLine(QPointF(-10.0, -15.0), QPointF(-10.0, -9.0));
         // 反相输入 −
         p->drawLine(QPointF(-13.0, 12.0), QPointF(-7.0, 12.0));
+        // 电源引脚：从三角形上／下边引到 ±30，和引脚坐标一致
+        if (comp.opampPowerPins) {
+            p->drawLine(QPointF(0.0, -30.0), QPointF(0.0, -11.0));
+            p->drawLine(QPointF(0.0, 30.0), QPointF(0.0, 11.0));
+            // 小字标注，否则两个光秃秃的引脚分不清正负
+            QFont small = p->font();
+            small.setPointSizeF(6.0);
+            p->save();
+            p->setFont(small);
+            p->drawText(QRectF(-18.0, -30.0, 16.0, 12.0), Qt::AlignRight | Qt::AlignVCenter,
+                        QStringLiteral("V+"));
+            p->drawText(QRectF(-18.0, 18.0, 16.0, 12.0), Qt::AlignRight | Qt::AlignVCenter,
+                        QStringLiteral("V−"));
+            p->restore();
+        }
         break;
     }
 

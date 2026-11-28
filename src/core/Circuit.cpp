@@ -256,6 +256,8 @@ void writeComponentFields(QJsonObject& o, const Component& c)
 
     case ComponentType::OpAmp:
         put("value", c.value);      // 开环增益
+        if (c.opampPowerPins)
+            o.insert(QStringLiteral("opampPowerPins"), true);
         put("vSatHigh", c.vSatHigh);
         put("vSatLow", c.vSatLow);
         put("gbw", c.gbw);
@@ -492,6 +494,7 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error, QStringList* w
         c.ibias = num("ibias", 0.0);
         c.rin = num("rin", 2e6);
         c.rout = num("rout", 50.0);
+        c.opampPowerPins = o.value(QStringLiteral("opampPowerPins")).toBool(false);
         // 枚举越界钳到合法范围：以前直接把任意整数 static_cast 进去，
         // 越界值在 switch 里没有分支，行为就没定义了
         c.groundKind = static_cast<GroundKind>(

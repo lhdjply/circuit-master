@@ -10,6 +10,12 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Added
 
+- **Op-amps can have V+ / V- power pins**: a "Power pins" checkbox in the property panel
+  adds two pins (V+ / V-, pins 4 and 5) and makes the output swing follow the real supply
+  rails (1.5 V short of each), so changing the supply no longer means editing parameters.
+  Leaving it unchecked keeps the original three-terminal model with the two swing fields.
+  The rails carry a 1 mA quiescent current so V+ is not left floating when only the supply
+  is wired.
 - **Update packages are verified with SHA-256**: every package's hash goes into the update
   manifest (`assets[].sha256` in `latest.json`) — there is no separate `hashes.sha256`
   file to ignore. The client hashes the download as it streams, then compares before

@@ -209,6 +209,12 @@ Set it to the measured signal's frequency, otherwise the window does not line up
         <translation>在此处打交点</translation>
     </message>
     <message>
+        <source>Adds V+ (pin 4) and V- (pin 5).
+With them wired, the output swing follows the real supply rails (minus %1 V) instead of the two swing fields below.</source>
+        <translation>多出 V+（引脚 4）与 V−（引脚 5）。
+接上之后输出摆幅跟着实际电源轨走（各留 %1 V 余量），下面那两个摆幅框不再生效。</translation>
+    </message>
+    <message>
         <source>Align and Distribute</source>
         <translation>对齐与分布</translation>
     </message>
@@ -1320,6 +1326,10 @@ Place a voltage (TP) or current (IP) test point and run again</source>
         <translation>纵向</translation>
     </message>
     <message>
+        <source>Power pins</source>
+        <translation>电源引脚</translation>
+    </message>
+    <message>
         <source>Previous Tab</source>
         <translation>上一个标签页</translation>
     </message>
@@ -1954,6 +1964,10 @@ Checked: normally closed, opens while held.</source>
     <message>
         <source>Update check failed: %1</source>
         <translation>检查更新失败：%1</translation>
+    </message>
+    <message>
+        <source>V+ / V- power pins</source>
+        <translation>V+ / V− 电源引脚</translation>
     </message>
     <message>
         <source>Value</source>

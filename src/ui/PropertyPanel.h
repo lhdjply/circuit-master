@@ -62,6 +62,7 @@ private:
     QLineEdit* m_vceSat = nullptr;
     QLineEdit* m_lpri = nullptr;
     // 运放：让模型不再「理想」的六个参数
+    QCheckBox* m_opPowerPins = nullptr; // 运放：是否引出 V+ / V−
     QLineEdit* m_opVsatHigh = nullptr;
     QLineEdit* m_opVsatLow = nullptr;
     QLineEdit* m_opGbw = nullptr;

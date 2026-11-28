@@ -142,6 +142,14 @@ void PropertyPanel::buildUi()
 
     // 运放：只暴露真正影响结果的那几个参数。默认值按通用型运放
     //（±15 V、1 MHz、0.5 V/µs）给，不动这些框就是「能用」的模型
+    m_opPowerPins = new QCheckBox(CSM_TR("V+ / V- power pins"), page);
+    m_opPowerPins->setToolTip(
+        CSM_TR("Adds V+ (pin 4) and V- (pin 5).\n"
+               "With them wired, the output swing follows the real supply rails "
+               "(minus %1 V) instead of the two swing fields below.")
+            .arg(Component::kOpampRailHeadroom, 0, 'g', 2));
+    m_form->addRow(CSM_TR("Power pins"), m_opPowerPins);
+
     m_opVsatHigh = makeEdit(CSM_TR("e.g. 15"));
     m_form->addRow(CSM_TR("Output swing high (V)"), m_opVsatHigh);
     m_opVsatLow = makeEdit(CSM_TR("e.g. -15"));
@@ -337,6 +345,7 @@ void PropertyPanel::buildUi()
     for (QLineEdit* edit : {m_opVsatHigh, m_opVsatLow, m_opGbw, m_opSlew, m_opVos, m_opIbias,
                             m_opRin, m_opRout})
         connect(edit, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
+    connect(m_opPowerPins, &QCheckBox::toggled, this, &PropertyPanel::applyValue);
     connect(m_lpri, &QLineEdit::editingFinished, this, &PropertyPanel::applyValue);
     connect(m_meterMode, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &PropertyPanel::applyValue);
@@ -448,6 +457,7 @@ void PropertyPanel::refreshFromItem()
     m_ctr->setText(QString::number(c.ctr, 'g', 4));
     m_vceSat->setText(quantityText(c.vceSat, UnitKind::Volt));
     m_lpri->setText(quantityText(c.lpri, UnitKind::Henry));
+    m_opPowerPins->setChecked(c.opampPowerPins);
     m_opVsatHigh->setText(quantityText(c.vSatHigh, UnitKind::Volt));
     m_opVsatLow->setText(quantityText(c.vSatLow, UnitKind::Volt));
     m_opGbw->setText(quantityText(c.gbw, UnitKind::Hertz));
@@ -524,6 +534,10 @@ void PropertyPanel::updateVisibility()
     for (QLineEdit* edit : {m_opVsatHigh, m_opVsatLow, m_opGbw, m_opSlew, m_opVos, m_opIbias,
                             m_opRin, m_opRout})
         m_form->setRowVisible(edit, opamp);
+    m_form->setRowVisible(m_opPowerPins, opamp);
+    // 有电源引脚时摆幅由电源轨算出来，这两行改成只读说明
+    m_form->setRowVisible(m_opVsatHigh, opamp && !c.opampPowerPins);
+    m_form->setRowVisible(m_opVsatLow, opamp && !c.opampPowerPins);
     m_form->setRowVisible(m_logicHigh, c.type == ComponentType::LogicGate);
 
     if (m_valueLabel) {
@@ -914,10 +928,15 @@ void PropertyPanel::applyValue()
         };
         if (!read(m_value, UnitKind::None, 1.0, &c.value))
             return;
-        if (!read(m_opVsatHigh, UnitKind::Volt, 1.0, &c.vSatHigh))
-            return;
-        if (!read(m_opVsatLow, UnitKind::Volt, 1.0, &c.vSatLow))
-            return;
+        c.opampPowerPins = m_opPowerPins && m_opPowerPins->isChecked();
+        // 摆幅两行在有电源引脚时是隐藏的：不读它们的文本，免得隐藏行里的旧内容
+        // 把有效参数覆盖掉
+        if (!c.opampPowerPins) {
+            if (!read(m_opVsatHigh, UnitKind::Volt, 1.0, &c.vSatHigh))
+                return;
+            if (!read(m_opVsatLow, UnitKind::Volt, 1.0, &c.vSatLow))
+                return;
+        }
         if (!read(m_opGbw, UnitKind::Hertz, 1.0, &c.gbw))
             return;
         if (!read(m_opSlew, UnitKind::None, 1e6, &c.slewRate))   // V/µs → V/s
@@ -939,6 +958,8 @@ void PropertyPanel::applyValue()
         m_item->setComponent(c);
         updateSubtitle();
         emit changed();
+        // 勾掉「电源引脚」时那两个引脚就没了，摆幅两行要跟着回来（或藏起来）
+        updateVisibility();
         return;
     }
 

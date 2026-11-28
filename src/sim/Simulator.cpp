@@ -578,7 +578,8 @@ double gateLevelFor(const Problem& p, const Component& comp, const std::vector<d
 
 // ---------------------------------------------------------------- 直流 / 瞬态装配
 void assembleReal(const Problem& p, const ElementState& st, bool transient, double h, double t,
-                  Matrix<double>& a, std::vector<double>& b, const DiodeModel& dm)
+                  Matrix<double>& a, std::vector<double>& b, const DiodeModel& dm,
+                  const std::vector<double>& x)
 {
     for (const Component* cp : p.elements) {
         const Component& comp = *cp;
@@ -948,16 +949,41 @@ void assembleReal(const Problem& p, const ElementState& st, bool transient, doub
                 beta = st.opampY.value(comp.id, 0.0) / (1.0 + hOverTau);   // 上一步提交值
             }
 
+            // 电源引脚：输出摆幅由实际电源轨决定，比 vSatHigh/vSatLow 更贴近现实
+            // （同一个运放换 ±5 V 供电，摆幅自然变小，不用手改参数）。
+            // 轨距用当前迭代解算，第一次迭代还是上一时刻的值，牛顿会收敛过去。
+            double vHi = std::max(comp.vSatHigh, comp.vSatLow);
+            double vLo = std::min(comp.vSatHigh, comp.vSatLow);
+            if (comp.opampPowerPins) {
+                const int nVp = p.nodeOf(comp.id, 3);
+                const int nVn = p.nodeOf(comp.id, 4);
+                // 注意 V− 接地时节点号就是 0，不能拿 "> 0" 当「引脚存在」用
+                const double railHi = p.voltage(x, nVp);
+                const double railLo = p.voltage(x, nVn);
+                const double head = Component::kOpampRailHeadroom;
+                if (railHi - railLo > 2.0 * head) {
+                    vHi = railHi - head;
+                    vLo = railLo + head;
+                }
+                // 静态电流：电源轨之间接一条等效电阻（1 mA @15 V ≈ 15 kΩ）。
+                // 没有它的话，只接电源、不接负载时 V+ 是浮空节点。
+                if (nVp != nVn)
+                    addG(a, nVp, nVn, 1.0 / 15000.0);
+            }
+
             // 饱和：在上一次迭代的 y 处线性化
-            const double vHi = std::max(comp.vSatHigh, comp.vSatLow);
-            const double vLo = std::min(comp.vSatHigh, comp.vSatLow);
             const double mid = 0.5 * (vHi + vLo);
             const double half = std::max(0.5 * (vHi - vLo), 1e-6);
             // 线性化点取「本轮迭代值」与「上一步提交值」的中点：撞轨那一刻
             // 两者可能相差很大，直接取迭代值会让牛顿在两个轨之间反复跳，
             // 各取一半相当于对迭代做阻尼
-            const double yIter = st.opampYIter.value(comp.id, st.opampY.value(comp.id, 0.0));
-            const double yCommit = st.opampY.value(comp.id, 0.0);
+            // 第一次求解时还没有内部状态：**从摆幅中点起步**，别从 0 起。
+            // 模型的约定是「内部 y = 0 对应中点」，若中点不在 0（例如 V+ = 5 V、
+            // V− = 0 时中点是 2.5 V），从 0 起步等于一上来就深饱和 —— 斜率趋于 0，
+            // 方程退化成「输出跟着输入」，牛顿会在错误解上收敛（实测 4 V 输入
+            // 打 5 V 供电的跟随器，输出停在 4 V 而不是 3.5 V）。
+            const double yIter = st.opampYIter.value(comp.id, st.opampY.value(comp.id, mid));
+            const double yCommit = st.opampY.value(comp.id, mid);
             const double yPrev = 0.5 * (yIter + yCommit);
             const double th = std::tanh((yPrev - mid) / half);
             const double slope = 1.0 - th * th;              // d sat / dy
@@ -1022,7 +1048,7 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
     for (int iter = 0; iter < 150; ++iter) {
         a.zero();
         std::fill(b.begin(), b.end(), 0.0);
-        assembleReal(p, st, transient, h, t, a, b, dm);
+        assembleReal(p, st, transient, h, t, a, b, dm, x);
 
         QString solveError;
         if (!a.solve(b, xnew, &solveError)) {
@@ -1112,7 +1138,10 @@ bool newtonSolve(const Problem& p, ElementState& st, bool transient, double h, d
             const double a0 = cp->value > 1.0 ? cp->value : 1e5;
             const double vd = p.voltage(x, p.nodeOf(cp->id, 0))
                               - p.voltage(x, p.nodeOf(cp->id, 1)) - cp->vos;
-            const double yOld = st.opampYIter.value(cp->id, st.opampY.value(cp->id, 0.0));
+            double railMid = 0.0;
+            double railHalf = 1.0;
+            opampSatRange(*cp, &railMid, &railHalf);
+            const double yOld = st.opampYIter.value(cp->id, st.opampY.value(cp->id, railMid));
             double y = a0 * vd;
             if (transient && cp->gbw > 0.0) {
                 const double tau = a0 / (2.0 * kPi * cp->gbw);
@@ -1503,11 +1532,12 @@ void updateState(const Problem& p, ElementState& st, const std::vector<double>& 
             const double yPrev = st.opampY.value(cp->id, 0.0);
             // opampY 一律存「内部」值（饱和之前）。被限速时把钉住的输出电压
             // 反解成内部值（sat 的反函数），保证 sat(opampY) == 钉住的输出
-            double y = st.opampYIter.value(cp->id, yPrev);
+            double mid = 0.0;
+            double half = 1.0;
+            opampSatRange(*cp, &mid, &half);
+            // 没有内部状态时按「中点」理解，理由同上：中点为 0 是特例而非通例
+            double y = st.opampYIter.value(cp->id, mid);
             if (st.opampSlew.contains(cp->id)) {
-                double mid = 0.0;
-                double half = 1.0;
-                opampSatRange(*cp, &mid, &half);
                 const double arg = std::clamp((st.opampSlew.value(cp->id) - mid) / half,
                                               -0.9999, 0.9999);
                 y = mid + half * std::atanh(arg);
