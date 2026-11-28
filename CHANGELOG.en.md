@@ -6,6 +6,27 @@ numbering follows [Semantic Versioning](https://semver.org/).
 The single source of truth for the version is the `VERSION` file at the
 repository root (same form as the tag, e.g. `v0.4.0`).
 
+## [Unreleased]
+
+### Changed
+
+- **Wires are drawn with right angles only, and the corner stays where it settled**:
+  dragging diagonally no longer produces a slanted segment — an elbow is inserted so the run
+  becomes one horizontal plus one vertical step. Once the corner is chosen it is kept: drag
+  down and then right and it stays bottom-left; drag right and then down and it stays
+  top-right. The choice is only reconsidered when the cursor lines up with the last point
+  (one leg shrinks to zero) — retreat into a vertical line and then go right again and the
+  corner is bottom-left once more. Both elbow coordinates come from the two endpoints, so it
+  still lands on the grid or the pin, and the preview shows exactly what will be committed.
+  Once you click, the segments you have committed turn **solid** and only the rubber band from
+  the last point to the cursor stays dashed, so it is obvious what is fixed and what is not.
+- **Right-click while wiring depends on how far the wire got**: with no points placed it
+  returns to the select tool; with only the start point it drops that point and stays in
+  wire mode; with at least one segment drawn it keeps the wire and starts a fresh,
+  unconnected one, still in wire mode. Only the next right-click (nothing in progress)
+  returns to select. Right-dragging the canvas still pans — only a click counts as
+  finishing.
+
 ## [v0.7.0] - 2026-11-28
 
 This release takes the sheet of paper seriously: the canvas *is* a sheet, and it

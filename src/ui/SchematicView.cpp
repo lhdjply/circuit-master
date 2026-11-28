@@ -23,6 +23,45 @@
 
 namespace csm {
 
+namespace {
+
+/// 两点是否已经在同一条水平 / 竖直线上（网格坐标，容差取半格）
+bool axisAligned(const QPointF& a, const QPointF& b)
+{
+    return std::abs(a.x() - b.x()) < 0.5 || std::abs(a.y() - b.y()) < 0.5;
+}
+
+/// 在 a→b 之间补的那个拐点：先横后竖取 (b.x, a.y)，先竖后横取 (a.x, b.y)。
+/// 两个坐标分别来自两个端点，所以拐点仍然落在网格上（或落在引脚上）。
+QPointF wireElbow(const QPointF& a, const QPointF& b, bool horizontalFirst)
+{
+    return horizontalFirst ? QPointF(b.x(), a.y()) : QPointF(a.x(), b.y());
+}
+
+/// 这一段该先横还是先竖。规则是「**保持上一次的选择**」，只在光标和落点
+/// 对齐（某条腿长度归零）时才重新认方向：
+///
+///   光标在落点正下方 / 正上方 → 只剩竖线 → 先竖（拐角在左下 / 左上）
+///   光标在落点正右方 / 正左方 → 只剩横线 → 先横（拐角在右上 / 右下）
+///   两条腿都在            → 保持上一次的选择，第一次才按主方向定
+///
+/// 这样「往下滑过去再往右拐」拐角留在左下；「往右滑过去再往下拐」留在右上；
+/// 中途往左退到只剩一条竖线再往右，又会从竖线重新开始 —— 都不会跟着最后一段乱翻。
+int wireElbowChoice(const QPointF& from, const QPointF& to, int current)
+{
+    const double dx = std::abs(to.x() - from.x());
+    const double dy = std::abs(to.y() - from.y());
+    if (dx < 0.5)
+        return 2;   // 只剩竖线
+    if (dy < 0.5)
+        return 1;   // 只剩横线
+    if (current != 0)
+        return current;
+    return dx >= dy ? 1 : 2;
+}
+
+} // namespace
+
 SchematicView::SchematicView(SchematicScene* scene, QWidget* parent)
     : QGraphicsView(scene, parent)
     , m_scene(scene)
@@ -85,9 +124,17 @@ void SchematicView::mousePressEvent(QMouseEvent* event)
     m_scene->setCursorScenePos(mapToScene(event->pos()));
     // 中键、右键都能拖着走图纸
     if (event->button() == Qt::MiddleButton || event->button() == Qt::RightButton) {
-        // 布线时右键仍然是「结束这条线」，不是平移
-        if (event->button() == Qt::RightButton && m_tool == Tool::Wire && !m_wirePoints.isEmpty()) {
-            finishWire();
+        // 布线时右键不是平移，按「画到哪一步」分三种：
+        //   已经落了至少两个点（有线段）→ 保留这条线并断开，留在布线状态，
+        //                                  下一条线跟它不相连
+        //   只落了起点（还没有线段）    → 把起点清掉，也留在布线状态
+        //   一个点都没有                → 见 mouseReleaseEvent：回到选择工具
+        if (event->button() == Qt::RightButton && m_tool == Tool::Wire
+            && !m_wirePoints.isEmpty()) {
+            if (m_wirePoints.size() >= 2)
+                finishWire();
+            else
+                cancelWire();
             event->accept();
             return;
         }
@@ -161,8 +208,9 @@ void SchematicView::mouseMoveEvent(QMouseEvent* event)
     m_scene->setCursorScenePos(scenePos);
     emit scenePositionChanged(scenePos);
 
-    if (m_tool == Tool::Wire && !m_wirePoints.isEmpty())
+    if (m_tool == Tool::Wire && !m_wirePoints.isEmpty()) {
         updatePreview(scenePos);
+    }
 
     QGraphicsView::mouseMoveEvent(event);
 }
@@ -188,8 +236,15 @@ void SchematicView::mouseReleaseEvent(QMouseEvent* event)
         m_menuPending = false;
         updateCursorAndHint();
         // 右键没拖动（或者干脆没收到 contextMenuEvent）：当成一次普通右键
-        if (wasRight && !dragged)
-            showContextMenuAt(menuPos);
+        if (wasRight && !dragged) {
+            if (m_tool == Tool::Wire) {
+                // 布线状态下没在画线，右键点一下就是「不画了」——回到选择工具。
+                // 拖动过的不算，那种情况是在平移图纸。
+                setTool(Tool::Select);
+            } else {
+                showContextMenuAt(menuPos);
+            }
+        }
         event->accept();
         return;
     }
@@ -460,6 +515,16 @@ void SchematicView::startWire(const QPointF& scenePos)
     m_wirePoints.clear();
     m_wirePoints.append(scenePos);
 
+    // 两件东西：已经落下的段用实线，还没定的橡皮筋用虚线
+    if (!m_wirePlaced) {
+        m_wirePlaced = new QGraphicsPathItem();
+        QPen pen(Theme::wire(), 2.0, Qt::SolidLine);
+        pen.setCapStyle(Qt::RoundCap);
+        pen.setJoinStyle(Qt::MiterJoin);
+        m_wirePlaced->setPen(pen);
+        m_wirePlaced->setZValue(5.0);
+        m_scene->addItem(m_wirePlaced);
+    }
     if (!m_preview) {
         m_preview = new QGraphicsPathItem();
         QPen pen(Theme::wire(), 2.0, Qt::DashLine);
@@ -476,9 +541,18 @@ void SchematicView::addWirePoint(const QPointF& scenePos)
         startWire(scenePos);
         return;
     }
-    if (QLineF(m_wirePoints.last(), scenePos).length() < 1.0)
+    const QPointF last = m_wirePoints.last();
+    if (QLineF(last, scenePos).length() < 1.0)
         return;
+
+    // 走线只走直角：斜着拖出来的那一段拆成两段，中间插一个拐点。
+    // 存进来的折线本身就已经是正交的，预览与落笔用的是同一份点，不会「看到的
+    // 是斜线、画出来是直角」。
+    const int choice = wireElbowChoice(last, scenePos, m_wireElbow);
+    if (!axisAligned(last, scenePos))
+        m_wirePoints.append(wireElbow(last, scenePos, choice == 1));
     m_wirePoints.append(scenePos);
+    m_wireElbow = 0;   // 下一段重新认方向
 }
 
 void SchematicView::updatePreview(const QPointF& scenePos)
@@ -486,12 +560,25 @@ void SchematicView::updatePreview(const QPointF& scenePos)
     if (!m_preview || m_wirePoints.isEmpty())
         return;
 
-    QPainterPath path;
-    path.moveTo(m_wirePoints.first());
+    // 已经落下的部分：实线
+    QPainterPath placed;
+    placed.moveTo(m_wirePoints.first());
     for (int i = 1; i < m_wirePoints.size(); ++i)
-        path.lineTo(m_wirePoints.at(i));
-    path.lineTo(m_scene->snapToPin(scenePos));
-    m_preview->setPath(path);
+        placed.lineTo(m_wirePoints.at(i));
+    if (m_wirePlaced)
+        m_wirePlaced->setPath(placed);
+
+    // 还没定的那一段：虚线（同样只走直角，和落笔时补的拐点保持一致）
+    const QPointF target = m_scene->snapToPin(scenePos);
+    const QPointF last = m_wirePoints.last();
+    m_wireElbow = wireElbowChoice(last, target, m_wireElbow);
+
+    QPainterPath rubber;
+    rubber.moveTo(last);
+    if (!axisAligned(last, target))
+        rubber.lineTo(wireElbow(last, target, m_wireElbow == 1));
+    rubber.lineTo(target);
+    m_preview->setPath(rubber);
 }
 
 void SchematicView::finishWire()
@@ -504,6 +591,16 @@ void SchematicView::finishWire()
     }
 
     m_wirePoints.clear();
+    clearWirePreview();
+}
+
+void SchematicView::clearWirePreview()
+{
+    if (m_wirePlaced) {
+        m_scene->removeItem(m_wirePlaced);
+        delete m_wirePlaced;
+        m_wirePlaced = nullptr;
+    }
     if (m_preview) {
         m_scene->removeItem(m_preview);
         delete m_preview;
@@ -514,11 +611,7 @@ void SchematicView::finishWire()
 void SchematicView::cancelWire()
 {
     m_wirePoints.clear();
-    if (m_preview) {
-        m_scene->removeItem(m_preview);
-        delete m_preview;
-        m_preview = nullptr;
-    }
+    clearWirePreview();
 }
 
 void SchematicView::zoomBy(double factor)

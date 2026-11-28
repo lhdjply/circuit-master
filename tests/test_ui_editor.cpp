@@ -25,6 +25,7 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFile>
+#include <QGraphicsPathItem>
 #include <QGraphicsSceneMouseEvent>
 #include <QLineEdit>
 #include <QImage>
@@ -75,6 +76,10 @@ private slots:
     void wireCanBeSelectedAndDeleted();
     void dragWireEndpointKeepsOtherEnd();
     void drawWireWithMouse();
+    void wireDrawingStaysOrthogonal();
+    void wireElbowFollowsMousePath();
+    void wireRightClickByStage();
+    void wirePreviewTurnsSolidAfterClick();
     void escCancelsWireThroughTheAction();
     void measureProbeReadsTheWire();
     void measureProbeUsesTheNearerWireEnd();
@@ -1737,6 +1742,289 @@ void UiEditorTest::drawWireWithMouse()
     QVERIFY(points.size() >= 2);
     QCOMPARE(points.first(), QPointF(270, 300));
     QCOMPARE(points.last(), QPointF(270, 420));
+}
+
+
+void UiEditorTest::wireDrawingStaysOrthogonal()
+{
+    // 走线只走直角：斜着点两下，落笔的折线必须由水平 / 竖直段组成，
+    // 中间自动补拐点（拐点坐标来自两个端点，所以仍在网格上）
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    QAction* newAction = nullptr;
+    for (QAction* action : window.findChildren<QAction*>()) {
+        if (action->text().startsWith(QStringLiteral("新建")))
+            newAction = action;
+    }
+    QVERIFY(newAction);
+    newAction->trigger();
+    settle();
+
+    auto* scene = currentScene(window);
+    auto* view = currentView(window);
+    QVERIFY(scene && view);
+
+    view->setTool(SchematicView::Tool::Wire);
+    settle();
+
+    // 故意画一条斜的：x 与 y 都变
+    const QPoint start = view->mapFromScene(QPointF(200, 200));
+    const QPoint end = view->mapFromScene(QPointF(360, 300));
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, start);
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, end);
+    QTest::mouseClick(view->viewport(), Qt::RightButton, Qt::NoModifier, end);
+    settle();
+
+    QCOMPARE(scene->wireItems().size(), 1);
+    const QVector<QPointF> points = scene->wireItems().first()->scenePoints();
+    QVERIFY2(points.size() >= 3, "斜线段应当被拆成两段并补一个拐点");
+
+    for (int i = 1; i < points.size(); ++i) {
+        const QPointF a = points.at(i - 1);
+        const QPointF b = points.at(i);
+        const bool horizontal = std::abs(a.y() - b.y()) < 0.5;
+        const bool vertical = std::abs(a.x() - b.x()) < 0.5;
+        QVERIFY2(horizontal || vertical,
+                 qPrintable(QStringLiteral("第 %1 段是斜线：(%2,%3) → (%4,%5)")
+                                .arg(i)
+                                .arg(a.x()).arg(a.y()).arg(b.x()).arg(b.y())));
+    }
+    QCOMPARE(points.first(), QPointF(200, 200));
+    QCOMPARE(points.last(), QPointF(360, 300));
+
+    // 继续往下画：新的一段也要是直角，且不能斜着接上去
+    const QPoint third = view->mapFromScene(QPointF(280, 420));
+    view->setTool(SchematicView::Tool::Wire);
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, end);
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, third);
+    QTest::mouseClick(view->viewport(), Qt::RightButton, Qt::NoModifier, third);
+    settle();
+
+    for (WireItem* wire : scene->wireItems()) {
+        const QVector<QPointF> pts = wire->scenePoints();
+        for (int i = 1; i < pts.size(); ++i) {
+            const QPointF a = pts.at(i - 1);
+            const QPointF b = pts.at(i);
+            QVERIFY(std::abs(a.y() - b.y()) < 0.5 || std::abs(a.x() - b.x()) < 0.5);
+        }
+    }
+}
+
+
+void UiEditorTest::wireElbowFollowsMousePath()
+{
+    // 拐点跟着鼠标滑过的路径走：先往下滑再往右滑，画出来就是先竖后横
+    // （拐点在下面），反过来就先横后竖（拐点在右边）。
+    // path 是鼠标依次滑过的位置，最后一个是落点
+    const auto drawWithPath = [](const QPointF& start, const QVector<QPointF>& path) {
+        MainWindow window;
+        window.resize(1200, 800);
+        window.show();
+        waitShown(window);
+
+        QAction* newAction = nullptr;
+        for (QAction* action : window.findChildren<QAction*>()) {
+            if (action->text().startsWith(QStringLiteral("新建")))
+                newAction = action;
+        }
+        if (!newAction)
+            return QVector<QPointF>();
+        newAction->trigger();
+        settle();
+
+        auto* scene = currentScene(window);
+        auto* view = currentView(window);
+        if (!scene || !view)
+            return QVector<QPointF>();
+
+        view->setTool(SchematicView::Tool::Wire);
+        settle();
+
+        QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier,
+                          view->mapFromScene(start));
+        for (const QPointF& step : path)
+            QTest::mouseMove(view->viewport(), view->mapFromScene(step));
+        const QPointF end = path.last();
+        QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier,
+                          view->mapFromScene(end));
+        QTest::mouseClick(view->viewport(), Qt::RightButton, Qt::NoModifier,
+                          view->mapFromScene(end));
+        settle();
+
+        if (scene->wireItems().size() != 1)
+            return QVector<QPointF>();
+        return scene->wireItems().first()->scenePoints();
+    };
+
+    // 往下滑再往右滑：拐点在下面（起点正下方）
+    const QVector<QPointF> downThenRight =
+        drawWithPath(QPointF(200, 200), {QPointF(200, 300), QPointF(360, 300)});
+    QCOMPARE(downThenRight.size(), 3);
+    QCOMPARE(downThenRight.at(0), QPointF(200, 200));
+    QCOMPARE(downThenRight.at(1), QPointF(200, 300));   // 先竖着下去
+    QCOMPARE(downThenRight.at(2), QPointF(360, 300));
+
+    // 往右滑再往下滑：拐点在右边（起点正右方）
+    const QVector<QPointF> rightThenDown =
+        drawWithPath(QPointF(200, 200), {QPointF(360, 200), QPointF(360, 300)});
+    QCOMPARE(rightThenDown.size(), 3);
+    QCOMPARE(rightThenDown.at(1), QPointF(360, 200));   // 先横着过去
+    QCOMPARE(rightThenDown.at(2), QPointF(360, 300));
+
+    // 中途退成一条竖线再往右：从竖线重新开始，拐角仍在左下
+    // （往右 → 往下 → 往左退到起点正下方 → 再往右）
+    const QVector<QPointF> foldBackAndRight =
+        drawWithPath(QPointF(200, 200),
+                     {QPointF(400, 200), QPointF(400, 400), QPointF(200, 400),
+                      QPointF(300, 400)});
+    QCOMPARE(foldBackAndRight.size(), 3);
+    QCOMPARE(foldBackAndRight.at(1), QPointF(200, 400));
+    QCOMPARE(foldBackAndRight.at(2), QPointF(300, 400));
+}
+
+
+void UiEditorTest::wireRightClickByStage()
+{
+    // 布线状态下的右键按「画到哪一步」分三种：
+    //   一个点都没有       → 回到选择工具
+    //   只有起点           → 清掉起点，留在布线
+    //   已经有线段         → 保留这条线并断开，留在布线
+    //   再右键（没在画）   → 回到选择
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    QAction* newAction = nullptr;
+    for (QAction* action : window.findChildren<QAction*>()) {
+        if (action->text().startsWith(QStringLiteral("新建")))
+            newAction = action;
+    }
+    QVERIFY(newAction);
+    newAction->trigger();
+    settle();
+
+    auto* scene = currentScene(window);
+    auto* view = currentView(window);
+    QVERIFY(scene && view);
+
+    const QPoint a = view->mapFromScene(QPointF(200, 200));
+    const QPoint b = view->mapFromScene(QPointF(320, 200));
+    const QPoint c = view->mapFromScene(QPointF(320, 320));
+
+    // ① 一个点都没画：右键回到选择工具
+    view->setTool(SchematicView::Tool::Wire);
+    settle();
+    QTest::mouseClick(view->viewport(), Qt::RightButton, Qt::NoModifier, a);
+    settle();
+    QCOMPARE(view->tool(), SchematicView::Tool::Select);
+    QCOMPARE(scene->wireItems().size(), 0);
+
+    // ② 只落了起点：右键清掉起点、留在布线，什么也没画出来
+    view->setTool(SchematicView::Tool::Wire);
+    settle();
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, a);
+    QTest::mouseClick(view->viewport(), Qt::RightButton, Qt::NoModifier, a);
+    settle();
+    QCOMPARE(view->tool(), SchematicView::Tool::Wire);
+    QCOMPARE(scene->wireItems().size(), 0);
+
+    // 此时再右键（没在画）→ 回到选择
+    QTest::mouseClick(view->viewport(), Qt::RightButton, Qt::NoModifier, a);
+    settle();
+    QCOMPARE(view->tool(), SchematicView::Tool::Select);
+
+    // ③ 画了线段再右键：线保留下来，工具仍在布线，下一条与它不相连
+    view->setTool(SchematicView::Tool::Wire);
+    settle();
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, a);
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, b);
+    QTest::mouseClick(view->viewport(), Qt::RightButton, Qt::NoModifier, b);
+    settle();
+    QCOMPARE(scene->wireItems().size(), 1);
+    QCOMPARE(view->tool(), SchematicView::Tool::Wire);
+
+    // 再画一条：从 c 开始，是一条独立的线（不与前一条合并）
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, c);
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier,
+                      view->mapFromScene(QPointF(460, 320)));
+    QTest::mouseClick(view->viewport(), Qt::RightButton, Qt::NoModifier,
+                      view->mapFromScene(QPointF(460, 320)));
+    settle();
+    QCOMPARE(scene->wireItems().size(), 2);
+
+    // 再右键（没在画）→ 回到选择
+    QTest::mouseClick(view->viewport(), Qt::RightButton, Qt::NoModifier, c);
+    settle();
+    QCOMPARE(view->tool(), SchematicView::Tool::Select);
+}
+
+
+void UiEditorTest::wirePreviewTurnsSolidAfterClick()
+{
+    // 点了左键落下一点之后，已经确定的那几段要变成实线，只有橡皮筋还是虚线。
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
+    waitShown(window);
+
+    QAction* newAction = nullptr;
+    for (QAction* action : window.findChildren<QAction*>()) {
+        if (action->text().startsWith(QStringLiteral("新建")))
+            newAction = action;
+    }
+    QVERIFY(newAction);
+    newAction->trigger();
+    settle();
+
+    auto* scene = currentScene(window);
+    auto* view = currentView(window);
+    QVERIFY(scene && view);
+
+    // 画线时用两件临时图元：实线的已落段、虚线的橡皮筋
+    const auto countPaths = [scene](Qt::PenStyle style) {
+        int count = 0;
+        for (QGraphicsItem* item : scene->items()) {
+            auto* path = dynamic_cast<QGraphicsPathItem*>(item);
+            if (!path || path->pen().style() != style)
+                continue;
+            if (path->path().isEmpty() || path->path().length() < 1.0)
+                continue;   // 只有 moveTo 的空路径不算
+            ++count;
+        }
+        return count;
+    };
+
+    view->setTool(SchematicView::Tool::Wire);
+    settle();
+
+    const QPoint start = view->mapFromScene(QPointF(200, 200));
+    const QPoint end = view->mapFromScene(QPointF(200, 320));
+    const QPoint further = view->mapFromScene(QPointF(420, 320));
+
+    // 只点了起点：还没有实线段，只有虚线橡皮筋
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, start);
+    QTest::mouseMove(view->viewport(), end);
+    settle();
+    QCOMPARE(countPaths(Qt::SolidLine), 0);
+    QCOMPARE(countPaths(Qt::DashLine), 1);
+
+    // 落下第二点：刚才那一段变实线，剩下的仍然是虚线
+    QTest::mouseClick(view->viewport(), Qt::LeftButton, Qt::NoModifier, end);
+    QTest::mouseMove(view->viewport(), further);
+    settle();
+    QCOMPARE(countPaths(Qt::SolidLine), 1);
+    QCOMPARE(countPaths(Qt::DashLine), 1);
+
+    // 收尾之后两件临时图元都收掉，场景里只剩真正的导线
+    QTest::mouseClick(view->viewport(), Qt::RightButton, Qt::NoModifier, further);
+    settle();
+    QCOMPARE(countPaths(Qt::SolidLine), 0);
+    QCOMPARE(countPaths(Qt::DashLine), 0);
+    QCOMPARE(scene->wireItems().size(), 1);
 }
 
 int main(int argc, char* argv[])

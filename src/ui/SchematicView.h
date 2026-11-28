@@ -71,6 +71,8 @@ private:
     void addWirePoint(const QPointF& scenePos);
     void updatePreview(const QPointF& scenePos);
     void finishWire();
+    /// 收掉画线时的两件临时图元（实线的已落段 + 虚线的橡皮筋）
+    void clearWirePreview();
     void updateCursorAndHint();
 
     SchematicScene* m_scene = nullptr;
@@ -83,7 +85,14 @@ private:
     ComponentItem* m_pressedButton = nullptr;
 
     QVector<QPointF> m_wirePoints;
+    /// 已经落下的那几段：实线（点了左键就该看到确定的线）
+    QGraphicsPathItem* m_wirePlaced = nullptr;
+    /// 从最后一个落点到光标的橡皮筋：虚线
     QGraphicsPathItem* m_preview = nullptr;
+    /// 这一段的拐角选哪一边：0 = 还没定、1 = 先横后竖（拐角在右上）、2 = 先竖后横（左下）。
+    /// 定下来就一直保持，只有光标和落点「对齐」（某条腿长度归零）时才重新认方向 ——
+    /// 所以往下滑过去再往右拐，拐角会留在左下，不会跟着最后一段乱翻。
+    int m_wireElbow = 0;
 
     bool m_panning = false;
     QPoint m_panStart;
