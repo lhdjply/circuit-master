@@ -169,7 +169,22 @@ struct Component {
     /// 交流档算有效值用的频率（Hz）：测量窗口取一个周期。
     /// 默认 50 Hz（市电）；被测信号不是 50 Hz 时必须跟着改，
     /// 否则窗口里装不下一个完整周期，读数会随时间乱跳。
+    /// 可用范围 20~500 Hz —— 见 acMeterFrequency()。
     double acFrequency = 50.0;
+    /// 交流档测量频率的下限 / 上限（Hz）。下限压着「窗口别长到几十秒」，
+    /// 上限压着「窗口里的采样点别太少」。
+    static constexpr double kAcFrequencyMin = 20.0;
+    static constexpr double kAcFrequencyMax = 500.0;
+    /// 实际生效的测量频率：没填（<= 0）时按 50 Hz，再夹到合法范围
+    double acMeterFrequency() const
+    {
+        const double f = acFrequency > 0.0 ? acFrequency : 50.0;
+        if (f < kAcFrequencyMin)
+            return kAcFrequencyMin;
+        if (f > kAcFrequencyMax)
+            return kAcFrequencyMax;
+        return f;
+    }
     /// 变压器的绕组形式（单绕组 / 初级 + 辅助 + 次级）
     TransformerKind transformerKind = TransformerKind::Single;
     /// 次级同名端画在下方（反相）：耦合系数取负，次级电压反 180°

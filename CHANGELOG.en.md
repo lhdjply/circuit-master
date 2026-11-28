@@ -77,6 +77,15 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Fixed
 
+- **The AC multimeter finally honours its own frequency**: three links were broken — the
+  "AC frequency" field in the property panel was displayed but never written back to the
+  component, the simulation hardcoded a 0.02 s window (50 Hz), and the value was saved but
+  never read back. Typing 400 Hz therefore did nothing; the window was always 50 Hz. The
+  window is now one period of that meter's own frequency, limited to **20-500 Hz** (values
+  outside clamp to the bounds, blank means 50 Hz), and the tooltip takes the range from the
+  constants. acMeterHonoursConfiguredFrequency proves the window really changes — a 300 Hz
+  window already reads at 5 ms while a 50 Hz one still shows dashes — and checks that the
+  live and batch paths agree.
 - **A failed crash-recovery copy was reported nowhere**: the timer writes a recovery copy
   every two minutes, but the return value of `Autosave::write()` was thrown away — with a
   full disk, a read-only home directory or an exhausted quota no copy existed at all while

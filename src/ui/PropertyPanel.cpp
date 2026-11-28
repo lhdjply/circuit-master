@@ -199,9 +199,13 @@ void PropertyPanel::buildUi()
     m_form->addRow(CSM_TR("High level (V)"), m_logicHigh);
 
     m_acFrequency = makeEdit();
+    // 范围从常量来，别在文案里写死数字 —— 改常量时提示会跟着变
     m_acFrequency->setToolTip(
-        CSM_TR("AC mode averages one full period: window = 1 / this frequency.\n"
-               "Follow the measured signal when it is not 50 Hz, otherwise the reading drifts."));
+        CSM_TR("AC mode averages one full period: window = 1 / this frequency "
+               "(%1-%2 Hz).\nSet it to the measured signal's frequency, otherwise the "
+               "window does not line up with the waveform and the reading drifts.")
+            .arg(Component::kAcFrequencyMin, 0, 'g', 3)
+            .arg(Component::kAcFrequencyMax, 0, 'g', 3));
     m_acFrequency->setPlaceholderText(CSM_TR("e.g. 50Hz"));
     m_form->addRow(CSM_TR("AC frequency"), m_acFrequency);
 
@@ -767,6 +771,26 @@ void PropertyPanel::applyValue()
         Component c = m_item->component();
         if (m_meterMode)
             c.multimeterMode = static_cast<MultimeterMode>(m_meterMode->currentData().toInt());
+        // 交流频率以前只显示、从来不写回：输入框改了等于没改，仿真永远按 50 Hz
+        // 取窗口。这里补上解析与范围检查（20~500 Hz）。
+        if (isAcMeterMode(c.multimeterMode) && m_acFrequency) {
+            QString reason;
+            bool ok = false;
+            const double hz = parseQuantity(m_acFrequency->text(), UnitKind::Hertz, &ok, &reason);
+            if (!ok) {
+                markInvalid(m_acFrequency, reason);
+                return;
+            }
+            if (hz < Component::kAcFrequencyMin || hz > Component::kAcFrequencyMax) {
+                markInvalid(m_acFrequency,
+                            CSM_TR("AC frequency must be between %1 and %2 Hz")
+                                .arg(Component::kAcFrequencyMin, 0, 'g', 3)
+                                .arg(Component::kAcFrequencyMax, 0, 'g', 3));
+                return;
+            }
+            markValid(m_acFrequency);
+            c.acFrequency = hz;
+        }
         m_item->setComponent(c);
         updateSubtitle();
         emit changed();

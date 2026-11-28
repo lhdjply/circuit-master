@@ -500,6 +500,9 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error, QStringList* w
         c.multimeterMode = static_cast<MultimeterMode>(
             std::clamp(o.value(QStringLiteral("multimeterMode")).toInt(0), 0,
                        int(MultimeterMode::AcCurrent)));
+        // 交流档的测量频率：以前写出去了却从来没人读回来，存盘一次就退回 50 Hz
+        c.acFrequency = std::clamp(num("acFrequency", 50.0), Component::kAcFrequencyMin,
+                                   Component::kAcFrequencyMax);
         c.netLabel = o.value(QStringLiteral("netLabel")).toString();
         c.normallyClosed = o.value(QStringLiteral("normallyClosed")).toBool(false);
         c.gateKind = static_cast<GateKind>(

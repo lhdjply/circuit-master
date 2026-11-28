@@ -97,6 +97,7 @@ private slots:
     void zenerFallbackIsForwardDiode();
     void multimeterMeasuresVoltageCurrentResistance();
     void multimeterMeasuresAcRms();
+    void acMeterHonoursConfiguredFrequency();
     void groundKindsAreSeparateNets();
     void signalGeneratorPlaysEveryWaveform();
     void signalGeneratorDrivesCircuitAndRoundTrips();
@@ -194,6 +195,143 @@ void CoreDeviceTest::bipolarTransistorAmplifies()
     // 基极-发射极正向导通，约 0.6~0.75 V
     QVERIFY2(vb->y.last() > 0.5 && vb->y.last() < 0.85,
              qPrintable(QString::number(vb->y.last())));
+}
+
+
+void CoreDeviceTest::acMeterHonoursConfiguredFrequency()
+{
+    // 交流档的测量窗口 = 1 / 频率。频率必须按这只表自己填的算：
+    // 以前窗口写死 0.02 s（50 Hz），而且属性面板的输入框根本没写回元件 ——
+    // 填 400 Hz 也没用，读数会跟着窗口乱跳。
+    auto build = [](double signalHz, double meterHz) {
+        Circuit c;
+        Component v;
+        v.id = 1;
+        v.type = ComponentType::VoltageSource;
+        v.pos = QPointF(100, 350);
+        v.rotation = 90;
+        v.refdes = QStringLiteral("V1");
+        v.function = SourceFunction::Sine;
+        v.amplitude = 220.0;
+        v.frequency = signalHz;
+        c.components.append(v);
+
+        Component mm;
+        mm.id = 2;
+        mm.type = ComponentType::Multimeter;
+        mm.pos = QPointF(250, 350);
+        mm.rotation = 90;
+        mm.refdes = QStringLiteral("XMM1");
+        mm.multimeterMode = MultimeterMode::AcVoltage;
+        mm.acFrequency = meterHz;
+        c.components.append(mm);
+
+        Component r;
+        r.id = 3;
+        r.type = ComponentType::Resistor;
+        r.pos = QPointF(350, 200);
+        r.refdes = QStringLiteral("R1");
+        r.value = 1000.0;
+        c.components.append(r);
+
+        Component g;
+        g.id = 4;
+        g.type = ComponentType::Ground;
+        g.pos = QPointF(100, 500);
+        g.refdes = QStringLiteral("GND");
+        c.components.append(g);
+
+        c.wires.append(Wire{{QPointF(100, 320), QPointF(100, 200), QPointF(320, 200)}});
+        c.wires.append(Wire{{QPointF(380, 200), QPointF(400, 200), QPointF(400, 320)}});
+        c.wires.append(Wire{{QPointF(400, 380), QPointF(400, 500), QPointF(100, 500)}});
+        c.wires.append(Wire{{QPointF(100, 380), QPointF(100, 500)}});
+        c.wires.append(Wire{{QPointF(250, 200), QPointF(250, 320)}});
+        c.wires.append(Wire{{QPointF(250, 380), QPointF(250, 500)}});
+        return c;
+    };
+
+    const auto readBatch = [&build](double signalHz, double meterHz, double tStop) {
+        const Circuit c = build(signalHz, meterHz);
+        SimulationOptions opt;
+        opt.kind = AnalysisKind::Transient;
+        opt.tStop = tStop;
+        opt.tStep = 1.0 / (meterHz * 200.0);
+        const SimulationResult r = Simulator::run(c, opt);
+        if (!r.ok)
+            return -1.0;
+        const Signal* sig = r.signal(QStringLiteral("XMM1"));
+        return sig ? sig->y.last() : -1.0;
+    };
+
+    // ① 窗口长度就是 1/频率：300 Hz 的窗口 3.3 ms，跑到 5 ms 早该有读数
+    const double at5ms300 = readBatch(300.0, 300.0, 0.005);
+    QVERIFY2(std::isfinite(at5ms300),
+             qPrintable(QStringLiteral("300 Hz 窗口 5 ms 时应当已有读数，实际 %1")
+                            .arg(at5ms300)));
+    // 同一时刻把表填成 50 Hz（窗口 20 ms）还攒不满 —— 读数必须是 NaN（界面显示横杠）。
+    // 这一条正是「频率没生效」的照妖镜：以前两条路径都按 50 Hz 取窗口。
+    const double at5ms50 = readBatch(300.0, 50.0, 0.005);
+    QVERIFY2(std::isnan(at5ms50),
+             qPrintable(QStringLiteral("50 Hz 窗口 5 ms 时不该有读数，实际 %1")
+                            .arg(at5ms50)));
+
+    // ② 220 V 有效值、400 Hz：表也填 400 Hz 时读数应当准
+    const double at400 = readBatch(400.0, 400.0, 0.05);
+    QVERIFY2(near(at400, 220.0, 2.0),
+             qPrintable(QStringLiteral("400 Hz 时读 %1 V").arg(at400)));
+
+    // ③ 实时仿真走的必须是同一个窗口（以前那条路径把周期写死成 0.02 s）
+    const auto liveReading = [&build](double meterHz, double seconds) {
+        const Circuit c = build(400.0, meterHz);
+        LiveTransient live;
+        QString error;
+        const double h = 1.0 / (meterHz * 200.0);
+        if (!live.start(c, h, &error))
+            return -1.0;
+        const int index = live.signalNames().indexOf(QStringLiteral("XMM1"));
+        if (index < 0)
+            return -1.0;
+        if (!live.advance(int(std::lround(seconds / h)), &error))
+            return -1.0;
+        return live.values().at(index);
+    };
+    const double live400 = liveReading(400.0, 0.05);
+    QVERIFY2(near(live400, 220.0, 2.0),
+             qPrintable(QStringLiteral("实时仿真 400 Hz 读 %1 V").arg(live400)));
+    const double live5ms300 = liveReading(300.0, 0.005);
+    QVERIFY2(std::isfinite(live5ms300),
+             qPrintable(QStringLiteral("实时仿真 300 Hz 窗口 5 ms 时应当已有读数，实际 %1")
+                            .arg(live5ms300)));
+
+    // 频率范围 20~500 Hz：越界按边界算，没填按 50 Hz
+    Component meter;
+    meter.type = ComponentType::Multimeter;
+    meter.multimeterMode = MultimeterMode::AcVoltage;
+    meter.acFrequency = 0.0;
+    QCOMPARE(meter.acMeterFrequency(), 50.0);
+    meter.acFrequency = 5.0;
+    QCOMPARE(meter.acMeterFrequency(), Component::kAcFrequencyMin);
+    meter.acFrequency = 1000.0;
+    QCOMPARE(meter.acMeterFrequency(), Component::kAcFrequencyMax);
+    meter.acFrequency = 300.0;
+    QCOMPARE(meter.acMeterFrequency(), 300.0);
+
+    // 存盘往返：这个值以前写出去却从来不读回来，存一次就退回 50 Hz
+    meter.acFrequency = 400.0;
+    Circuit saved;
+    saved.components.append(meter);
+    const Circuit back = Circuit::fromJson(saved.toJson());
+    QCOMPARE(back.components.first().acFrequency, 400.0);
+
+    // 读盘时越界值也要钳住
+    QJsonObject raw = saved.toJson();
+    QJsonArray comps = raw.value(QStringLiteral("components")).toArray();
+    QJsonObject first = comps.at(0).toObject();
+    first.insert(QStringLiteral("acFrequency"), 5000.0);
+    comps.replace(0, first);
+    raw.insert(QStringLiteral("components"), comps);
+    QCOMPARE(Circuit::fromJson(raw).components.first().acFrequency,
+             Component::kAcFrequencyMax);
 }
 
 void CoreDeviceTest::polarizedCapacitorReverseDetected()

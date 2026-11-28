@@ -1421,12 +1421,14 @@ QVector<Signal> makeSignals(const Problem& p)
 
 /// 把当前时刻的万用表读数喂进交流档的滑动窗口（瞬态每步调用一次）。
 /// 直流工作点不调用 —— 没有时间轴，交流有效值就是 0。
-void updateAcMeters(const Problem& p, ElementState& st, const std::vector<double>& x,
-                    double h, double period = 0.02)
+void updateAcMeters(const Problem& p, ElementState& st, const std::vector<double>& x, double h)
 {
     for (const Component* cp : p.elements) {
         if (cp->type != ComponentType::Multimeter || !isAcMeterMode(cp->multimeterMode))
             continue;
+        // 窗口按这只表自己的频率取一个周期。以前这里写死 0.02 s（= 50 Hz），
+        // 用户把频率改成 400 Hz 也没用 —— 窗口对不上信号周期，读数会乱跳。
+        const double period = 1.0 / cp->acMeterFrequency();
         double instant = 0.0;
         if (cp->multimeterMode == MultimeterMode::AcCurrent) {
             const int br = p.branchOf.value(cp->id, -1);
@@ -2232,7 +2234,7 @@ SimulationResult Simulator::run(const Circuit& circuit, const SimulationOptions&
         for (const Component& comp : circuit.components) {
             if (comp.type != ComponentType::Multimeter || !isAcMeterMode(comp.multimeterMode))
                 continue;
-            const double freq = comp.acFrequency > 0.1 ? comp.acFrequency : 50.0;
+            const double freq = comp.acMeterFrequency();
             const double period = 1.0 / freq;
             if (tStop < period) {
                 result.log << CSM_TR("Tip: %1 is an AC range and needs one full period (%2 Hz → %3) "

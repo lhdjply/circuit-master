@@ -172,10 +172,14 @@ See the report on this page; switch to Live Scope for waveforms</translation>
         <translation>AC frequency</translation>
     </message>
     <message>
-        <source>AC mode averages one full period: window = 1 / this frequency.
-Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</source>
-        <translation>AC mode averages one full period: window = 1 / this frequency.
-Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</translation>
+        <source>AC frequency must be between %1 and %2 Hz</source>
+        <translation>AC frequency must be between %1 and %2 Hz</translation>
+    </message>
+    <message>
+        <source>AC mode averages one full period: window = 1 / this frequency (%1-%2 Hz).
+Set it to the measured signal's frequency, otherwise the window does not line up with the waveform and the reading drifts.</source>
+        <translation>AC mode averages one full period: window = 1 / this frequency (%1-%2 Hz).
+Set it to the measured signal's frequency, otherwise the window does not line up with the waveform and the reading drifts.</translation>
     </message>
     <message>
         <source>AC volts</source>

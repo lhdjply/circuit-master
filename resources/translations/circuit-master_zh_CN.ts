@@ -175,10 +175,14 @@ See the report on this page; switch to Live Scope for waveforms</source>
         <translation>交流频率</translation>
     </message>
     <message>
-        <source>AC mode averages one full period: window = 1 / this frequency.
-Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</source>
-        <translation>交流档按一个周期算有效值：窗口 = 1 / 这个频率。
-被测信号不是 50 Hz 时必须跟着改，否则读数会随时间跳动。</translation>
+        <source>AC frequency must be between %1 and %2 Hz</source>
+        <translation>交流频率要在 %1 ~ %2 Hz 之间</translation>
+    </message>
+    <message>
+        <source>AC mode averages one full period: window = 1 / this frequency (%1-%2 Hz).
+Set it to the measured signal's frequency, otherwise the window does not line up with the waveform and the reading drifts.</source>
+        <translation>交流档按一个完整周期取平均：窗口 = 1 / 这个频率（%1~%2 Hz）。
+填成被测信号的频率，否则窗口和波形对不齐，读数会飘。</translation>
     </message>
     <message>
         <source>AC volts</source>
