@@ -265,6 +265,7 @@ void UpdateDialog::startAttempt()
     // 每次尝试重新计时：有的镜像连得上但只往外滴几 KB/s，光靠「请求结束」判断
     // 失败会让用户干等好几分钟。这里改成按吞吐量判，慢或卡住就换下一个地址。
     m_attemptBytes = 0;
+    m_hash.reset();   // 换镜像就从头算，否则算出来是两段拼起来的哈希
     m_lastTickBytes = 0;
     m_idleTicks = 0;
     m_attemptClock.restart();
@@ -301,6 +302,7 @@ void UpdateDialog::onReadyRead()
         return;
     const QByteArray chunk = m_reply->readAll();
     m_attemptBytes += chunk.size();
+    m_hash.addData(chunk);
     if (m_file)
         m_file->write(chunk);
     updateTransferInfo();
@@ -426,7 +428,40 @@ void UpdateDialog::onFinished()
     }
 
     if (m_file && m_file->isOpen()) {
-        m_file->write(reply->readAll());
+        const QByteArray tail = reply->readAll();
+        m_file->write(tail);
+        m_hash.addData(tail);
+
+        // 校验：清单里给了 sha256 就必须对上。第三方镜像 / 转发服务有可能回一个
+        // 被截断或被替换的文件，装下去就是给系统塞了个不知道是什么的东西。
+        // 对不上就换下一个镜像重下；全都不行才报错。
+        const QByteArray digest = m_hash.result();
+        if (!m_asset.sha256.isEmpty() && !UpdateChecker::hashMatches(digest, m_asset.sha256)) {
+            const QString got = QString::fromLatin1(digest.toHex());
+            m_file->cancelWriting();
+            delete m_file;
+            m_file = nullptr;
+            const QString reason =
+                CSM_TR("Checksum mismatch: expected %1, got %2")
+                    .arg(m_asset.sha256, got);
+            trace(reason);
+            if (m_attempt < m_urls.size()) {
+                m_status->setText(CSM_TR("The downloaded file did not match its checksum, "
+                                         "trying another mirror (%1/%2)…")
+                                      .arg(m_attempt + 1)
+                                      .arg(m_urls.size()));
+                m_file = new QSaveFile(m_savePath, this);
+                if (!m_file->open(QIODevice::WriteOnly)) {
+                    abortDownload(m_file->errorString());
+                    return;
+                }
+                startAttempt();
+                return;
+            }
+            abortDownload(reason);
+            return;
+        }
+
         if (!m_file->commit()) {
             const QString reason = m_file->errorString();
             delete m_file;
@@ -439,6 +474,7 @@ void UpdateDialog::onFinished()
     }
 
     m_savedPath = m_savePath;
+    m_checkedHash = !m_asset.sha256.isEmpty();
     m_progress->setValue(m_progress->maximum());
     m_downloadButton->setEnabled(true);
     m_downloadButton->setText(CSM_TR("Download and Install Again"));
@@ -478,7 +514,10 @@ void UpdateDialog::installDownloaded(const QString& path)
             QDesktopServices::openUrl(QUrl::fromLocalFile(info.absolutePath()));
             return;
         }
-        m_status->setText(CSM_TR("Installing, confirm in the authorization window…"));
+        m_status->setText(m_checkedHash
+                              ? CSM_TR("Checksum verified. Installing, confirm in the "
+                                       "authorization window…")
+                              : CSM_TR("Installing, confirm in the authorization window…"));
         QApplication::setOverrideCursor(Qt::WaitCursor);
         QProcess process;
         process.start(tool, {QStringLiteral("dpkg"), QStringLiteral("-i"), path});

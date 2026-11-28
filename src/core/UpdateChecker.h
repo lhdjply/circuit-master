@@ -61,6 +61,9 @@ struct ReleaseAsset {
     QString name;   // 文件名，例如 circuit-master_0.2.0_amd64.deb
     QString url;    // 直链（github.com/releases/download/<tag>/<file>）
     qint64 size = 0; // 字节数，未知为 0
+    /// 安装包的 SHA-256（小写十六进制）。清单没给就是空的 —— 那是老版本清单，
+    /// 或者 CI 没算出来，这时只能提示「未校验」而不能当成校验通过。
+    QString sha256;
 };
 
 /// 一条 Release 里本功能用得到的字段
@@ -121,6 +124,12 @@ public:
     static QVector<QUrl> downloadUrls(const QString& assetUrl, const QString& preferredMirror);
     /// 用当前构建目标挑包（首选形态）
     static ReleaseAsset pickAssetForHost(const ReleaseInfo& release);
+
+    /// 下载到的字节流的 SHA-256 是否与清单里的一致。digest 是原始摘要
+    /// （QCryptographicHash::result()），expectedHex 是清单里的十六进制文本。
+    /// expected 为空表示清单没给哈希：返回 false，调用方应当提示「无法校验」。
+    /// 比较前统一转小写、去掉空白，容忍大小写与前后空格。
+    static bool hashMatches(const QByteArray& digest, const QString& expectedHex);
 
     /// 当前平台支持哪些包形态，按推荐顺序排列（找不到产物时为空）
     static QVector<PackageFormat> formatsFor(HostPlatform platform, InstallKind kind);

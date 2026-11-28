@@ -403,6 +403,14 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>正在检查更新…</translation>
     </message>
     <message>
+        <source>Checksum mismatch: expected %1, got %2</source>
+        <translation>校验和对不上：清单是 %1，实际是 %2</translation>
+    </message>
+    <message>
+        <source>Checksum verified. Installing, confirm in the authorization window…</source>
+        <translation>校验通过，正在安装，请在授权窗口确认…</translation>
+    </message>
+    <message>
         <source>Circuit Master</source>
         <translation>电路仿真大师</translation>
     </message>
@@ -1740,6 +1748,10 @@ Restore them?</source>
     <message>
         <source>The circuit has no solvable nodes. Place parts and wire them together.</source>
         <translation>电路中没有可求解的节点。请放置元件并用导线连接。</translation>
+    </message>
+    <message>
+        <source>The downloaded file did not match its checksum, trying another mirror (%1/%2)…</source>
+        <translation>下载的文件校验对不上，换一个镜像重试（%1/%2）…</translation>
     </message>
     <message>
         <source>The example has no components.</source>

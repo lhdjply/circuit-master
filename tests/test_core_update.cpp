@@ -8,6 +8,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSignalSpy>
+#include <QCryptographicHash>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTest>
@@ -23,6 +24,7 @@ private slots:
     void updatePickerChoosesPlatformAsset();
     void downloadUrlsPreferWorkingMirror();
     void manifestRecordsMirrorForDownloads();
+    void manifestCarriesPackageChecksum();
     void versionComparison();
     void changelogSectionsAreUnique();
 };
@@ -395,6 +397,84 @@ void CoreUpdateTest::manifestRecordsMirrorForDownloads()
     QCOMPARE(release.assets.size(), 1);
     QVERIFY2(!release.mirror.isEmpty(), "应当记录取到清单所用的镜像");
     QVERIFY(release.mirror.startsWith(mirror));
+}
+
+
+void CoreUpdateTest::manifestCarriesPackageChecksum()
+{
+    // 清单里带了安装包的 sha256，客户端下载完要拿它比对
+    const QByteArray payload = QByteArray("package-bytes");
+    const QByteArray raw = QCryptographicHash::hash(payload, QCryptographicHash::Sha256);
+    const QByteArray digest = raw.toHex();   // 清单里存的是十六进制文本
+
+    QTcpServer server;
+    QVERIFY(server.listen(QHostAddress::LocalHost));
+    connect(&server, &QTcpServer::newConnection, this, [&server, &payload] {
+        QTcpSocket* socket = server.nextPendingConnection();
+        connect(socket, &QTcpSocket::readyRead, socket, [socket, &payload] {
+            socket->readAll();
+            socket->write("HTTP/1.1 200 OK\r\nContent-Type: application/octet-stream\r\n"
+                          "Content-Length: "
+                          + QByteArray::number(payload.size()) + "\r\nConnection: close\r\n\r\n"
+                          + payload);
+            socket->disconnectFromHost();
+        });
+    });
+
+    const QString base = QStringLiteral("http://127.0.0.1:%1").arg(server.serverPort());
+    QJsonObject asset;
+    asset.insert(QStringLiteral("name"), QStringLiteral("circuit-master_99.0.0_amd64.deb"));
+    asset.insert(QStringLiteral("url"), base + QStringLiteral("/pkg.bin"));
+    asset.insert(QStringLiteral("size"), qint64(payload.size()));
+    // 故意写成大写 + 前后空格：解析时要规整成小写
+    asset.insert(QStringLiteral("sha256"),
+                 QStringLiteral("  %1  ").arg(QString::fromLatin1(digest.toUpper())));
+
+    QJsonObject object;
+    object.insert(QStringLiteral("version"), QStringLiteral("99.0.0"));
+    object.insert(QStringLiteral("tag"), QStringLiteral("v99.0.0"));
+    object.insert(QStringLiteral("assets"), QJsonArray{asset});
+    const QByteArray manifest = QJsonDocument(object).toJson(QJsonDocument::Compact);
+
+    QTcpServer manifestServer;
+    QVERIFY(manifestServer.listen(QHostAddress::LocalHost));
+    connect(&manifestServer, &QTcpServer::newConnection, this,
+            [&manifestServer, &manifest] {
+                QTcpSocket* socket = manifestServer.nextPendingConnection();
+                connect(socket, &QTcpSocket::readyRead, socket, [socket, &manifest] {
+                    socket->readAll();
+                    socket->write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
+                                  "Content-Length: "
+                                  + QByteArray::number(manifest.size())
+                                  + "\r\nConnection: close\r\n\r\n" + manifest);
+                    socket->disconnectFromHost();
+                });
+            });
+
+    const QString manifestBase =
+        QStringLiteral("http://127.0.0.1:%1").arg(manifestServer.serverPort());
+
+    UpdateChecker checker;
+    checker.setMirrorPrefixes({manifestBase});
+    checker.setManifestUrl(QUrl(base + QStringLiteral("/latest.json")));
+    QSignalSpy spy(&checker, &UpdateChecker::updateAvailable);
+    QVERIFY(checker.check());
+    QVERIFY(spy.wait(5000));
+
+    const auto release = spy.first().at(0).value<ReleaseInfo>();
+    QCOMPARE(release.assets.size(), 1);
+    const ReleaseAsset picked = release.assets.first();
+    QCOMPARE(picked.sha256, QString::fromLatin1(digest));
+
+    // 比对本身：入参是原始摘要，清单里是十六进制；大小写、空白都容忍，空值不算通过
+    QVERIFY(UpdateChecker::hashMatches(raw, picked.sha256));
+    QVERIFY(UpdateChecker::hashMatches(raw, QString::fromLatin1(digest.toUpper())));
+    QVERIFY(UpdateChecker::hashMatches(raw, QStringLiteral(" %1 ").arg(QString::fromLatin1(digest))));
+    QVERIFY(!UpdateChecker::hashMatches(raw, QString()));
+    QVERIFY(!UpdateChecker::hashMatches(QByteArray(), picked.sha256));
+    QByteArray wrong = raw;
+    wrong[0] = char(wrong.at(0) ^ 0x01);
+    QVERIFY(!UpdateChecker::hashMatches(wrong, picked.sha256));
 }
 
 void CoreUpdateTest::versionComparison()

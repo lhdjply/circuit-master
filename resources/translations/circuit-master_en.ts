@@ -400,6 +400,14 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
         <translation>Checking for updates…</translation>
     </message>
     <message>
+        <source>Checksum mismatch: expected %1, got %2</source>
+        <translation>Checksum mismatch: expected %1, got %2</translation>
+    </message>
+    <message>
+        <source>Checksum verified. Installing, confirm in the authorization window…</source>
+        <translation>Checksum verified. Installing, confirm in the authorization window…</translation>
+    </message>
+    <message>
         <source>Circuit Master</source>
         <translation>Circuit Master</translation>
     </message>
@@ -1738,6 +1746,10 @@ Restore them?</translation>
     <message>
         <source>The circuit has no solvable nodes. Place parts and wire them together.</source>
         <translation>The circuit has no solvable nodes. Place parts and wire them together.</translation>
+    </message>
+    <message>
+        <source>The downloaded file did not match its checksum, trying another mirror (%1/%2)…</source>
+        <translation>The downloaded file did not match its checksum, trying another mirror (%1/%2)…</translation>
     </message>
     <message>
         <source>The example has no components.</source>

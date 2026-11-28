@@ -12,6 +12,7 @@
 
 #include "core/UpdateChecker.h"
 
+#include <QCryptographicHash>
 #include <QDialog>
 #include <QElapsedTimer>
 #include <QUrl>
@@ -79,7 +80,11 @@ private:
     QNetworkAccessManager* m_net = nullptr;
     QNetworkReply* m_reply = nullptr;
     QSaveFile* m_file = nullptr;
+    /// 边收边算，避免下完再读一遍上百 MB 的文件（每次换镜像重开）
+    QCryptographicHash m_hash{QCryptographicHash::Sha256};
     bool m_installAfterDownload = false;
+    /// 这次下载是否真的校验过（清单里没给 sha256 时为 false，界面上要说清楚）
+    bool m_checkedHash = false;
 
     QLabel* m_status = nullptr;
     QProgressBar* m_progress = nullptr;

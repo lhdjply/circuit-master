@@ -10,6 +10,13 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Added
 
+- **Update packages are verified with SHA-256**: every package's hash goes into the update
+  manifest (`assets[].sha256` in `latest.json`) — there is no separate `hashes.sha256`
+  file to ignore. The client hashes the download as it streams, then compares before
+  installing: on a mismatch the file is discarded and the next mirror is tried, and if all
+  of them disagree it reports both the expected and the actual digest.
+  Nothing was checked before — a mirror could have served any file at all. Releases that
+  predate this still install, but the UI says the package was not verified.
 - **Paper, orientation and scale are adjustable when printing**: "Paper" is a dropdown
   (A5 … A1, defaulting to the sheet's own setting), "Orientation" switches landscape /
   portrait and "Scale" offers fit-to-sheet, actual size (1:1) or a custom percentage —

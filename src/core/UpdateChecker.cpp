@@ -600,6 +600,7 @@ bool UpdateChecker::parseManifest(const QByteArray& payload)
         asset.name = item.value(QStringLiteral("name")).toString();
         asset.url = item.value(QStringLiteral("url")).toString();
         asset.size = qint64(item.value(QStringLiteral("size")).toDouble(0.0));
+        asset.sha256 = item.value(QStringLiteral("sha256")).toString().trimmed().toLower();
         if (!asset.name.isEmpty() && !asset.url.isEmpty())
             info.assets.append(asset);
     }
@@ -631,6 +632,14 @@ bool UpdateChecker::parseManifest(const QByteArray& payload)
 
     report(info);
     return true;
+}
+
+bool UpdateChecker::hashMatches(const QByteArray& digest, const QString& expectedHex)
+{
+    const QString expected = expectedHex.trimmed().toLower();
+    if (expected.isEmpty() || digest.isEmpty())
+        return false;
+    return QString::fromLatin1(digest.toHex()) == expected;
 }
 
 void UpdateChecker::report(const ReleaseInfo& release)
