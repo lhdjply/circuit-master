@@ -47,6 +47,10 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</source>
         <translation>「%1」有未保存的更改，是否保存？</translation>
     </message>
     <message>
+        <source>"%1" is not a finite number, using %2.</source>
+        <translation>「%1」不是有限数，改用 %2。</translation>
+    </message>
+    <message>
         <source>%1 %2 (%3 × %4 mm)</source>
         <translation>%1 %2（%3 × %4 mm）</translation>
     </message>
@@ -649,6 +653,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Draw wire (W)</source>
         <translation>绘制导线 (W)</translation>
+    </message>
+    <message>
+        <source>Duplicate component id %1, renumbered to %2.</source>
+        <translation>元件编号 %1 重复，已改成 %2。</translation>
     </message>
     <message>
         <source>Duty %</source>
@@ -1900,6 +1908,10 @@ Checked: normally closed, opens while held.</source>
         <translation>单位不匹配，应为 %1</translation>
     </message>
     <message>
+        <source>Unknown component type "%1" (skipped).</source>
+        <translation>认不出的元件型号「%1」，已跳过。</translation>
+    </message>
+    <message>
         <source>Unknown error</source>
         <translation>未知错误</translation>
     </message>
@@ -1966,6 +1978,10 @@ Checked: normally closed, opens while held.</source>
     <message>
         <source>Volts per microsecond. 0 means unlimited.</source>
         <translation>单位 V/µs；0 表示不限速。</translation>
+    </message>
+    <message>
+        <source>Warning: %1</source>
+        <translation>提示：%1</translation>
     </message>
     <message>
         <source>Waveform</source>

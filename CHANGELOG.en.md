@@ -70,6 +70,16 @@ repository root (same form as the tag, e.g. `v0.4.0`).
 
 ### Fixed
 
+- **Loading a file no longer silently changes the circuit**: `.csm` was read with no
+  validation at all, and three cases altered the circuit without a word —
+  duplicate component ids made the netlist's per-id pin table overwrite one entry, so two
+  parts ended up on the same node (a 5 V divider measured 0 V instead of 2.5 V); an
+  unrecognised type tag quietly became a "0 Ω resistor"; and a non-finite number put inf
+  into the matrix, so the solve returned nan and the user only saw "did not converge".
+  Duplicate ids are now renumbered, unknown types are skipped, non-finite values fall back
+  to their defaults, and each case leaves a note in the log. Ground / multimeter / gate
+  modes are clamped to their valid range too (they used to be cast straight from any
+  integer, leaving switches without a matching branch).
 - **Editing a parameter mid-run reset the capacitor voltage to the DC operating point**:
   while the live scope was running, changing a resistor or capacitor value re-solved the
   DC operating point and wrote it back into the capacitor voltage, so a half-charged

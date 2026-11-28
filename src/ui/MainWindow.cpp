@@ -2581,12 +2581,17 @@ bool MainWindow::openPath(const QString& path)
     }
 
     QString error;
+    QStringList loadWarnings;
     const QJsonObject root = json.object();
-    const Circuit circuit = Circuit::fromJson(root, &error);
+    const Circuit circuit = Circuit::fromJson(root, &error, &loadWarnings);
     if (!error.isEmpty()) {
         Dialogs::warn(this, CSM_TR("Open failed"), error);
         return false;
     }
+    // 能读但不对劲的地方（重复 id 被重新编号、认不出的型号被跳过、数值不是有限数）
+    // 不拦着打开，但要让人看见，否则电路悄悄变了却没人知道
+    for (const QString& warning : loadWarnings)
+        appendLog(CSM_TR("Warning: %1").arg(warning));
     if (circuit.components.isEmpty()) {
         Dialogs::warn(this, CSM_TR("Open failed"), CSM_TR("The file has no components."));
         return false;

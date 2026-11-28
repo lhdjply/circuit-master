@@ -44,6 +44,10 @@ Waveform exceeds the range (scale locked), click Auto Scale to restore</translat
         <translation>"%1" has unsaved changes. Save them?</translation>
     </message>
     <message>
+        <source>"%1" is not a finite number, using %2.</source>
+        <translation>"%1" is not a finite number, using %2.</translation>
+    </message>
+    <message>
         <source>%1 %2 (%3 × %4 mm)</source>
         <translation>%1 %2 (%3 × %4 mm)</translation>
     </message>
@@ -646,6 +650,10 @@ Follow the measured signal when it is not 50 Hz, otherwise the reading drifts.</
     <message>
         <source>Draw wire (W)</source>
         <translation>Draw wire (W)</translation>
+    </message>
+    <message>
+        <source>Duplicate component id %1, renumbered to %2.</source>
+        <translation>Duplicate component id %1, renumbered to %2.</translation>
     </message>
     <message>
         <source>Duty %</source>
@@ -1898,6 +1906,10 @@ Checked: normally closed, opens while held.</translation>
         <translation>Unit mismatch, expected %1</translation>
     </message>
     <message>
+        <source>Unknown component type "%1" (skipped).</source>
+        <translation>Unknown component type "%1" (skipped).</translation>
+    </message>
+    <message>
         <source>Unknown error</source>
         <translation>Unknown error</translation>
     </message>
@@ -1964,6 +1976,10 @@ Checked: normally closed, opens while held.</translation>
     <message>
         <source>Volts per microsecond. 0 means unlimited.</source>
         <translation>Volts per microsecond. 0 means unlimited.</translation>
+    </message>
+    <message>
+        <source>Warning: %1</source>
+        <translation>Warning: %1</translation>
     </message>
     <message>
         <source>Waveform</source>

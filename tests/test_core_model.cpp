@@ -14,6 +14,7 @@
 #include <QJsonObject>
 #include <QTest>
 #include <cmath>
+#include <limits>
 
 using namespace csm;
 
@@ -77,6 +78,7 @@ class CoreModelTest : public QObject {
 
 private slots:
     void netLabelsWithSameNameConnectNets();
+    void loaderRepairsBadFiles();
     void quantitiesWithUnits();
     void unitsRoundTrip();
     void netlistFindsNodes();
@@ -253,6 +255,96 @@ void CoreModelTest::netLabelsWithSameNameConnectNets()
     QVERIFY2(error.isEmpty(), qPrintable(error));
     QCOMPARE(back.components.at(4).netLabel, QStringLiteral("VCC"));
     QCOMPARE(back.components.at(4).type, ComponentType::NetLabel);
+}
+
+
+void CoreModelTest::loaderRepairsBadFiles()
+{
+    // ① 重复 id：网络表按 id 建引脚表，重复的话后一个会覆盖前一个，
+    //    两个元件都接到同一处 —— 电路静悄悄地变了
+    {
+        const QByteArray json = R"({"format":"circuit-master","version":3,"components":[
+          {"id":1,"type":"V","x":100,"y":300,"rotation":90,"dcValue":5},
+          {"id":2,"type":"R","x":200,"y":200,"value":1000},
+          {"id":2,"type":"R","x":300,"y":300,"rotation":90,"value":1000},
+          {"id":4,"type":"GND","x":200,"y":400}],
+          "wires":[[[100,270],[100,200],[170,200]],[[230,200],[300,200],[300,270]],
+                   [[300,330],[300,400],[100,400],[100,330]]]})";
+        QString error;
+        QStringList warnings;
+        const Circuit c = Circuit::fromJson(QJsonDocument::fromJson(json).object(), &error,
+                                            &warnings);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        QCOMPARE(c.components.size(), 4);
+
+        QSet<int> ids;
+        for (const Component& comp : c.components) {
+            QVERIFY2(!ids.contains(comp.id),
+                     qPrintable(QStringLiteral("id %1 重复").arg(comp.id)));
+            ids.insert(comp.id);
+        }
+        QVERIFY2(!warnings.isEmpty(), "重复 id 应当有提示");
+
+        // 关键：分压结果必须正确（2.5 V），而不是「两个电阻都接到同一处」
+        const Netlist net = c.buildNetlist();
+        QVERIFY2(net.valid, qPrintable(net.error));
+        SimulationOptions opt;
+        opt.kind = AnalysisKind::OperatingPoint;
+        const SimulationResult r = Simulator::run(c, opt);
+        QVERIFY2(r.ok, qPrintable(r.error));
+        bool found = false;
+        for (const QString& line : r.report.split(QLatin1Char('\n')))
+            if (line.contains(QLatin1String("= 2.5 V")))
+                found = true;
+        QVERIFY2(found, qPrintable(r.report));
+    }
+
+    // ② 认不出的型号：以前会静悄悄变成 0 Ω 电阻
+    {
+        const QByteArray json = R"({"format":"circuit-master","version":3,"components":[
+          {"id":1,"type":"XYZ","x":100,"y":300},
+          {"id":2,"type":"R","x":200,"y":200,"value":1000}],"wires":[]})";
+        QStringList warnings;
+        const Circuit c = Circuit::fromJson(QJsonDocument::fromJson(json).object(), nullptr,
+                                            &warnings);
+        QCOMPARE(c.components.size(), 1);
+        QCOMPARE(c.components.first().type, ComponentType::Resistor);
+        QVERIFY2(!warnings.isEmpty(), "认不出的型号应当有提示");
+    }
+
+    // ③ 非有限数值：退回默认值，而不是让 inf 进矩阵
+    {
+        QJsonObject comp{
+            {QStringLiteral("id"), 1},
+            {QStringLiteral("type"), QStringLiteral("C")},
+            {QStringLiteral("x"), 100},
+            {QStringLiteral("y"), 300},
+            {QStringLiteral("value"), std::numeric_limits<double>::infinity()},
+        };
+        QJsonObject root{
+            {QStringLiteral("format"), QStringLiteral("circuit-master")},
+            {QStringLiteral("version"), 3},
+            {QStringLiteral("components"), QJsonArray{comp}},
+        };
+        QStringList warnings;
+        const Circuit c = Circuit::fromJson(root, nullptr, &warnings);
+        QCOMPARE(c.components.size(), 1);
+        QVERIFY(std::isfinite(c.components.first().value));
+        QVERIFY2(!warnings.isEmpty(), "非有限数值应当有提示");
+    }
+
+    // ④ 枚举越界：钳到合法范围，别让 switch 落到没有分支的地方
+    {
+        const QByteArray json = R"({"format":"circuit-master","version":3,"components":[
+          {"id":1,"type":"GND","x":100,"y":300,"groundKind":999},
+          {"id":2,"type":"XMM","x":200,"y":200,"multimeterMode":-7}],"wires":[]})";
+        const Circuit c = Circuit::fromJson(QJsonDocument::fromJson(json).object());
+        QCOMPARE(c.components.size(), 2);
+        QVERIFY(int(c.components.at(0).groundKind) >= 0);
+        QVERIFY(int(c.components.at(0).groundKind) <= int(GroundKind::Earth));
+        QVERIFY(int(c.components.at(1).multimeterMode) >= 0);
+        QVERIFY(int(c.components.at(1).multimeterMode) <= int(MultimeterMode::AcCurrent));
+    }
 }
 
 void CoreModelTest::quantitiesWithUnits()

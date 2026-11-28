@@ -29,7 +29,10 @@ public:
     Netlist buildNetlist() const;
 
     QJsonObject toJson() const;
-    static Circuit fromJson(const QJsonObject& obj, QString* error = nullptr);
+    /// warnings 收集「能读但不对劲」的情况（重复 id、认不出的型号、非有限数值），
+    /// 传 nullptr 就丢掉；error 只表示整份文件读不了
+    static Circuit fromJson(const QJsonObject& obj, QString* error = nullptr,
+                            QStringList* warnings = nullptr);
 
     /// 依据电源频率/脉冲周期建议的最大步长，用于避免采样混叠。
     /// 没有动态电源时返回 0。

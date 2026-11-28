@@ -51,8 +51,11 @@ QString typeToTag(ComponentType type)
     return QStringLiteral("R");
 }
 
-ComponentType tagToType(const QString& tag)
+ComponentType tagToType(const QString& tag, bool* known)
 {
+    if (known)
+        *known = true;
+    if (tag == QLatin1String("R")) return ComponentType::Resistor;
     if (tag == QLatin1String("C")) return ComponentType::Capacitor;
     if (tag == QLatin1String("L")) return ComponentType::Inductor;
     if (tag == QLatin1String("D")) return ComponentType::Diode;
@@ -80,6 +83,9 @@ ComponentType tagToType(const QString& tag)
     if (tag == QLatin1String("GATE")) return ComponentType::LogicGate;
     if (tag == QLatin1String("IP")) return ComponentType::CurrentProbe;
     if (tag == QLatin1String("GND")) return ComponentType::Ground;
+    // 认不出的标签：返回的型号只是占位，调用方必须看 *known 决定是否丢弃
+    if (known)
+        *known = false;
     return ComponentType::Resistor;
 }
 
@@ -385,9 +391,13 @@ QJsonObject Circuit::toJson() const
     return root;
 }
 
-Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
+Circuit Circuit::fromJson(const QJsonObject& obj, QString* error, QStringList* warnings)
 {
     Circuit circuit;
+    const auto warn = [warnings](const QString& text) {
+        if (warnings)
+            warnings->append(text);
+    };
     if (obj.value(QStringLiteral("format")).toString() != QLatin1String("circuit-master")) {
         if (error)
             *error = CSM_TR("Not a Circuit Master circuit file.");
@@ -399,71 +409,110 @@ Circuit Circuit::fromJson(const QJsonObject& obj, QString* error)
     const bool legacyPeakAmplitude = formatVersion < 2;
 
     const QJsonArray compArray = obj.value(QStringLiteral("components")).toArray();
+    QSet<int> usedIds;
+    int nextFreeId = 1;
+
     for (const QJsonValue& v : compArray) {
         const QJsonObject o = v.toObject();
+        // 读一个数值：写不下的（inf / nan）退回默认值。.csm 是文本格式，
+        // QJsonDocument 本来就拒绝 1e400 这种字面量，这里是兜底 —— 文件也可能
+        // 被别的工具改写，一旦 inf 混进矩阵，解出来全是 nan，用户只会看到
+        // 「不收敛」，根本不知道是文件的问题。
+        const auto num = [&o, &warn](const char* key, double fallback = 0.0) {
+            const double v = o.value(QLatin1String(key)).toDouble(fallback);
+            if (std::isfinite(v))
+                return v;
+            warn(CSM_TR("\"%1\" is not a finite number, using %2.")
+                     .arg(QLatin1String(key))
+                     .arg(fallback));
+            return fallback;
+        };
         Component c;
+        const QString tag = o.value(QStringLiteral("type")).toString();
+        bool knownTag = false;
+        c.type = tagToType(tag, &knownTag);
+        if (!knownTag) {
+            // 认不出的型号以前会静悄悄变成「0 Ω 电阻」，电路照画、结果全错
+            warn(CSM_TR("Unknown component type \"%1\" (skipped).").arg(tag));
+            continue;
+        }
         c.id = o.value(QStringLiteral("id")).toInt();
-        c.type = tagToType(o.value(QStringLiteral("type")).toString());
-        c.pos = QPointF(o.value(QStringLiteral("x")).toDouble(), o.value(QStringLiteral("y")).toDouble());
+        if (c.id <= 0 || usedIds.contains(c.id)) {
+            // id 是网络表的键：重复的话后一个会把前一个的引脚覆盖掉，
+            // 两个元件都接到同一个位置，电路静悄悄地变了（实测 2.5 V 变 0 V）
+            const int original = c.id;
+            while (usedIds.contains(nextFreeId) || nextFreeId <= 0)
+                ++nextFreeId;
+            c.id = nextFreeId++;
+            warn(CSM_TR("Duplicate component id %1, renumbered to %2.")
+                     .arg(original)
+                     .arg(c.id));
+        }
+        usedIds.insert(c.id);
+        c.pos = QPointF(num("x"), num("y"));
         c.rotation = o.value(QStringLiteral("rotation")).toInt();
         c.mirrorX = o.value(QStringLiteral("mirrorX")).toBool(false);
         c.mirrorY = o.value(QStringLiteral("mirrorY")).toBool(false);
         c.refdes = o.value(QStringLiteral("refdes")).toString();
-        c.value = o.value(QStringLiteral("value")).toDouble();
+        c.value = num("value");
         c.function = tagToFunction(o.value(QStringLiteral("function")).toString());
-        c.dcValue = o.value(QStringLiteral("dcValue")).toDouble();
-        c.amplitude = o.value(QStringLiteral("amplitude")).toDouble(1.0);
+        c.dcValue = num("dcValue");
+        c.amplitude = num("amplitude", 1.0);
         if (legacyPeakAmplitude && c.function == SourceFunction::Sine)
             c.amplitude /= std::sqrt(2.0);
-        c.offset = o.value(QStringLiteral("offset")).toDouble();
-        c.frequency = o.value(QStringLiteral("frequency")).toDouble(1000.0);
-        c.phaseDeg = o.value(QStringLiteral("phaseDeg")).toDouble();
-        c.delayTime = o.value(QStringLiteral("delayTime")).toDouble();
-        c.damping = o.value(QStringLiteral("damping")).toDouble();
-        c.pulseV1 = o.value(QStringLiteral("pulseV1")).toDouble();
-        c.pulseV2 = o.value(QStringLiteral("pulseV2")).toDouble(5.0);
-        c.pulseRise = o.value(QStringLiteral("pulseRise")).toDouble(1e-6);
-        c.pulseFall = o.value(QStringLiteral("pulseFall")).toDouble(1e-6);
-        c.pulseWidth = o.value(QStringLiteral("pulseWidth")).toDouble(5e-4);
-        c.pulsePeriod = o.value(QStringLiteral("pulsePeriod")).toDouble(1e-3);
+        c.offset = num("offset");
+        c.frequency = num("frequency", 1000.0);
+        c.phaseDeg = num("phaseDeg");
+        c.delayTime = num("delayTime");
+        c.damping = num("damping");
+        c.pulseV1 = num("pulseV1");
+        c.pulseV2 = num("pulseV2", 5.0);
+        c.pulseRise = num("pulseRise", 1e-6);
+        c.pulseFall = num("pulseFall", 1e-6);
+        c.pulseWidth = num("pulseWidth", 5e-4);
+        c.pulsePeriod = num("pulsePeriod", 1e-3);
         c.waveform = tagToWaveform(o.value(QStringLiteral("waveform")).toString());
-        c.duty = o.value(QStringLiteral("duty")).toDouble(0.5);
+        c.duty = num("duty", 0.5);
         c.closed = o.value(QStringLiteral("closed")).toBool(true);
         c.polarized = o.value(QStringLiteral("polarized")).toBool(false);
-        c.beta = o.value(QStringLiteral("beta")).toDouble(100.0);
-        c.vth = o.value(QStringLiteral("vth")).toDouble(2.0);
-        c.k = o.value(QStringLiteral("k")).toDouble(2e-3);
-        c.vf = o.value(QStringLiteral("vf")).toDouble(0.7);
-        c.ctr = o.value(QStringLiteral("ctr")).toDouble(3.0);
-        c.vceSat = o.value(QStringLiteral("vceSat")).toDouble(0.2);
-        c.lpri = o.value(QStringLiteral("lpri")).toDouble(1.0);
+        c.beta = num("beta", 100.0);
+        c.vth = num("vth", 2.0);
+        c.k = num("k", 2e-3);
+        c.vf = num("vf", 0.7);
+        c.ctr = num("ctr", 3.0);
+        c.vceSat = num("vceSat", 0.2);
+        c.lpri = num("lpri", 1.0);
         c.secondaryInverted = o.value(QStringLiteral("secondaryInverted")).toBool(false);
-        c.auxRatio = o.value(QStringLiteral("auxRatio")).toDouble(1.0);
-        c.vSatHigh = o.value(QStringLiteral("vSatHigh")).toDouble(15.0);
-        c.vSatLow = o.value(QStringLiteral("vSatLow")).toDouble(-15.0);
-        c.gbw = o.value(QStringLiteral("gbw")).toDouble(1e6);
-        c.slewRate = o.value(QStringLiteral("slewRate")).toDouble(0.5e6);
-        c.vos = o.value(QStringLiteral("vos")).toDouble(0.0);
-        c.ibias = o.value(QStringLiteral("ibias")).toDouble(0.0);
-        c.rin = o.value(QStringLiteral("rin")).toDouble(2e6);
-        c.rout = o.value(QStringLiteral("rout")).toDouble(50.0);
-        c.groundKind = static_cast<GroundKind>(o.value(QStringLiteral("groundKind")).toInt(0));
+        c.auxRatio = num("auxRatio", 1.0);
+        c.vSatHigh = num("vSatHigh", 15.0);
+        c.vSatLow = num("vSatLow", -15.0);
+        c.gbw = num("gbw", 1e6);
+        c.slewRate = num("slewRate", 0.5e6);
+        c.vos = num("vos", 0.0);
+        c.ibias = num("ibias", 0.0);
+        c.rin = num("rin", 2e6);
+        c.rout = num("rout", 50.0);
+        // 枚举越界钳到合法范围：以前直接把任意整数 static_cast 进去，
+        // 越界值在 switch 里没有分支，行为就没定义了
+        c.groundKind = static_cast<GroundKind>(
+            std::clamp(o.value(QStringLiteral("groundKind")).toInt(0), 0,
+                       int(GroundKind::Earth)));
         c.multimeterMode = static_cast<MultimeterMode>(
-            o.value(QStringLiteral("multimeterMode")).toInt(0));
+            std::clamp(o.value(QStringLiteral("multimeterMode")).toInt(0), 0,
+                       int(MultimeterMode::AcCurrent)));
         c.netLabel = o.value(QStringLiteral("netLabel")).toString();
         c.normallyClosed = o.value(QStringLiteral("normallyClosed")).toBool(false);
-        c.gateKind = static_cast<GateKind>(o.value(QStringLiteral("gateKind")).toInt(0));
-        c.logicHigh = o.value(QStringLiteral("logicHigh")).toDouble(3.3);
-        c.refLabelOffset = QPointF(o.value(QStringLiteral("refLabelDx")).toDouble(),
-                                   o.value(QStringLiteral("refLabelDy")).toDouble());
-        c.valueLabelOffset = QPointF(o.value(QStringLiteral("valueLabelDx")).toDouble(),
-                                     o.value(QStringLiteral("valueLabelDy")).toDouble());
+        c.gateKind = static_cast<GateKind>(
+            std::clamp(o.value(QStringLiteral("gateKind")).toInt(0), 0, int(GateKind::Xnor)));
+        c.logicHigh = num("logicHigh", 3.3);
+        c.refLabelOffset = QPointF(num("refLabelDx"),
+                                   num("refLabelDy"));
+        c.valueLabelOffset = QPointF(num("valueLabelDx"),
+                                     num("valueLabelDy"));
         c.transformerKind =
             o.value(QStringLiteral("transformerKind")).toString() == QLatin1String("primary-aux-secondary")
                 ? TransformerKind::PrimaryAuxSecondary
                 : TransformerKind::Single;
-        if (c.id <= 0)
-            continue;
         circuit.components.append(c);
     }
 
